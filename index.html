@@ -23,14 +23,19 @@
   button:hover{background:#142814}
   button.live{border-color:var(--red);color:var(--red)}
   button.armed{border-color:var(--amber);color:var(--amber);animation:pulse 1s infinite}
+  button.folder-ok{border-color:#00aaff;color:#00aaff}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   #status{font-size:.74em;padding:2px 8px;border-radius:3px;background:#080f08;
     border:1px solid var(--border);min-width:78px;text-align:center}
   #status.ok{color:var(--green);border-color:var(--dgreen)}
   #status.err{color:var(--red)}
+  #folder-status{font-size:.7em;color:#557799;max-width:180px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
   .sep{color:#1a3a1a;font-size:1.1em;margin:0 1px}
   .cg{display:flex;align-items:center;gap:4px;font-size:.71em}
   input[type=range]{accent-color:var(--amber);cursor:pointer}
+  input[type=number]{background:#080f08;color:var(--amber);border:1px solid #2a4a2a;
+    border-radius:3px;padding:2px 5px;font-family:monospace;font-size:.78em;outline:none}
   .vdisp{color:var(--amber);font-size:.78em;min-width:38px}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
   .pbox{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:6px}
@@ -41,21 +46,28 @@
   .boxhdr{display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap}
   .bhlbl{font-size:.68em;letter-spacing:2px;white-space:nowrap}
   #arm-btn{display:none;border-color:var(--amber);color:var(--amber)}
-  #fft-range-lbl{font-size:.68em;color:#557755;margin-left:4px}
+  #save-frf-btn{border-color:#ff9900;color:#ff9900;margin-top:9px;width:100%}
+  #save-frf-btn:hover{background:#1a0f00}
+  #save-msg{font-size:.7em;color:#557755;text-align:center;margin-top:5px;min-height:1em}
   @media(max-width:620px){.row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <h1>◈ PYSCOPE</h1>
 
+<!-- ── Top bar: mic + folder ── -->
 <div class="bar">
   <div class="cg"><label>INPUT ›</label>
     <select id="mic-sel"><option>— scanning —</option></select>
   </div>
   <button id="conn-btn" onclick="connectMic()">▶ CONNECT</button>
   <span id="status">OFFLINE</span>
+  <span class="sep">│</span>
+  <button id="folder-btn" onclick="pickFolder()">📁 FOLDER</button>
+  <span id="folder-status">no folder connected</span>
 </div>
 
+<!-- ── Small channel plots ── -->
 <div class="row">
   <div class="pbox"><div class="plabel" style="color:#39ff14">CH1 · LEFT</div>
     <canvas id="ch1" width="512" height="110"></canvas></div>
@@ -63,30 +75,33 @@
     <canvas id="ch2" width="512" height="110"></canvas></div>
 </div>
 
+<!-- ── Triggered scope ── -->
 <div class="scopebox">
   <div class="boxhdr">
     <span class="bhlbl" style="color:var(--amber)">◈ TRIGGERED SCOPE</span>
     <span class="sep">│</span>
     <div class="cg"><label>TRIG SRC</label>
-      <select id="trig-ch"><option value="L">CH1·L</option><option value="R">CH2·R</option></select>
+      <select id="trig-ch" onchange="settingChanged()">
+        <option value="L">CH1·L</option><option value="R">CH2·R</option></select>
     </div>
     <div class="cg"><label>EDGE</label>
-      <select id="edge-sel"><option value="rising">↑ RISE</option><option value="falling">↓ FALL</option></select>
+      <select id="edge-sel" onchange="settingChanged()">
+        <option value="rising">↑ RISE</option><option value="falling">↓ FALL</option></select>
     </div>
     <div class="cg"><label>LEVEL</label>
       <input type="range" id="trig-lvl" min="-95" max="95" value="10" step="1"
-        style="width:75px" oninput="updTrig()">
+        style="width:75px" oninput="updTrig();settingChanged()">
       <span class="vdisp" id="trig-disp">+0.10</span>
     </div>
     <span class="sep">│</span>
     <div class="cg"><label>PRE-TRIG</label>
       <input type="range" id="pre-trig" min="0" max="50" value="10" step="1"
-        style="width:65px" oninput="updPre()">
+        style="width:65px" oninput="updPre();settingChanged()">
       <span class="vdisp" id="pre-lbl">10ms</span>
     </div>
     <span class="sep">│</span>
     <div class="cg"><label>MODE</label>
-      <select id="trig-mode" onchange="modeChange()">
+      <select id="trig-mode" onchange="modeChange();settingChanged()">
         <option value="auto">AUTO</option>
         <option value="normal">NORMAL</option>
         <option value="oneshot">ONE-SHOT</option>
@@ -96,13 +111,14 @@
     <span class="sep">│</span>
     <div class="cg"><label>ZOOM</label>
       <input type="range" id="zoom" min="1" max="30" value="1" step="1"
-        style="width:75px" oninput="updZoom()">
+        style="width:75px" oninput="updZoom();settingChanged()">
       <span class="vdisp" id="zoom-lbl">1×</span>
     </div>
   </div>
   <canvas id="trig-canvas" width="1024" height="310" style="cursor:pointer"></canvas>
 </div>
 
+<!-- ── FFT panel ── -->
 <div class="scopebox" id="fft-box" style="display:none">
   <div class="boxhdr">
     <span class="bhlbl" style="color:#ff9900">◈ FFT TRANSFER · |CH1|/|CH2| (dB)</span>
@@ -112,24 +128,23 @@
     <div class="cg">
       <label>F MIN</label>
       <input type="number" id="fft-fmin" value="20" min="1" max="20000" step="1"
-        style="width:62px;background:#080f08;color:var(--amber);border:1px solid #2a4a2a;
-               border-radius:3px;padding:2px 5px;font-family:monospace;font-size:.78em;outline:none"
-        onchange="applyFftRange()">
+        style="width:62px" onchange="applyFftRange();settingChanged()">
       <label>Hz</label>
     </div>
     <div class="cg">
       <label>F MAX</label>
       <input type="number" id="fft-fmax" value="22050" min="100" max="96000" step="1"
-        style="width:72px;background:#080f08;color:var(--amber);border:1px solid #2a4a2a;
-               border-radius:3px;padding:2px 5px;font-family:monospace;font-size:.78em;outline:none"
-        onchange="applyFftRange()">
+        style="width:72px" onchange="applyFftRange();settingChanged()">
       <label>Hz</label>
     </div>
   </div>
-  <canvas id="fft-canvas" width="1024" height="380" style="cursor:default"></canvas>
+  <canvas id="fft-canvas" width="1024" height="380"></canvas>
+  <button id="save-frf-btn" onclick="saveFRF()">💾 SAVE FRF AS CSV</button>
+  <div id="save-msg"></div>
 </div>
 
 <script>
+/* ── Ring buffer ── */
 const BUF = 65536;
 window.samplesL    = new Float32Array(BUF);
 window.samplesR    = new Float32Array(BUF);
@@ -137,28 +152,138 @@ window.writePos    = 0;
 window.sampleRate  = 44100;
 window.isConnected = false;
 window.oneshotArm  = false;
+window.scopeViewCh = 'L';
+window.fftData     = null;   // {freqs:[], rdb:[]} stored on each FFT draw
+window.dirHandle   = null;   // FileSystemDirectoryHandle when folder connected
+window._scopeHits  = [];
+let _saveTimer     = null;
+const SETTINGS_FILE = 'pyscope_settings.json';
 
-// View channel for frozen scope (independent of trigger source)
-window.scopeViewCh = 'L';   // 'L' | 'R' | 'both'
-
-// FFT freq axis bounds (read directly from inputs)
-function applyFftRange(){
-  let fmin=parseFloat(document.getElementById('fft-fmin').value)||20;
-  let fmax=parseFloat(document.getElementById('fft-fmax').value)||22050;
-  if(fmin<1)fmin=1; if(fmax<fmin+50)fmax=fmin+50;
-  document.getElementById('fft-fmin').value=Math.round(fmin);
-  document.getElementById('fft-fmax').value=Math.round(fmax);
-}
-function getFftRange(){
+/* ── Settings helpers ── */
+function getSettings(){
   return{
-    fMin:parseFloat(document.getElementById('fft-fmin').value)||20,
-    fMax:parseFloat(document.getElementById('fft-fmax').value)||22050
+    trigLvl   : +document.getElementById('trig-lvl').value,
+    edge      : document.getElementById('edge-sel').value,
+    preTrig   : +document.getElementById('pre-trig').value,
+    mode      : document.getElementById('trig-mode').value,
+    zoom      : +document.getElementById('zoom').value,
+    trigCh    : document.getElementById('trig-ch').value,
+    fftFmin   : +document.getElementById('fft-fmin').value,
+    fftFmax   : +document.getElementById('fft-fmax').value,
+    scopeViewCh: window.scopeViewCh
   };
 }
 
-/* Hit-test regions for scope channel labels (populated by drawScope) */
-window._scopeHits = []; // [{x,y,w,h,ch}, ...]
+function applySettings(s){
+  if(s.trigLvl   !== undefined){ document.getElementById('trig-lvl').value  = s.trigLvl;   updTrig(); }
+  if(s.edge      !== undefined)  document.getElementById('edge-sel').value   = s.edge;
+  if(s.preTrig   !== undefined){ document.getElementById('pre-trig').value   = s.preTrig;   updPre(); }
+  if(s.mode      !== undefined){ document.getElementById('trig-mode').value  = s.mode;      modeChange(); }
+  if(s.zoom      !== undefined){ document.getElementById('zoom').value       = s.zoom;      updZoom(); }
+  if(s.trigCh    !== undefined)  document.getElementById('trig-ch').value    = s.trigCh;
+  if(s.fftFmin   !== undefined)  document.getElementById('fft-fmin').value   = s.fftFmin;
+  if(s.fftFmax   !== undefined)  document.getElementById('fft-fmax').value   = s.fftFmax;
+  if(s.scopeViewCh !== undefined) window.scopeViewCh = s.scopeViewCh;
+}
 
+function settingChanged(){
+  if(!window.dirHandle) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>saveSettingsToFolder(), 800);
+}
+
+async function saveSettingsToFolder(){
+  if(!window.dirHandle) return;
+  try{
+    const fh = await window.dirHandle.getFileHandle(SETTINGS_FILE, {create:true});
+    const w  = await fh.createWritable();
+    await w.write(JSON.stringify(getSettings(), null, 2));
+    await w.close();
+    document.getElementById('folder-status').textContent='✓ settings saved';
+  }catch(e){ console.warn('Settings save:', e); }
+}
+
+async function loadSettingsFromFolder(){
+  if(!window.dirHandle) return;
+  try{
+    const fh   = await window.dirHandle.getFileHandle(SETTINGS_FILE);
+    const file = await fh.getFile();
+    const text = await file.text();
+    const s    = JSON.parse(text);
+    applySettings(s);
+    document.getElementById('folder-status').textContent='✓ settings loaded';
+  }catch(e){
+    // File doesn't exist yet — that's fine
+    document.getElementById('folder-status').textContent='(no saved settings found)';
+  }
+}
+
+/* ── Folder picker ── */
+async function pickFolder(){
+  if(!window.showDirectoryPicker){
+    alert('File System Access API not supported.\nPlease use Chrome or Edge.');
+    return;
+  }
+  try{
+    window.dirHandle = await window.showDirectoryPicker({mode:'readwrite'});
+    const btn = document.getElementById('folder-btn');
+    btn.classList.add('folder-ok');
+    btn.textContent = '📁 ' + window.dirHandle.name;
+    document.getElementById('folder-status').textContent = 'loading settings…';
+    await loadSettingsFromFolder();
+  }catch(e){
+    if(e.name !== 'AbortError')
+      document.getElementById('folder-status').textContent = 'error: ' + e.message;
+  }
+}
+
+/* ── Save FRF CSV ── */
+async function saveFRF(){
+  if(!window.fftData || !window.fftData.freqs.length){
+    showSaveMsg('No FRF data captured yet.', '#ff3333'); return;
+  }
+  const {freqs, rdb} = window.fftData;
+  const rows = ['Frequency_Hz,FRF_dB'];
+  for(let i=0;i<freqs.length;i++) rows.push(freqs[i].toFixed(4)+','+rdb[i].toFixed(6));
+  const csv = rows.join('\n');
+  const ts  = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const fname = 'frf_' + ts + '.csv';
+
+  if(window.dirHandle){
+    /* write directly into connected folder */
+    try{
+      const fh = await window.dirHandle.getFileHandle(fname, {create:true});
+      const w  = await fh.createWritable();
+      await w.write(csv); await w.close();
+      showSaveMsg('✓ Saved to folder: ' + fname, '#39ff14');
+    }catch(e){ showSaveMsg('Save error: '+e.message,'#ff3333'); }
+  } else if(window.showSaveFilePicker){
+    /* native save dialog */
+    try{
+      const fh = await window.showSaveFilePicker({
+        suggestedName: fname,
+        types:[{description:'CSV',accept:{'text/csv':['.csv']}}]
+      });
+      const w = await fh.createWritable();
+      await w.write(csv); await w.close();
+      showSaveMsg('✓ File saved.','#39ff14');
+    }catch(e){ if(e.name!=='AbortError') showSaveMsg('Save error: '+e.message,'#ff3333'); }
+  } else {
+    /* fallback: download link */
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = fname; a.click();
+    showSaveMsg('✓ Download triggered.','#39ff14');
+  }
+}
+
+function showSaveMsg(txt, col){
+  const el = document.getElementById('save-msg');
+  el.textContent = txt; el.style.color = col;
+  setTimeout(()=>{ el.textContent=''; }, 5000);
+}
+
+/* ── UI helpers ── */
 function updTrig(){ const v=+document.getElementById('trig-lvl').value/100; document.getElementById('trig-disp').textContent=(v>=0?'+':'')+v.toFixed(2); }
 function updPre() { document.getElementById('pre-lbl').textContent=document.getElementById('pre-trig').value+'ms'; updZoom(); }
 function updZoom(){
@@ -172,57 +297,14 @@ function modeChange(){
     document.getElementById('trig-mode').value==='oneshot'?'inline-block':'none';
 }
 function armOneshot(){ window.oneshotArm=true; document.getElementById('arm-btn').classList.add('armed'); }
-
-/* ── Scope canvas: click to select view channel ── */
-function setupScopeClick(){
-  const cv=document.getElementById('trig-canvas');
-  // scale from CSS px to canvas px
-  cv.addEventListener('click', e=>{
-    const r=cv.getBoundingClientRect();
-    const scX=cv.width/r.width, scY=cv.height/r.height;
-    const cx=(e.clientX-r.left)*scX, cy=(e.clientY-r.top)*scY;
-    for(const h of window._scopeHits){
-      if(cx>=h.x&&cx<=h.x+h.w&&cy>=h.y&&cy<=h.y+h.h){
-        window.scopeViewCh=h.ch; return;
-      }
-    }
-  });
+function applyFftRange(){
+  let fmin=parseFloat(document.getElementById('fft-fmin').value)||20;
+  let fmax=parseFloat(document.getElementById('fft-fmax').value)||22050;
+  if(fmin<1)fmin=1; if(fmax<fmin+50)fmax=fmin+50;
+  document.getElementById('fft-fmin').value=Math.round(fmin);
+  document.getElementById('fft-fmax').value=Math.round(fmax);
 }
-
-/* ── FFT canvas: double-click left/right zone to change freq bounds ── */
-function setupFftDblClick(){
-  const cv=document.getElementById('fft-canvas');
-  const PL=40; // must match showFFT padding
-  cv.addEventListener('dblclick', e=>{
-    const r=cv.getBoundingClientRect();
-    const scX=cv.width/r.width;
-    const cx=(e.clientX-r.left)*scX;
-    const PW=cv.width-PL;
-    const zone=PW*0.25; // left/right 25% of plot area
-    if(cx < PL+zone){
-      // step fMin up (zoom left edge in), wrap around
-      window.fftFMinIdx=(window.fftFMinIdx+1)%FFT_FMIN_STEPS.length;
-      // ensure fMin < fMax
-      const fMax=FFT_FMAX_STEPS[window.fftFMaxIdx];
-      while(FFT_FMIN_STEPS[window.fftFMinIdx]>=fMax)
-        window.fftFMinIdx=(window.fftFMinIdx+1)%FFT_FMIN_STEPS.length;
-    } else if(cx > PL+PW-zone){
-      // step fMax down (zoom right edge in), wrap around
-      window.fftFMaxIdx=(window.fftFMaxIdx+1)%FFT_FMAX_STEPS.length;
-      const fMin=FFT_FMIN_STEPS[window.fftFMinIdx];
-      while(FFT_FMAX_STEPS[window.fftFMaxIdx]<=fMin)
-        window.fftFMaxIdx=(window.fftFMaxIdx+1)%FFT_FMAX_STEPS.length;
-    }
-    updFftRangeLabel();
-  });
-}
-
-function updFftRangeLabel(){
-  const fMin=FFT_FMIN_STEPS[window.fftFMinIdx];
-  const fMax=FFT_FMAX_STEPS[window.fftFMaxIdx];
-  const fmt=f=>f>=1000?(f/1000).toFixed(f%1000?1:0)+'kHz':f+'Hz';
-  document.getElementById('fft-range-lbl').textContent=fmt(fMin)+' – '+fmt(fMax);
-}
+function getFftRange(){ return{fMin:+document.getElementById('fft-fmin').value||20, fMax:+document.getElementById('fft-fmax').value||22050}; }
 
 /* ── Mic enumerate + connect ── */
 async function populateMics(){
@@ -267,10 +349,8 @@ async function connectMic(){
   }catch(e){setStatus('ERR:'+e.message.slice(0,18).toUpperCase(),false);}
 }
 
-/* ── Canvas draw helpers ── */
-function pickTick(ms){
-  for(const t of[0.05,.1,.2,.5,1,2,5,10,20,25,50,100,150,200,300])if(ms/t<=10)return t;return 100;
-}
+/* ── Canvas helpers ── */
+function pickTick(ms){for(const t of[0.05,.1,.2,.5,1,2,5,10,20,25,50,100,150,200,300])if(ms/t<=10)return t;return 100;}
 
 window.drawCh=function(id,samp,col){
   const cv=document.getElementById(id),cx=cv.getContext('2d'),w=cv.width,h=cv.height;
@@ -286,7 +366,6 @@ window.drawCh=function(id,samp,col){
   cx.stroke();
 };
 
-/* sA = left/CH1 data, sB = right/CH2 data — drawScope decides brightness from scopeViewCh */
 window.drawScope=function(sA,sB,trigLvl,status,startMs,totalMs,trigCh){
   const cv=document.getElementById('trig-canvas'),cx=cv.getContext('2d');
   const w=cv.width,h=cv.height,PAD_B=26,PH=h-PAD_B;
@@ -311,7 +390,6 @@ window.drawScope=function(sA,sB,trigLvl,status,startMs,totalMs,trigCh){
     cx.beginPath();cx.moveTo(tx,0);cx.lineTo(tx,PH);cx.stroke();cx.setLineDash([]);
     cx.fillStyle='#ff8833';cx.font='bold 10px monospace';cx.fillText('T',tx+3,13);
   }
-
   const ty=PH/2-trigLvl*PH/2*.85;
   cx.strokeStyle='#ff6600';cx.lineWidth=1;cx.setLineDash([6,4]);
   cx.beginPath();cx.moveTo(0,ty);cx.lineTo(w,ty);cx.stroke();cx.setLineDash([]);
@@ -320,14 +398,12 @@ window.drawScope=function(sA,sB,trigLvl,status,startMs,totalMs,trigCh){
   cx.fillText(tlbl,5,Math.min(PH-4,Math.max(13,ty-4)));
   if(tx>=0&&tx<=w){cx.fillStyle='#ff6600';cx.beginPath();cx.arc(tx,ty,4,0,2*Math.PI);cx.fill();}
 
-  /* status + trig source badges */
   const sc={'trig':'#39ff14','armed':'#ffb800','hold':'#00aaff'}[status]||'#556655';
   const st={'trig':'TRIG ●','armed':'ARMED ◉','hold':'HOLD ◈','wait':'WAIT ○'}[status]||'WAIT ○';
   cx.fillStyle=sc;cx.font='bold 11px monospace';cx.fillText(st,w-82,14);
-  cx.fillStyle='#446644';cx.font='10px monospace';
-  cx.fillText('TRIG:'+(trigCh==='L'?'CH1':'CH2'),w-82,27);
+  cx.fillStyle='#446644';cx.font='10px monospace';cx.fillText('TRIG:'+(trigCh==='L'?'CH1':'CH2'),w-82,27);
 
-  /* ── view-channel selector pills ── */
+  /* channel selector pills */
   const vc=window.scopeViewCh;
   const pills=[{ch:'L',lbl:'● CH1',col:'#39ff14'},{ch:'R',lbl:'● CH2',col:'#00aaff'},{ch:'both',lbl:'◈ BOTH',col:'#ffb800'}];
   window._scopeHits=[];
@@ -335,52 +411,39 @@ window.drawScope=function(sA,sB,trigLvl,status,startMs,totalMs,trigCh){
   for(const p of pills){
     const active=(vc===p.ch);
     const tw=cx.measureText(p.lbl).width+14;
-    cx.fillStyle=active?p.col+'22':'#0a120a';
-    cx.strokeStyle=active?p.col:'#1a3a1a';
-    cx.lineWidth=1;
+    cx.fillStyle=active?p.col+'22':'#0a120a';cx.strokeStyle=active?p.col:'#1a3a1a';cx.lineWidth=1;
     cx.beginPath();cx.roundRect(px,4,tw,16,3);cx.fill();cx.stroke();
-    cx.fillStyle=active?p.col:'#335533';cx.font='bold 9px monospace';
-    cx.fillText(p.lbl,px+7,14);
+    cx.fillStyle=active?p.col:'#335533';cx.font='bold 9px monospace';cx.fillText(p.lbl,px+7,14);
     window._scopeHits.push({x:px,y:4,w:tw,h:16,ch:p.ch});
     px+=tw+4;
   }
 
-  /* ── draw waveforms based on scopeViewCh ── */
   function drawWave(samp,col,alpha,lw){
     if(!samp||samp.length<2)return;
     cx.globalAlpha=alpha;cx.strokeStyle=col;cx.lineWidth=lw;
-    cx.shadowBlur=alpha>0.5?5:0;cx.shadowColor=col+'55';
-    cx.beginPath();const n=samp.length;
+    cx.shadowBlur=alpha>0.5?5:0;cx.shadowColor=col+'55';cx.beginPath();
+    const n=samp.length;
     for(let i=0;i<n;i++){const x=w*i/(n-1),y=PH/2-samp[i]*PH/2*.85;i?cx.lineTo(x,y):cx.moveTo(x,y);}
     cx.stroke();cx.shadowBlur=0;cx.globalAlpha=1;
   }
-
-  if(vc==='both'){
-    drawWave(sA,'#c8ff00',0.9,2);   // CH1 full
-    drawWave(sB,'#00ccff',0.5,1.5); // CH2 dimmer
-  } else if(vc==='L'){
-    drawWave(sA,'#c8ff00',0.9,2);
-    drawWave(sB,'#00ccff',0.18,1);
-  } else {
-    drawWave(sA,'#c8ff00',0.18,1);
-    drawWave(sB,'#00ccff',0.9,2);
-  }
+  if(vc==='both'){ drawWave(sA,'#c8ff00',0.9,2); drawWave(sB,'#00ccff',0.5,1.5); }
+  else if(vc==='L'){ drawWave(sA,'#c8ff00',0.9,2); drawWave(sB,'#00ccff',0.18,1); }
+  else             { drawWave(sA,'#c8ff00',0.18,1); drawWave(sB,'#00ccff',0.9,2); }
 };
 
 window.showFFT=function(freqs,rdb){
+  window.fftData={freqs:Array.from(freqs), rdb:Array.from(rdb)};
   document.getElementById('fft-box').style.display='block';
   const{fMin,fMax}=getFftRange();
   const cv=document.getElementById('fft-canvas'),cx=cv.getContext('2d');
   const w=cv.width,h=cv.height,PL=40,PB=22,PW=w-PL,PH=h-PB;
   cx.fillStyle='#030a03';cx.fillRect(0,0,w,h);
-
   const lMin=Math.log10(Math.max(1,fMin)),lMax=Math.log10(fMax);
   const fin=rdb.filter(v=>isFinite(v));
   let dbMax=24,dbMin=-24;
   if(fin.length){const mx=Math.max(...fin),mn=Math.min(...fin);dbMax=Math.max(6,Math.ceil((mx+3)/6)*6);dbMin=Math.min(-6,Math.floor((mn-3)/6)*6);}
   const fX=f=>PL+PW*(Math.log10(Math.max(fMin,Math.min(fMax,f)))-lMin)/(lMax-lMin);
   const dY=d=>PH*(1-(Math.max(dbMin,Math.min(dbMax,d))-dbMin)/(dbMax-dbMin));
-
   cx.strokeStyle='#0c1e0c';cx.lineWidth=1;cx.font='9px monospace';
   for(const f of[10,20,30,50,100,200,300,500,1000,2000,3000,5000,10000,15000,20000,22050]){
     if(f<fMin*0.99||f>fMax*1.01)continue;
@@ -404,11 +467,20 @@ window.showFFT=function(freqs,rdb){
   cx.stroke();cx.shadowBlur=0;
   cx.fillStyle='#446644';cx.font='9px monospace';cx.fillText('Hz',PL+4,h-4);
 };
-
 window.hideFFT=function(){document.getElementById('fft-box').style.display='none';};
 
+/* ── Scope canvas click (channel selector) ── */
+document.getElementById('trig-canvas').addEventListener('click',e=>{
+  const cv=document.getElementById('trig-canvas'),r=cv.getBoundingClientRect();
+  const cx=(e.clientX-r.left)*cv.width/r.width, cy=(e.clientY-r.top)*cv.height/r.height;
+  for(const h of window._scopeHits){
+    if(cx>=h.x&&cx<=h.x+h.w&&cy>=h.y&&cy<=h.y+h.h){
+      window.scopeViewCh=h.ch; settingChanged(); return;
+    }
+  }
+});
+
 populateMics(); updTrig(); updZoom(); updPre();
-setupScopeClick();
 </script>
 
 <script type="py" async>
@@ -427,8 +499,7 @@ last_cap_r    = None
 oneshot_fired = False
 
 def get_latest(arr_js, n, wp=None):
-    if wp is None:
-        wp = int(js.window.writePos)
+    if wp is None: wp = int(js.window.writePos)
     n  = min(n, BUF)
     mv = arr_js.to_py()
     return list(mv[wp-n:wp]) if wp >= n else list(mv[BUF-(n-wp):BUF]) + list(mv[0:wp])
@@ -471,10 +542,8 @@ async def render_loop():
             total_n  = pre_n + post_n
             need_n   = SEARCH_N + total_n + pre_n
 
-            # snapshot writePos ONCE so both channels are time-aligned
             wp = int(js.window.writePos)
 
-            # rolling channel plots (DC-subtracted)
             lat_l = sub_mean(dsamp(get_latest(js.window.samplesL, DISP_N, wp), DRAW_PTS))
             lat_r = sub_mean(dsamp(get_latest(js.window.samplesR, DISP_N, wp), DRAW_PTS))
             js.window.drawCh('ch1', to_js(lat_l), '#39ff14')
@@ -508,15 +577,13 @@ async def render_loop():
                 if not found:
                     mid = SEARCH_N // 2 + pre_n
                     mid = max(pre_n, min(mid, len(buf_l) - post_n - 1))
-                    fl = buf_l[mid - pre_n : mid + post_n]
-                    fr = buf_r[mid - pre_n : mid + post_n]
+                    fl  = buf_l[mid - pre_n : mid + post_n]
+                    fr  = buf_r[mid - pre_n : mid + post_n]
                     if len(fl) == total_n:
                         last_cap_l, last_cap_r = fl, fr
                 status = 'trig' if found else 'wait'
-
             elif mode == 'normal':
                 status = 'trig' if found else ('hold' if last_cap_l else 'wait')
-
             elif mode == 'oneshot':
                 if not oneshot_fired:
                     status = 'trig' if found else 'armed'
@@ -524,7 +591,6 @@ async def render_loop():
                 else:
                     status = 'hold'
 
-            # zoom: preserve trigger position ratio
             disp_l = last_cap_l or []
             disp_r = last_cap_r or []
             if disp_l and len(disp_l) > 1:
@@ -545,13 +611,11 @@ async def render_loop():
                 start_ms = -pre_ms
                 total_ms = pre_ms + 300.0
 
-            # always pass CH1(L) as sA, CH2(R) as sB — JS picks brightness
             js.window.drawScope(
                 to_js(pts_a), to_js(pts_b),
                 trig_lvl, status, start_ms, total_ms, trig_ch
             )
 
-            # FFT only when holding a triggered frame
             show_fft = status in ('trig', 'hold')
             if show_fft and last_cap_l and len(last_cap_l) == total_n:
                 arr_l = np.array(last_cap_l, dtype=np.float32)
