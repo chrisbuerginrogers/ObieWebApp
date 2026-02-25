@@ -6,361 +6,429 @@
 <title>PyScope</title>
 <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 <style>
-  :root{--bg:#050d05;--panel:#0a140a;--border:#152515;--green:#39ff14;--dgreen:#1a6b00;
-    --amber:#ffb800;--blue:#00aaff;--red:#ff3333;--yellow:#c8ff00;--text:#90b890}
+  :root{--bg:#050d05;--panel:#0a140a;--border:#152515;--green:#39ff14;
+    --dgreen:#1a6b00;--amber:#ffb800;--blue:#00aaff;--red:#ff3333;--text:#90b890}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;padding:12px;min-height:100vh}
-  h1{color:var(--green);font-size:1.05em;letter-spacing:5px;margin-bottom:10px;text-shadow:0 0 8px var(--green)}
-
-  .bar{display:flex;align-items:center;gap:8px;padding:7px 11px;
-    background:var(--panel);border:1px solid var(--border);border-radius:5px;
-    margin-bottom:9px;flex-wrap:wrap}
-  label{font-size:.72em;white-space:nowrap}
+  body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
+    padding:12px;min-height:100vh}
+  h1{color:var(--green);font-size:1.05em;letter-spacing:5px;margin-bottom:9px;
+    text-shadow:0 0 8px var(--green)}
+  .bar{display:flex;align-items:center;gap:8px;padding:6px 11px;background:var(--panel);
+    border:1px solid var(--border);border-radius:5px;margin-bottom:7px;flex-wrap:wrap}
+  label{font-size:.71em;white-space:nowrap}
   select{background:#080f08;color:var(--green);border:1px solid var(--dgreen);
-    border-radius:3px;padding:3px 6px;font-family:monospace;font-size:.8em;outline:none}
+    border-radius:3px;padding:3px 6px;font-family:monospace;font-size:.79em;outline:none}
+  input[type=range]{accent-color:var(--amber);cursor:pointer;background:transparent}
   button{background:#091409;color:var(--green);border:1px solid var(--green);
-    border-radius:4px;padding:4px 14px;font-family:monospace;font-size:.8em;cursor:pointer;
+    border-radius:4px;padding:4px 13px;font-family:monospace;font-size:.79em;cursor:pointer;
     letter-spacing:1px;transition:background .15s;white-space:nowrap}
   button:hover{background:#142814}
   button.live{border-color:var(--red);color:var(--red)}
-  button.armed{border-color:var(--amber);color:var(--amber);animation:pulse 1s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-  #status{font-size:.76em;padding:2px 9px;border-radius:3px;
-    background:#080f08;border:1px solid var(--border);min-width:80px;text-align:center}
+  button.stopped{border-color:var(--amber);color:var(--amber)}
+  button.armed{animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  #status{font-size:.74em;padding:2px 9px;border-radius:3px;background:#080f08;
+    border:1px solid var(--border);min-width:76px;text-align:center}
   #status.ok{color:var(--green);border-color:var(--dgreen)}
   #status.err{color:var(--red)}
-  .sep{color:#1a3a1a;font-size:1.2em;margin:0 2px}
-
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
-  .pbox{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:6px}
-  .plabel{font-size:.7em;letter-spacing:2px;margin-bottom:4px}
-  canvas{display:block;width:100%;border-radius:2px;image-rendering:pixelated}
-
-  #scope-box{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:7px}
-  #scope-hdr{display:flex;align-items:center;gap:10px;margin-bottom:7px;flex-wrap:wrap}
-  .sh-lbl{font-size:.7em;letter-spacing:2px;color:var(--amber);white-space:nowrap}
-  .cg{display:flex;align-items:center;gap:4px;font-size:.73em}
-  input[type=range]{accent-color:var(--amber);cursor:pointer}
-  #trig-disp,#zoom-lbl{color:var(--amber);font-size:.8em;min-width:46px}
+  .sep{color:#1a3a1a;font-size:1.1em;user-select:none}
+  .cg{display:flex;align-items:center;gap:4px;font-size:.72em}
+  .vv{color:var(--amber);font-size:.79em;min-width:46px}
   #arm-btn{display:none;border-color:var(--amber);color:var(--amber)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
+  .pbox{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:6px}
+  .bh{font-size:.69em;letter-spacing:2px;margin-bottom:4px}
+  canvas{display:block;width:100%;border-radius:2px;image-rendering:pixelated}
   @media(max-width:600px){.row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-
 <h1>◈ PYSCOPE</h1>
 
-<!-- Top bar: mic + connect -->
+<!-- Bar 1: device + transport -->
 <div class="bar">
   <div class="cg"><label>INPUT ›</label>
     <select id="mic-sel"><option>— scanning —</option></select>
   </div>
   <button id="conn-btn" onclick="connectMic()">▶ CONNECT</button>
+  <span class="sep">│</span>
+  <button id="pause-btn" onclick="togglePause()">■ STOP</button>
   <span id="status">OFFLINE</span>
 </div>
 
-<!-- Small channel plots -->
+<!-- Bar 2: trigger controls + window -->
+<div class="bar">
+  <div class="cg"><label>SRC</label>
+    <select id="trig-ch"><option value="L">CH1·L</option><option value="R">CH2·R</option></select>
+  </div>
+  <div class="cg"><label>EDGE</label>
+    <select id="edge-sel">
+      <option value="rising">↑ RISE</option><option value="falling">↓ FALL</option>
+    </select>
+  </div>
+  <div class="cg"><label>TRIG LVL</label>
+    <input type="range" id="trig-lvl" min="-95" max="95" value="10" step="1"
+      style="width:78px" oninput="updTrig()">
+    <span class="vv" id="trig-disp">+0.10</span>
+  </div>
+  <div class="cg"><label>MODE</label>
+    <select id="trig-mode" onchange="toggleArmBtn()">
+      <option value="auto">AUTO</option>
+      <option value="normal">NORMAL</option>
+      <option value="oneshot">ONE-SHOT</option>
+    </select>
+  </div>
+  <button id="arm-btn" onclick="armOneshot()">◉ ARM</button>
+  <span class="sep">│</span>
+  <div class="cg"><label>WINDOW</label>
+    <select id="win-size">
+      <option value="50">50ms</option><option value="100">100ms</option>
+      <option value="200">200ms</option><option value="300" selected>300ms</option>
+      <option value="500">500ms</option><option value="750">750ms</option>
+      <option value="1000">1s</option><option value="2000">2s</option>
+    </select>
+  </div>
+  <div class="cg"><label>SCOPE ZOOM</label>
+    <input type="range" id="scope-zoom" min="1" max="20" value="1" step="1"
+      style="width:72px" oninput="updScopeZoom()">
+    <span class="vv" id="szoom-lbl">1×</span>
+  </div>
+</div>
+
+<!-- Bar 3: channel plot zoom -->
+<div class="bar">
+  <div class="cg"><label>CH ZOOM</label>
+    <input type="range" id="ch-zoom" min="10" max="2000" value="150" step="10"
+      style="width:100px" oninput="updChZoom()">
+    <span class="vv" id="czoom-lbl">150ms</span>
+  </div>
+  <label style="color:#334433;font-size:.68em">← rolling window for CH1 / CH2 plots</label>
+</div>
+
+<!-- Channel plots -->
 <div class="row">
   <div class="pbox">
-    <div class="plabel" style="color:#39ff14">CH 1 · LEFT</div>
-    <canvas id="ch1" width="512" height="120"></canvas>
+    <div class="bh" style="color:#39ff14">CH 1 · LEFT</div>
+    <canvas id="ch1" width="512" height="110"></canvas>
   </div>
   <div class="pbox">
-    <div class="plabel" style="color:#00aaff">CH 2 · RIGHT</div>
-    <canvas id="ch2" width="512" height="120"></canvas>
+    <div class="bh" style="color:#00aaff">CH 2 · RIGHT</div>
+    <canvas id="ch2" width="512" height="110"></canvas>
   </div>
 </div>
 
 <!-- Triggered scope -->
-<div id="scope-box">
-  <div id="scope-hdr">
-    <span class="sh-lbl">◈ TRIGGERED SCOPE</span>
-    <span class="sep">│</span>
-    <div class="cg"><label>SRC</label>
-      <select id="trig-ch">
-        <option value="L">CH1 · L</option>
-        <option value="R">CH2 · R</option>
-      </select>
-    </div>
-    <div class="cg"><label>EDGE</label>
-      <select id="edge-sel">
-        <option value="rising">↑ RISE</option>
-        <option value="falling">↓ FALL</option>
-      </select>
-    </div>
-    <div class="cg"><label>TRIG LVL</label>
-      <input type="range" id="trig-lvl" min="-95" max="95" value="10" step="1"
-        style="width:90px" oninput="updTrig()">
-      <span id="trig-disp">+0.10</span>
-    </div>
-    <span class="sep">│</span>
-    <div class="cg"><label>MODE</label>
-      <select id="trig-mode" onchange="toggleArmBtn()">
-        <option value="auto">AUTO</option>
-        <option value="normal">NORMAL</option>
-        <option value="oneshot">ONE-SHOT</option>
-      </select>
-    </div>
-    <button id="arm-btn" onclick="armOneshot()">◉ ARM</button>
-    <span class="sep">│</span>
-    <div class="cg"><label>ZOOM</label>
-      <input type="range" id="zoom" min="1" max="20" value="1" step="1"
-        style="width:90px" oninput="updZoom()">
-      <span id="zoom-lbl">1× · 300ms</span>
-    </div>
-  </div>
-  <canvas id="trig-canvas" width="1024" height="310"></canvas>
+<div class="pbox" style="margin-bottom:7px">
+  <div class="bh" style="color:var(--amber)">◈ TRIGGERED SCOPE · 100ms pre-trigger</div>
+  <canvas id="trig-canvas" width="1024" height="295"></canvas>
+</div>
+
+<!-- FFT -->
+<div class="pbox">
+  <div class="bh" style="color:var(--green)">◈ FFT SPECTRUM · log Hz</div>
+  <canvas id="fft-canvas" width="1024" height="160"></canvas>
 </div>
 
 <script>
-const BUF = 65536;
-window.samplesL  = new Float32Array(BUF);
-window.samplesR  = new Float32Array(BUF);
-window.writePos  = 0;
+const BUF = 131072;
+window.samplesL   = new Float32Array(BUF);
+window.samplesR   = new Float32Array(BUF);
+window.writePos   = 0;
 window.sampleRate = 44100;
-window.isConnected = false;
-window.oneshotArm  = false;
+window.isConnected= false;
+window.oneshotArm = false;
+window.paused     = false;
 
-function updTrig() {
-  const v = parseInt(document.getElementById('trig-lvl').value) / 100;
-  document.getElementById('trig-disp').textContent = (v >= 0 ? '+' : '') + v.toFixed(2);
+let analyser, fftBuf, fftFrozen = null;
+
+/* ── UI helpers ── */
+function updTrig(){
+  const v=parseInt(document.getElementById('trig-lvl').value)/100;
+  document.getElementById('trig-disp').textContent=(v>=0?'+':'')+v.toFixed(2);
 }
-function updZoom() {
-  const z = parseInt(document.getElementById('zoom').value);
-  const ms = Math.round(300 / z);
-  document.getElementById('zoom-lbl').textContent = z + '× · ' + ms + 'ms';
+function updScopeZoom(){
+  document.getElementById('szoom-lbl').textContent=
+    document.getElementById('scope-zoom').value+'×';
 }
-function toggleArmBtn() {
-  const m = document.getElementById('trig-mode').value;
-  document.getElementById('arm-btn').style.display = m === 'oneshot' ? 'inline-block' : 'none';
+function updChZoom(){
+  document.getElementById('czoom-lbl').textContent=
+    document.getElementById('ch-zoom').value+'ms';
 }
-function armOneshot() {
-  window.oneshotArm = true;
+function toggleArmBtn(){
+  document.getElementById('arm-btn').style.display=
+    document.getElementById('trig-mode').value==='oneshot'?'inline-block':'none';
+}
+function armOneshot(){
+  window.oneshotArm=true;
   document.getElementById('arm-btn').classList.add('armed');
 }
-
-async function populateMics() {
-  try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const sel = document.getElementById('mic-sel');
-    sel.innerHTML = '';
-    const mics = devs.filter(d => d.kind === 'audioinput');
-    if (!mics.length) { sel.innerHTML = '<option>No devices found</option>'; return; }
-    mics.forEach((d, i) => {
-      const o = document.createElement('option');
-      o.value = d.deviceId;
-      o.textContent = d.label || 'Microphone ' + (i + 1);
-      sel.appendChild(o);
-    });
-  } catch(e) { setStatus('PERM DENIED', false); }
-}
-
-let audioCtx, processor, mediaStream;
-function setStatus(msg, ok) {
-  const el = document.getElementById('status');
-  el.textContent = msg; el.className = ok ? 'ok' : 'err';
-}
-
-async function connectMic() {
-  const btn = document.getElementById('conn-btn');
-  if (window.isConnected) {
-    if (processor)   { processor.disconnect(); processor = null; }
-    if (audioCtx)    { await audioCtx.close(); audioCtx = null; }
-    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
-    window.isConnected = false;
-    btn.textContent = '▶ CONNECT'; btn.className = '';
-    setStatus('OFFLINE', false); return;
+function togglePause(){
+  window.paused=!window.paused;
+  const btn=document.getElementById('pause-btn');
+  if(window.paused){
+    btn.textContent='▶ RUN'; btn.classList.add('stopped');
+    if(analyser&&fftBuf){fftFrozen=new Float32Array(fftBuf.length);analyser.getFloatFrequencyData(fftFrozen);}
+  } else {
+    btn.textContent='■ STOP'; btn.classList.remove('stopped'); fftFrozen=null;
   }
-  const devId = document.getElementById('mic-sel').value;
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: devId ? { exact: devId } : undefined,
-        channelCount: { ideal: 2 },
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false
-      }
+}
+function setStatus(msg,ok){
+  const el=document.getElementById('status');
+  el.textContent=msg; el.className=ok?'ok':'err';
+}
+
+/* ── Mic setup ── */
+async function populateMics(){
+  try{
+    await navigator.mediaDevices.getUserMedia({audio:true});
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const sel=document.getElementById('mic-sel'); sel.innerHTML='';
+    const mics=devs.filter(d=>d.kind==='audioinput');
+    if(!mics.length){sel.innerHTML='<option>No devices found</option>';return;}
+    mics.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label||'Microphone '+(i+1); sel.appendChild(o);
     });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    window.sampleRate = audioCtx.sampleRate;
-    const src = audioCtx.createMediaStreamSource(mediaStream);
-    processor = audioCtx.createScriptProcessor(2048, 2, 2);
-    processor.onaudioprocess = e => {
-      const ib = e.inputBuffer;
-      const L  = ib.getChannelData(0);
-      const R  = ib.numberOfChannels > 1 ? ib.getChannelData(1) : L;
-      let wp = window.writePos;
-      for (let i = 0; i < L.length; i++) {
-        window.samplesL[wp] = L[i];
-        window.samplesR[wp] = R[i];
-        if (++wp >= BUF) wp = 0;
+  } catch(e){setStatus('PERM DENIED',false);}
+}
+
+let audioCtx,processor,mediaStream;
+
+async function connectMic(){
+  const btn=document.getElementById('conn-btn');
+  if(window.isConnected){
+    if(processor){processor.disconnect();processor=null;}
+    if(audioCtx){await audioCtx.close();audioCtx=null;analyser=null;fftBuf=null;}
+    if(mediaStream){mediaStream.getTracks().forEach(t=>t.stop());mediaStream=null;}
+    window.isConnected=false; btn.textContent='▶ CONNECT'; btn.className='';
+    setStatus('OFFLINE',false); return;
+  }
+  const devId=document.getElementById('mic-sel').value;
+  try{
+    mediaStream=await navigator.mediaDevices.getUserMedia({audio:{
+      deviceId:devId?{exact:devId}:undefined,
+      channelCount:{ideal:2},echoCancellation:false,noiseSuppression:false,autoGainControl:false
+    }});
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    window.sampleRate=audioCtx.sampleRate;
+    const src=audioCtx.createMediaStreamSource(mediaStream);
+
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=4096; analyser.smoothingTimeConstant=0.78;
+    analyser.minDecibels=-100; analyser.maxDecibels=0;
+    fftBuf=new Float32Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+
+    processor=audioCtx.createScriptProcessor(2048,2,2);
+    processor.onaudioprocess=e=>{
+      const ib=e.inputBuffer, L=ib.getChannelData(0);
+      const R=ib.numberOfChannels>1?ib.getChannelData(1):L;
+      let wp=window.writePos;
+      for(let i=0;i<L.length;i++){
+        window.samplesL[wp]=L[i]; window.samplesR[wp]=R[i];
+        if(++wp>=BUF)wp=0;
       }
-      window.writePos = wp;
+      window.writePos=wp;
     };
-    src.connect(processor);
-    processor.connect(audioCtx.destination);
-    window.isConnected = true;
-    btn.textContent = '■ DISCONNECT'; btn.className = 'live';
-    setStatus('● LIVE', true);
-  } catch(e) {
-    setStatus('ERR:' + e.message.slice(0, 20).toUpperCase(), false);
-  }
+    src.connect(processor); processor.connect(audioCtx.destination);
+    window.isConnected=true; btn.textContent='■ DISCONNECT'; btn.className='live';
+    setStatus('● LIVE',true);
+  } catch(e){setStatus('ERR:'+e.message.slice(0,18).toUpperCase(),false);}
 }
 
-/* ── Canvas renderers ── */
-function drawGrid(cx, w, h, cols, rows) {
-  cx.strokeStyle = '#0c1e0c'; cx.lineWidth = 1;
-  for (let i = 1; i < rows; i++) {
-    const y = h * i / rows;
-    cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w, y); cx.stroke();
-  }
-  for (let i = 1; i < cols; i++) {
-    const x = w * i / cols;
-    cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, h); cx.stroke();
-  }
-  cx.strokeStyle = '#1a4a1a'; cx.lineWidth = 1;
-  cx.beginPath(); cx.moveTo(0, h / 2); cx.lineTo(w, h / 2); cx.stroke();
+/* ══════════════════ Canvas renderers ══════════════════ */
+
+function hgrid(cx,w,h,cols,rows){
+  cx.strokeStyle='#0c1e0c'; cx.lineWidth=1;
+  for(let r=1;r<rows;r++){const y=h*r/rows;cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+  for(let c=1;c<cols;c++){const x=w*c/cols;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+  cx.strokeStyle='#1a4a1a'; cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(0,h/2);cx.lineTo(w,h/2);cx.stroke();
 }
 
-window.drawCh = function(id, samples, color) {
-  const cv = document.getElementById(id);
-  const cx = cv.getContext('2d');
-  const w = cv.width, h = cv.height;
-  cx.fillStyle = '#030a03'; cx.fillRect(0, 0, w, h);
-  drawGrid(cx, w, h, 8, 4);
-  if (!samples || samples.length < 2) return;
-  cx.strokeStyle = color; cx.lineWidth = 1.5;
-  cx.beginPath();
-  const n = samples.length;
-  for (let i = 0; i < n; i++) {
-    const x = w * i / (n - 1), y = h / 2 - samples[i] * h / 2 * 0.85;
-    i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+window.drawCh=function(id,samps,color,paused){
+  const cv=document.getElementById(id), cx=cv.getContext('2d');
+  const w=cv.width, h=cv.height;
+  cx.fillStyle='#030a03'; cx.fillRect(0,0,w,h);
+  hgrid(cx,w,h,8,4);
+  if(paused){cx.fillStyle='rgba(255,136,0,0.05)';cx.fillRect(0,0,w,h);}
+  if(!samps||samps.length<2)return;
+  cx.strokeStyle=color; cx.lineWidth=1.5; cx.beginPath();
+  for(let i=0;i<samps.length;i++){
+    const x=w*i/(samps.length-1), y=h/2-samps[i]*h/2*0.85;
+    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
   }
   cx.stroke();
+  if(paused){cx.fillStyle='#ff8800';cx.font='bold 10px monospace';cx.fillText('STOP',4,12);}
 };
 
-function pickTickMs(rangeMs) {
-  for (const t of [1,2,5,10,20,25,50,100,150,200,300,500]) {
-    if (rangeMs / t <= 10) return t;
-  }
-  return 50;
+function pickTick(ms){
+  for(const t of[1,2,5,10,20,25,50,100,150,200,250,500,1000])
+    if(ms/t<=10)return t;
+  return 500;
 }
 
-// samplesA = trigger channel (brighter), samplesB = other channel (dimmer)
-window.drawScope = function(samplesA, samplesB, trigLvl, status, totalMs, trigCh) {
-  const cv = document.getElementById('trig-canvas');
-  const cx = cv.getContext('2d');
-  const w = cv.width, h = cv.height;
-  const PAD_B = 30, PH = h - PAD_B;
+window.drawScope=function(sA,sB,trigLvl,status,totalMs,preTrigMs,trigCh,paused){
+  const cv=document.getElementById('trig-canvas'), cx=cv.getContext('2d');
+  const w=cv.width, h=cv.height, PAD_B=26, PH=h-PAD_B;
+  cx.fillStyle='#030a03'; cx.fillRect(0,0,w,h);
+  if(paused){cx.fillStyle='rgba(255,136,0,0.04)';cx.fillRect(0,0,w,PH);}
 
-  cx.fillStyle = '#030a03'; cx.fillRect(0, 0, w, h);
+  const tick=pickTick(totalMs);
+  const t0=-preTrigMs, t1=totalMs-preTrigMs;
 
-  // ── grid & x-axis ──
-  cx.strokeStyle = '#0c1e0c'; cx.lineWidth = 1;
-  const tickMs = pickTickMs(totalMs);
-  const numTicks = Math.floor(totalMs / tickMs);
-  for (let i = 1; i <= numTicks; i++) {
-    const x = w * (i * tickMs) / totalMs;
-    cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, PH); cx.stroke();
+  // vertical grid (time-based)
+  cx.strokeStyle='#0c1e0c'; cx.lineWidth=1;
+  for(let t=Math.ceil(t0/tick)*tick; t<=t1+0.001; t+=tick){
+    const x=(t+preTrigMs)/totalMs*w;
+    cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,PH);cx.stroke();
   }
-  for (let r = 1; r < 6; r++) {
-    const y = PH * r / 6;
-    cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w, y); cx.stroke();
+  // horizontal grid
+  for(let r=1;r<6;r++){const y=PH*r/6;cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+  cx.strokeStyle='#1a4a1a';
+  cx.beginPath();cx.moveTo(0,PH/2);cx.lineTo(w,PH/2);cx.stroke();
+  cx.beginPath();cx.moveTo(0,PH);cx.lineTo(w,PH);cx.stroke();
+
+  // x-axis labels (relative to trigger = 0)
+  cx.fillStyle='#446644'; cx.font='10px monospace';
+  for(let t=Math.ceil(t0/tick)*tick; t<=t1+0.001; t+=tick){
+    const x=(t+preTrigMs)/totalMs*w;
+    const lbl=(t>=0?'+':'')+Math.round(t)+'ms';
+    const tw=lbl.length*6;
+    cx.fillText(lbl, Math.max(1,Math.min(w-tw-1,x-tw/2)), h-7);
   }
-  cx.strokeStyle = '#1a4a1a'; cx.lineWidth = 1;
-  cx.beginPath(); cx.moveTo(0, PH / 2); cx.lineTo(w, PH / 2); cx.stroke();
 
-  // x-axis labels
-  cx.fillStyle = '#446644'; cx.font = '10px monospace';
-  cx.fillText('0', 3, h - 8);
-  for (let i = 1; i <= numTicks; i++) {
-    const x = w * (i * tickMs) / totalMs;
-    const lbl = (i * tickMs) + 'ms';
-    cx.fillText(lbl, Math.min(x + 2, w - lbl.length * 6 - 2), h - 8);
-  }
-  // total range at right edge
-  const rlbl = totalMs.toFixed(1) + 'ms';
-  cx.fillStyle = '#557755';
-  cx.fillText(rlbl, w - rlbl.length * 6.5, h - 8);
+  // trigger level dashed line
+  const ty=PH/2-trigLvl*PH/2*0.85;
+  cx.strokeStyle='#ff6600'; cx.lineWidth=1; cx.setLineDash([6,4]);
+  cx.beginPath();cx.moveTo(0,ty);cx.lineTo(w,ty);cx.stroke(); cx.setLineDash([]);
+  cx.fillStyle='#ff6600'; cx.font='10px monospace';
+  cx.fillText('▶ '+(trigLvl>=0?'+':'')+trigLvl.toFixed(2),5,Math.max(12,Math.min(PH-4,ty-4)));
 
-  // x-axis line
-  cx.strokeStyle = '#1a3a1a'; cx.lineWidth = 1;
-  cx.beginPath(); cx.moveTo(0, PH); cx.lineTo(w, PH); cx.stroke();
+  // trigger time marker (T = 0)
+  const tx=preTrigMs/totalMs*w;
+  cx.strokeStyle='rgba(255,102,0,0.55)'; cx.lineWidth=1; cx.setLineDash([4,3]);
+  cx.beginPath();cx.moveTo(tx,0);cx.lineTo(tx,PH);cx.stroke(); cx.setLineDash([]);
+  cx.fillStyle='#ff9933'; cx.font='bold 10px monospace';
+  cx.fillText('T',Math.min(tx+3,w-14),12);
 
-  // ── trigger level line ──
-  const ty = PH / 2 - trigLvl * PH / 2 * 0.85;
-  cx.strokeStyle = '#ff6600'; cx.lineWidth = 1; cx.setLineDash([6, 4]);
-  cx.beginPath(); cx.moveTo(0, ty); cx.lineTo(w, ty); cx.stroke();
-  cx.setLineDash([]);
-  cx.fillStyle = '#ff6600'; cx.font = '10px monospace';
-  const tlbl = (trigLvl >= 0 ? '+' : '') + trigLvl.toFixed(2);
-  cx.fillText('▶ ' + tlbl, 5, Math.min(PH - 4, Math.max(12, ty - 4)));
+  // status badge
+  const sc={trig:['#39ff14','TRIG ●'],armed:['#ffb800','ARMED ◉'],
+    hold:['#00aaff','HOLD ◈'],wait:['#556655','WAIT ○']};
+  const[col,txt]=paused?['#ff8800','STOP ■']:(sc[status]||sc.wait);
+  cx.fillStyle=col; cx.font='bold 11px monospace'; cx.fillText(txt,w-82,14);
+  cx.fillStyle='#446644'; cx.font='10px monospace';
+  cx.fillText('SRC:'+(trigCh==='L'?'CH1':'CH2'),w-82,28);
 
-  // ── status badge ──
-  let scol = '#556655', stxt = 'WAIT ○';
-  if (status === 'trig')  { scol = '#39ff14'; stxt = 'TRIG ●'; }
-  if (status === 'armed') { scol = '#ffb800'; stxt = 'ARMED ◉'; }
-  if (status === 'hold')  { scol = '#00aaff'; stxt = 'HOLD ◈'; }
-  cx.fillStyle = scol; cx.font = 'bold 11px monospace';
-  cx.fillText(stxt, w - 75, 14);
-
-  // source label
-  cx.fillStyle = '#446644'; cx.font = '10px monospace';
-  cx.fillText('SRC:' + (trigCh === 'L' ? 'CH1' : 'CH2'), w - 75, 28);
-
-  // ── draw background (other) channel ──
-  if (samplesB && samplesB.length >= 2) {
-    cx.globalAlpha = 0.35;
-    cx.strokeStyle = trigCh === 'L' ? '#00aaff' : '#39ff14';
-    cx.lineWidth = 1;
+  // dim: other channel
+  if(sB&&sB.length>=2){
+    cx.globalAlpha=0.28; cx.strokeStyle=trigCh==='L'?'#00aaff':'#39ff14'; cx.lineWidth=1;
     cx.beginPath();
-    const nb = samplesB.length;
-    for (let i = 0; i < nb; i++) {
-      const x = w * i / (nb - 1), y = PH / 2 - samplesB[i] * PH / 2 * 0.85;
-      i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
-    }
-    cx.stroke();
-    cx.globalAlpha = 1;
+    for(let i=0;i<sB.length;i++){const x=w*i/(sB.length-1),y=PH/2-sB[i]*PH/2*0.85;i===0?cx.moveTo(x,y):cx.lineTo(x,y);}
+    cx.stroke(); cx.globalAlpha=1;
   }
-
-  // ── draw trigger channel (bright, glow) ──
-  if (samplesA && samplesA.length >= 2) {
-    const acol = trigCh === 'L' ? '#c8ff00' : '#00ccff';
-    cx.strokeStyle = acol; cx.lineWidth = 2;
-    cx.shadowBlur = 5; cx.shadowColor = acol + '66';
+  // bright: trigger channel with glow
+  if(sA&&sA.length>=2){
+    const ac=trigCh==='L'?'#c8ff00':'#00ccff';
+    cx.strokeStyle=ac; cx.lineWidth=2; cx.shadowBlur=5; cx.shadowColor=ac+'66';
     cx.beginPath();
-    const na = samplesA.length;
-    for (let i = 0; i < na; i++) {
-      const x = w * i / (na - 1), y = PH / 2 - samplesA[i] * PH / 2 * 0.85;
-      i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
-    }
-    cx.stroke(); cx.shadowBlur = 0;
+    for(let i=0;i<sA.length;i++){const x=w*i/(sA.length-1),y=PH/2-sA[i]*PH/2*0.85;i===0?cx.moveTo(x,y):cx.lineTo(x,y);}
+    cx.stroke(); cx.shadowBlur=0;
   }
 };
 
-populateMics();
-updTrig(); updZoom();
+window.drawFFT=function(frozen){
+  const cv=document.getElementById('fft-canvas'), cx=cv.getContext('2d');
+  const w=cv.width, h=cv.height, PL=40, PB=22, PW=w-PL, PH=h-PB;
+  cx.fillStyle='#030a03'; cx.fillRect(0,0,w,h);
+
+  let data;
+  if(frozen&&fftFrozen){data=fftFrozen;}
+  else if(!frozen&&analyser){analyser.getFloatFrequencyData(fftBuf);data=fftBuf;}
+  else{cx.fillStyle='#446644';cx.font='12px monospace';cx.fillText('NO SIGNAL',PL+PW/2-42,h/2);return;}
+
+  const sr=window.sampleRate, nyq=sr/2;
+  const fMn=10, fMx=nyq, lMn=Math.log10(fMn), lMx=Math.log10(fMx);
+  const dMn=-100, dMx=0;
+  const fxp=f=>PL+(Math.log10(f)-lMn)/(lMx-lMn)*PW;
+  const dyp=d=>PH*(1-(d-dMn)/(dMx-dMn));
+
+  // freq grid
+  cx.fillStyle='#446644'; cx.font='10px monospace'; cx.strokeStyle='#0c1e0c'; cx.lineWidth=1;
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(f=>{
+    if(f>nyq)return;
+    const x=fxp(f);
+    cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,PH);cx.stroke();
+    const l=f>=1000?(f/1000)+'k':f+'';
+    cx.fillText(l,x-l.length*3,h-6);
+  });
+  // dB grid
+  [-80,-60,-40,-20,0].forEach(db=>{
+    const y=dyp(db);
+    cx.strokeStyle='#0c1e0c'; cx.lineWidth=1;
+    cx.beginPath();cx.moveTo(PL,y);cx.lineTo(w,y);cx.stroke();
+    cx.fillStyle='#446644'; cx.font='10px monospace';
+    cx.fillText(db+'dB',1,y+4);
+  });
+  // 0dB accent
+  cx.strokeStyle='#1a4a1a'; cx.setLineDash([4,4]);
+  cx.beginPath();cx.moveTo(PL,dyp(0));cx.lineTo(w,dyp(0));cx.stroke();cx.setLineDash([]);
+
+  // filled area
+  cx.fillStyle='rgba(57,255,20,0.06)';
+  cx.beginPath(); cx.moveTo(PL,PH);
+  for(let px=0;px<PW;px++){
+    const f=Math.pow(10,lMn+(px/PW)*(lMx-lMn));
+    const bin=Math.min(data.length-1,Math.round(f/nyq*data.length));
+    const y=Math.max(0,Math.min(PH,dyp(data[bin])));
+    cx.lineTo(PL+px,y);
+  }
+  cx.lineTo(PL+PW,PH); cx.closePath(); cx.fill();
+
+  // spectrum line
+  cx.strokeStyle='#39ff14'; cx.lineWidth=1.5; cx.shadowBlur=3; cx.shadowColor='#39ff1444';
+  cx.beginPath();
+  for(let px=0;px<PW;px++){
+    const f=Math.pow(10,lMn+(px/PW)*(lMx-lMn));
+    const bin=Math.min(data.length-1,Math.round(f/nyq*data.length));
+    const y=Math.max(0,Math.min(PH,dyp(data[bin])));
+    px===0?cx.moveTo(PL,y):cx.lineTo(PL+px,y);
+  }
+  cx.stroke(); cx.shadowBlur=0;
+
+  // y-axis
+  cx.strokeStyle='#1a4a1a'; cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(PL,0);cx.lineTo(PL,PH);cx.stroke();
+
+  if(frozen){
+    cx.fillStyle='rgba(255,136,0,0.05)';cx.fillRect(PL,0,PW,PH);
+    cx.fillStyle='#ff8800';cx.font='bold 10px monospace';cx.fillText('STOP',PL+4,12);
+  }
+};
+
+populateMics(); updTrig(); updScopeZoom(); updChZoom();
 </script>
 
 <script type="py" async>
 import asyncio, js
 from pyodide.ffi import to_js
 
-BUF      = 65536
-DISP_N   = 4096
+BUF      = 131072
+SEARCH_N = 8192
 DRAW_PTS = 300
 TDRAW    = 512
-SEARCH_N = 4096   # look-back region for trigger hunting
 
-# ── persistent state ──
-last_cap_l   = None
-last_cap_r   = None
-oneshot_fired = False
+last_cap_l      = None
+last_cap_r      = None
+last_cap_pre    = 0      # pre-trigger samples in last capture
+frozen_ch_l     = None
+frozen_ch_r     = None
+oneshot_fired   = False
 
 def get_latest(arr_js, n):
-    wp  = int(js.window.writePos)
-    mv  = arr_js.to_py()
-    n   = min(n, BUF)
+    wp = int(js.window.writePos)
+    n  = min(n, BUF)
+    mv = arr_js.to_py()
     if wp >= n:
         return list(mv[wp - n : wp])
     return list(mv[BUF - (n - wp) : BUF]) + list(mv[0 : wp])
@@ -371,103 +439,133 @@ def dsamp(s, pts):
     step = n / pts
     return [s[int(i * step)] for i in range(pts)]
 
-def find_trigger(samples, level, edge, win):
-    limit = len(samples) - win - 2
-    if limit <= 0: return 0, False
-    if edge == 'rising':
-        for i in range(1, limit):
-            if samples[i-1] < level <= samples[i]:
-                return i, True
-    else:
-        for i in range(1, limit):
-            if samples[i-1] > level >= samples[i]:
-                return i, True
-    return 0, False
+def find_trigger(samples, level, edge):
+    """Return index of first crossing, or -1."""
+    for i in range(1, len(samples)):
+        if edge == 'rising':
+            if samples[i-1] < level <= samples[i]: return i
+        else:
+            if samples[i-1] > level >= samples[i]: return i
+    return -1
 
 async def render_loop():
-    global last_cap_l, last_cap_r, oneshot_fired
+    global last_cap_l, last_cap_r, last_cap_pre
+    global frozen_ch_l, frozen_ch_r, oneshot_fired
 
     while True:
         await asyncio.sleep(1 / 30)
         if not js.window.isConnected:
             continue
         try:
-            sr       = float(js.window.sampleRate)
-            trig_win = int(sr * 0.3)
-            need_n   = SEARCH_N + trig_win
+            paused = bool(js.window.paused)
+            sr     = float(js.window.sampleRate)
+
+            # ── read UI params ──
+            win_ms     = float(js.document.getElementById('win-size').value)
+            trig_lvl   = float(js.document.getElementById('trig-lvl').value) / 100.0
+            edge       = str(js.document.getElementById('edge-sel').value)
+            mode       = str(js.document.getElementById('trig-mode').value)
+            trig_ch    = str(js.document.getElementById('trig-ch').value)
+            s_zoom     = max(1, int(js.document.getElementById('scope-zoom').value))
+            ch_ms      = max(10, int(js.document.getElementById('ch-zoom').value))
+
+            win_n      = int(sr * win_ms / 1000)
+            pre_ms     = min(100.0, win_ms * 0.85)   # 100ms pre, capped at 85% of window
+            pre_n      = int(sr * pre_ms / 1000)
+            post_n     = max(1, win_n - pre_n)
 
             # ── rolling channel plots ──
-            lat_l = dsamp(get_latest(js.window.samplesL, DISP_N), DRAW_PTS)
-            lat_r = dsamp(get_latest(js.window.samplesR, DISP_N), DRAW_PTS)
-            js.window.drawCh('ch1', to_js(lat_l), '#39ff14')
-            js.window.drawCh('ch2', to_js(lat_r), '#00aaff')
+            ch_n = min(int(sr * ch_ms / 1000), BUF // 2)
+            if paused:
+                if frozen_ch_l is None:
+                    frozen_ch_l = dsamp(get_latest(js.window.samplesL, ch_n), DRAW_PTS)
+                    frozen_ch_r = dsamp(get_latest(js.window.samplesR, ch_n), DRAW_PTS)
+                cL, cR = frozen_ch_l, frozen_ch_r
+            else:
+                frozen_ch_l = frozen_ch_r = None
+                cL = dsamp(get_latest(js.window.samplesL, ch_n), DRAW_PTS)
+                cR = dsamp(get_latest(js.window.samplesR, ch_n), DRAW_PTS)
 
-            # ── triggered scope ──
-            trig_lvl = float(js.document.getElementById('trig-lvl').value) / 100.0
-            edge     = str(js.document.getElementById('edge-sel').value)
-            mode     = str(js.document.getElementById('trig-mode').value)
-            trig_ch  = str(js.document.getElementById('trig-ch').value)
-            zoom     = max(1, int(js.document.getElementById('zoom').value))
+            js.window.drawCh('ch1', to_js(cL), '#39ff14', paused)
+            js.window.drawCh('ch2', to_js(cR), '#00aaff', paused)
 
-            # grab both channels aligned
-            buf_l = get_latest(js.window.samplesL, need_n)
-            buf_r = get_latest(js.window.samplesR, need_n)
-            src   = buf_l if trig_ch == 'L' else buf_r
+            # ── FFT ──
+            js.window.drawFFT(paused)
 
-            t_idx, found = find_trigger(src, trig_lvl, edge, trig_win)
-
-            # ── one-shot arm signal from JS ──
+            # ── one-shot arm reset ──
             if js.window.oneshotArm:
                 js.window.oneshotArm = False
                 oneshot_fired = False
-                # button styling reset via Python is tricky; fire JS eval
                 js.document.getElementById('arm-btn').classList.remove('armed')
 
-            # ── capture on trigger ──
-            status = 'wait'
-            if found:
-                last_cap_l = buf_l[t_idx : t_idx + trig_win]
-                last_cap_r = buf_r[t_idx : t_idx + trig_win]
+            # ── triggered scope ──
+            # ring-buffer layout for capture:
+            #   buf[ 0 .. pre_n-1 ]          → pre-trigger history
+            #   buf[ pre_n .. pre_n+SEARCH-1 ]→ search window
+            #   buf[ pre_n+SEARCH .. end ]    → post-trigger room
+            found = False
+            if not paused:
+                need_n = min(pre_n + SEARCH_N + post_n, BUF - 1)
+                bL = get_latest(js.window.samplesL, need_n)
+                bR = get_latest(js.window.samplesR, need_n)
+                src = bL if trig_ch == 'L' else bR
 
+                # search region: [pre_n : pre_n+SEARCH_N]
+                s0 = max(0, len(bL) - post_n - SEARCH_N)
+                s1 = max(s0+1, len(bL) - post_n)
+                search = src[s0:s1]
+
+                t_rel = find_trigger(search, trig_lvl, edge)
+                if t_rel >= 0:
+                    t_abs = s0 + t_rel
+                    cs, ce = t_abs - pre_n, t_abs + post_n
+                    if cs >= 0 and ce <= len(bL):
+                        cl, cr = bL[cs:ce], bR[cs:ce]
+                        if len(cl) == win_n:
+                            found = True
+                            last_cap_l = cl
+                            last_cap_r = cr
+                            last_cap_pre = pre_n
+
+            # mode logic
+            status = 'wait'
             if mode == 'auto':
                 if found:
                     status = 'trig'
-                else:
-                    # free-running: show mid-buffer
-                    if not found:
-                        mid = max(0, len(buf_l) // 2 - trig_win // 2)
-                        last_cap_l = buf_l[mid : mid + trig_win]
-                        last_cap_r = buf_r[mid : mid + trig_win]
+                elif not paused:
+                    # free-run: show latest window, no pre-trigger reference
+                    n_fr = min(win_n, BUF // 2)
+                    last_cap_l = get_latest(js.window.samplesL, n_fr)
+                    last_cap_r = get_latest(js.window.samplesR, n_fr)
+                    last_cap_pre = 0
                     status = 'wait'
-
             elif mode == 'normal':
                 status = 'trig' if found else ('hold' if last_cap_l else 'wait')
-
             elif mode == 'oneshot':
                 if not oneshot_fired:
-                    if found:
-                        oneshot_fired = True
-                        status = 'trig'
-                    else:
-                        status = 'armed'
+                    if found: oneshot_fired = True; status = 'trig'
+                    else: status = 'armed'
                 else:
                     status = 'hold'
 
-            # ── apply zoom ──
-            disp_l = last_cap_l if last_cap_l else []
-            disp_r = last_cap_r if last_cap_r else []
-            if disp_l:
-                n_show  = max(10, len(disp_l) // zoom)
-                pts_a   = dsamp(disp_l[:n_show], TDRAW)
-                pts_b   = dsamp(disp_r[:n_show], TDRAW)
-                disp_ms = n_show / sr * 1000.0
+            # ── apply scope zoom (slice from front, keep trigger position) ──
+            dL = last_cap_l or []
+            dR = last_cap_r or []
+            if dL:
+                n_show     = max(10, len(dL) // s_zoom)
+                pts_a      = dsamp(dL[:n_show], TDRAW)
+                pts_b      = dsamp(dR[:n_show], TDRAW)
+                disp_ms    = n_show / sr * 1000.0
+                # pre-trig stays constant unless zoom cuts past it
+                disp_pre   = min(last_cap_pre, n_show) / sr * 1000.0
             else:
                 pts_a = pts_b = []
-                disp_ms = 300.0 / zoom
+                disp_ms  = win_ms / s_zoom
+                disp_pre = min(pre_ms, disp_ms)
 
             js.window.drawScope(
                 to_js(pts_a), to_js(pts_b),
-                trig_lvl, status, disp_ms, trig_ch
+                trig_lvl, status, disp_ms, disp_pre, trig_ch, paused
             )
 
         except Exception as e:
