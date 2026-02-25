@@ -1,639 +1,260 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PyScope</title>
-<py-config>packages = ["numpy"]</py-config>
-<script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-<style>
-  :root{--bg:#050d05;--panel:#0a140a;--border:#152515;--green:#39ff14;--dgreen:#1a6b00;
-    --amber:#ffb800;--blue:#00aaff;--red:#ff3333;--text:#90b890}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;padding:12px;min-height:100vh}
-  h1{color:var(--green);font-size:1.05em;letter-spacing:5px;margin-bottom:10px;text-shadow:0 0 8px var(--green)}
-  .bar{display:flex;align-items:center;gap:7px;padding:6px 10px;background:var(--panel);
-    border:1px solid var(--border);border-radius:5px;margin-bottom:9px;flex-wrap:wrap}
-  label{font-size:.7em;white-space:nowrap}
-  select{background:#080f08;color:var(--green);border:1px solid var(--dgreen);
-    border-radius:3px;padding:3px 5px;font-family:monospace;font-size:.78em;outline:none}
-  button{background:#091409;color:var(--green);border:1px solid var(--green);
-    border-radius:4px;padding:4px 12px;font-family:monospace;font-size:.78em;cursor:pointer;
-    letter-spacing:1px;transition:background .15s;white-space:nowrap}
-  button:hover{background:#142814}
-  button.live{border-color:var(--red);color:var(--red)}
-  button.armed{border-color:var(--amber);color:var(--amber);animation:pulse 1s infinite}
-  button.folder-ok{border-color:#00aaff;color:#00aaff}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
-  #status{font-size:.74em;padding:2px 8px;border-radius:3px;background:#080f08;
-    border:1px solid var(--border);min-width:78px;text-align:center}
-  #status.ok{color:var(--green);border-color:var(--dgreen)}
-  #status.err{color:var(--red)}
-  #folder-status{font-size:.7em;color:#557799;max-width:180px;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
-  .sep{color:#1a3a1a;font-size:1.1em;margin:0 1px}
-  .cg{display:flex;align-items:center;gap:4px;font-size:.71em}
-  input[type=range]{accent-color:var(--amber);cursor:pointer}
-  input[type=number]{background:#080f08;color:var(--amber);border:1px solid #2a4a2a;
-    border-radius:3px;padding:2px 5px;font-family:monospace;font-size:.78em;outline:none}
-  .vdisp{color:var(--amber);font-size:.78em;min-width:38px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
-  .pbox{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:6px}
-  .plabel{font-size:.68em;letter-spacing:2px;margin-bottom:4px}
-  canvas{display:block;width:100%;border-radius:2px;image-rendering:pixelated}
-  .scopebox{background:var(--panel);border:1px solid var(--border);border-radius:5px;
-    padding:7px;margin-bottom:9px}
-  .boxhdr{display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap}
-  .bhlbl{font-size:.68em;letter-spacing:2px;white-space:nowrap}
-  #arm-btn{display:none;border-color:var(--amber);color:var(--amber)}
-  #save-frf-btn{border-color:#ff9900;color:#ff9900;margin-top:9px;width:100%}
-  #save-frf-btn:hover{background:#1a0f00}
-  #save-msg{font-size:.7em;color:#557755;text-align:center;margin-top:5px;min-height:1em}
-  @media(max-width:620px){.row{grid-template-columns:1fr}}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ObieApps</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --card-hover: #1c2128;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 40px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+      max-width: 680px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .tagline {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .divider {
+      width: 100%;
+      max-width: 680px;
+      border: none;
+      border-top: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+
+    .section-label {
+      width: 100%;
+      max-width: 680px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 680px;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+
+    .card:hover {
+      background: var(--card-hover);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      font-size: 1.4rem;
+      width: 36px; height: 36px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-name {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .card-desc {
+      font-size: 0.87rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .card-tag {
+      align-self: flex-start;
+      margin-top: 4px;
+      padding: 2px 9px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .tag-app   { border-color: #388bfd55; color: #58a6ff; }
+    .tag-video { border-color: #f7853455; color: #f78534; }
+    .tag-site  { border-color: #3fb95055; color: #3fb950; }
+    .tag-legacy{ border-color: #bc8cff55; color: #bc8cff; }
+
+    footer {
+      margin-top: auto;
+      padding-top: 30px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    footer a { color: var(--muted); text-decoration: underline; }
+  </style>
 </head>
 <body>
-<h1>◈ PYSCOPE</h1>
 
-<!-- ── Top bar: mic + folder ── -->
-<div class="bar">
-  <div class="cg"><label>INPUT ›</label>
-    <select id="mic-sel"><option>— scanning —</option></select>
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">🎛️</div>
+      <h1>ObieApps</h1>
+    </div>
+    <p class="tagline">
+      A collection of apps, tools, and resources from the
+      <strong>Oberlin Acoustics Workshop</strong> — built for exploring
+      sound, signal analysis, and acoustic education.
+    </p>
+    <span class="badge">&#128279; All ObieApp resources in one place</span>
+  </header>
+
+  <hr class="divider" />
+
+  <p class="section-label">📦 Apps &amp; Tools</p>
+  <div class="cards">
+
+    <a class="card" href="pyscope.html">
+      <div class="card-header">
+        <div class="card-icon">📡</div>
+        <span class="card-name">PyScope</span>
+      </div>
+      <p class="card-desc">
+        A Python-based real-time oscilloscope and signal analysis tool.
+        Visualize waveforms, measure frequency, and explore acoustic signals.
+      </p>
+      <span class="card-tag tag-app">App · Python</span>
+    </a>
+
+    <a class="card" href="https://sites.google.com/view/oberlinacoustics/home?pli=1" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">🗂️</div>
+        <span class="card-name">Legacy Software</span>
+      </div>
+      <p class="card-desc">
+        The original Oberlin Acoustics software suite. Previous versions of
+        tools and resources from the workshop's earlier work.
+      </p>
+      <span class="card-tag tag-legacy">Legacy · Google Sites</span>
+    </a>
+
   </div>
-  <button id="conn-btn" onclick="connectMic()">▶ CONNECT</button>
-  <span id="status">OFFLINE</span>
-  <span class="sep">│</span>
-  <button id="folder-btn" onclick="pickFolder()">📁 FOLDER</button>
-  <span id="folder-status">no folder connected</span>
-</div>
 
-<!-- ── Small channel plots ── -->
-<div class="row">
-  <div class="pbox"><div class="plabel" style="color:#39ff14">CH1 · LEFT</div>
-    <canvas id="ch1" width="512" height="110"></canvas></div>
-  <div class="pbox"><div class="plabel" style="color:#00aaff">CH2 · RIGHT</div>
-    <canvas id="ch2" width="512" height="110"></canvas></div>
-</div>
+  <p class="section-label">🌐 Community &amp; Resources</p>
+  <div class="cards">
 
-<!-- ── Triggered scope ── -->
-<div class="scopebox">
-  <div class="boxhdr">
-    <span class="bhlbl" style="color:var(--amber)">◈ TRIGGERED SCOPE</span>
-    <span class="sep">│</span>
-    <div class="cg"><label>TRIG SRC</label>
-      <select id="trig-ch" onchange="settingChanged()">
-        <option value="L">CH1·L</option><option value="R">CH2·R</option></select>
-    </div>
-    <div class="cg"><label>EDGE</label>
-      <select id="edge-sel" onchange="settingChanged()">
-        <option value="rising">↑ RISE</option><option value="falling">↓ FALL</option></select>
-    </div>
-    <div class="cg"><label>LEVEL</label>
-      <input type="range" id="trig-lvl" min="-95" max="95" value="10" step="1"
-        style="width:75px" oninput="updTrig();settingChanged()">
-      <span class="vdisp" id="trig-disp">+0.10</span>
-    </div>
-    <span class="sep">│</span>
-    <div class="cg"><label>PRE-TRIG</label>
-      <input type="range" id="pre-trig" min="0" max="50" value="10" step="1"
-        style="width:65px" oninput="updPre();settingChanged()">
-      <span class="vdisp" id="pre-lbl">10ms</span>
-    </div>
-    <span class="sep">│</span>
-    <div class="cg"><label>MODE</label>
-      <select id="trig-mode" onchange="modeChange();settingChanged()">
-        <option value="auto">AUTO</option>
-        <option value="normal">NORMAL</option>
-        <option value="oneshot">ONE-SHOT</option>
-      </select>
-    </div>
-    <button id="arm-btn" onclick="armOneshot()">◉ ARM</button>
-    <span class="sep">│</span>
-    <div class="cg"><label>ZOOM</label>
-      <input type="range" id="zoom" min="1" max="30" value="1" step="1"
-        style="width:75px" oninput="updZoom();settingChanged()">
-      <span class="vdisp" id="zoom-lbl">1×</span>
-    </div>
+    <a class="card" href="https://www.youtube.com/@oberlinacousticsworkshop9137" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">▶️</div>
+        <span class="card-name">YouTube Channel</span>
+      </div>
+      <p class="card-desc">
+        Oberlin Acoustics Workshop on YouTube — lectures, demos, and
+        explorations in acoustics and signal processing.
+      </p>
+      <span class="card-tag tag-video">Video · YouTube</span>
+    </a>
+
+    <a class="card" href="https://euphonics.org/" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">🔊</div>
+        <span class="card-name">Euphonics.org</span>
+      </div>
+      <p class="card-desc">
+        An interactive resource on the science of musical sound — covering
+        instrument acoustics, psychoacoustics, and more.
+      </p>
+      <span class="card-tag tag-site">Website · Reference</span>
+    </a>
+
   </div>
-  <canvas id="trig-canvas" width="1024" height="310" style="cursor:pointer"></canvas>
-</div>
 
-<!-- ── FFT panel ── -->
-<div class="scopebox" id="fft-box" style="display:none">
-  <div class="boxhdr">
-    <span class="bhlbl" style="color:#ff9900">◈ FFT TRANSFER · |CH1|/|CH2| (dB)</span>
-    <span class="sep">│</span>
-    <span style="font-size:.68em;color:#556655">Hann-windowed · log freq axis</span>
-    <span class="sep">│</span>
-    <div class="cg">
-      <label>F MIN</label>
-      <input type="number" id="fft-fmin" value="20" min="1" max="20000" step="1"
-        style="width:62px" onchange="applyFftRange();settingChanged()">
-      <label>Hz</label>
-    </div>
-    <div class="cg">
-      <label>F MAX</label>
-      <input type="number" id="fft-fmax" value="22050" min="100" max="96000" step="1"
-        style="width:72px" onchange="applyFftRange();settingChanged()">
-      <label>Hz</label>
-    </div>
-  </div>
-  <canvas id="fft-canvas" width="1024" height="380"></canvas>
-  <button id="save-frf-btn" onclick="saveFRF()">💾 SAVE FRF AS CSV</button>
-  <div id="save-msg"></div>
-</div>
+  <footer>
+    Oberlin Acoustics Workshop &mdash;
+    <a href="https://euphonics.org/">euphonics.org</a>
+  </footer>
 
-<script>
-/* ── Ring buffer ── */
-const BUF = 65536;
-window.samplesL    = new Float32Array(BUF);
-window.samplesR    = new Float32Array(BUF);
-window.writePos    = 0;
-window.sampleRate  = 44100;
-window.isConnected = false;
-window.oneshotArm  = false;
-window.scopeViewCh = 'L';
-window.fftData     = null;   // {freqs:[], rdb:[]} stored on each FFT draw
-window.dirHandle   = null;   // FileSystemDirectoryHandle when folder connected
-window._scopeHits  = [];
-let _saveTimer     = null;
-const SETTINGS_FILE = 'pyscope_settings.json';
-
-/* ── Settings helpers ── */
-function getSettings(){
-  return{
-    trigLvl   : +document.getElementById('trig-lvl').value,
-    edge      : document.getElementById('edge-sel').value,
-    preTrig   : +document.getElementById('pre-trig').value,
-    mode      : document.getElementById('trig-mode').value,
-    zoom      : +document.getElementById('zoom').value,
-    trigCh    : document.getElementById('trig-ch').value,
-    fftFmin   : +document.getElementById('fft-fmin').value,
-    fftFmax   : +document.getElementById('fft-fmax').value,
-    scopeViewCh: window.scopeViewCh
-  };
-}
-
-function applySettings(s){
-  if(s.trigLvl   !== undefined){ document.getElementById('trig-lvl').value  = s.trigLvl;   updTrig(); }
-  if(s.edge      !== undefined)  document.getElementById('edge-sel').value   = s.edge;
-  if(s.preTrig   !== undefined){ document.getElementById('pre-trig').value   = s.preTrig;   updPre(); }
-  if(s.mode      !== undefined){ document.getElementById('trig-mode').value  = s.mode;      modeChange(); }
-  if(s.zoom      !== undefined){ document.getElementById('zoom').value       = s.zoom;      updZoom(); }
-  if(s.trigCh    !== undefined)  document.getElementById('trig-ch').value    = s.trigCh;
-  if(s.fftFmin   !== undefined)  document.getElementById('fft-fmin').value   = s.fftFmin;
-  if(s.fftFmax   !== undefined)  document.getElementById('fft-fmax').value   = s.fftFmax;
-  if(s.scopeViewCh !== undefined) window.scopeViewCh = s.scopeViewCh;
-}
-
-function settingChanged(){
-  if(!window.dirHandle) return;
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(()=>saveSettingsToFolder(), 800);
-}
-
-async function saveSettingsToFolder(){
-  if(!window.dirHandle) return;
-  try{
-    const fh = await window.dirHandle.getFileHandle(SETTINGS_FILE, {create:true});
-    const w  = await fh.createWritable();
-    await w.write(JSON.stringify(getSettings(), null, 2));
-    await w.close();
-    document.getElementById('folder-status').textContent='✓ settings saved';
-  }catch(e){ console.warn('Settings save:', e); }
-}
-
-async function loadSettingsFromFolder(){
-  if(!window.dirHandle) return;
-  try{
-    const fh   = await window.dirHandle.getFileHandle(SETTINGS_FILE);
-    const file = await fh.getFile();
-    const text = await file.text();
-    const s    = JSON.parse(text);
-    applySettings(s);
-    document.getElementById('folder-status').textContent='✓ settings loaded';
-  }catch(e){
-    // File doesn't exist yet — that's fine
-    document.getElementById('folder-status').textContent='(no saved settings found)';
-  }
-}
-
-/* ── Folder picker ── */
-async function pickFolder(){
-  if(!window.showDirectoryPicker){
-    alert('File System Access API not supported.\nPlease use Chrome or Edge.');
-    return;
-  }
-  try{
-    window.dirHandle = await window.showDirectoryPicker({mode:'readwrite'});
-    const btn = document.getElementById('folder-btn');
-    btn.classList.add('folder-ok');
-    btn.textContent = '📁 ' + window.dirHandle.name;
-    document.getElementById('folder-status').textContent = 'loading settings…';
-    await loadSettingsFromFolder();
-  }catch(e){
-    if(e.name !== 'AbortError')
-      document.getElementById('folder-status').textContent = 'error: ' + e.message;
-  }
-}
-
-/* ── Save FRF CSV ── */
-async function saveFRF(){
-  if(!window.fftData || !window.fftData.freqs.length){
-    showSaveMsg('No FRF data captured yet.', '#ff3333'); return;
-  }
-  const {freqs, rdb} = window.fftData;
-  const rows = ['Frequency_Hz,FRF_dB'];
-  for(let i=0;i<freqs.length;i++) rows.push(freqs[i].toFixed(4)+','+rdb[i].toFixed(6));
-  const csv = rows.join('\n');
-  const ts  = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  const fname = 'frf_' + ts + '.csv';
-
-  if(window.dirHandle){
-    /* write directly into connected folder */
-    try{
-      const fh = await window.dirHandle.getFileHandle(fname, {create:true});
-      const w  = await fh.createWritable();
-      await w.write(csv); await w.close();
-      showSaveMsg('✓ Saved to folder: ' + fname, '#39ff14');
-    }catch(e){ showSaveMsg('Save error: '+e.message,'#ff3333'); }
-  } else if(window.showSaveFilePicker){
-    /* native save dialog */
-    try{
-      const fh = await window.showSaveFilePicker({
-        suggestedName: fname,
-        types:[{description:'CSV',accept:{'text/csv':['.csv']}}]
-      });
-      const w = await fh.createWritable();
-      await w.write(csv); await w.close();
-      showSaveMsg('✓ File saved.','#39ff14');
-    }catch(e){ if(e.name!=='AbortError') showSaveMsg('Save error: '+e.message,'#ff3333'); }
-  } else {
-    /* fallback: download link */
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    a.download = fname; a.click();
-    showSaveMsg('✓ Download triggered.','#39ff14');
-  }
-}
-
-function showSaveMsg(txt, col){
-  const el = document.getElementById('save-msg');
-  el.textContent = txt; el.style.color = col;
-  setTimeout(()=>{ el.textContent=''; }, 5000);
-}
-
-/* ── UI helpers ── */
-function updTrig(){ const v=+document.getElementById('trig-lvl').value/100; document.getElementById('trig-disp').textContent=(v>=0?'+':'')+v.toFixed(2); }
-function updPre() { document.getElementById('pre-lbl').textContent=document.getElementById('pre-trig').value+'ms'; updZoom(); }
-function updZoom(){
-  const z=+document.getElementById('zoom').value;
-  const pre=+document.getElementById('pre-trig').value;
-  const ms=((pre+300)/z).toFixed(z>5?1:0);
-  document.getElementById('zoom-lbl').textContent=z+'× · '+ms+'ms';
-}
-function modeChange(){
-  document.getElementById('arm-btn').style.display=
-    document.getElementById('trig-mode').value==='oneshot'?'inline-block':'none';
-}
-function armOneshot(){ window.oneshotArm=true; document.getElementById('arm-btn').classList.add('armed'); }
-function applyFftRange(){
-  let fmin=parseFloat(document.getElementById('fft-fmin').value)||20;
-  let fmax=parseFloat(document.getElementById('fft-fmax').value)||22050;
-  if(fmin<1)fmin=1; if(fmax<fmin+50)fmax=fmin+50;
-  document.getElementById('fft-fmin').value=Math.round(fmin);
-  document.getElementById('fft-fmax').value=Math.round(fmax);
-}
-function getFftRange(){ return{fMin:+document.getElementById('fft-fmin').value||20, fMax:+document.getElementById('fft-fmax').value||22050}; }
-
-/* ── Mic enumerate + connect ── */
-async function populateMics(){
-  try{
-    await navigator.mediaDevices.getUserMedia({audio:true});
-    const devs=await navigator.mediaDevices.enumerateDevices();
-    const sel=document.getElementById('mic-sel'); sel.innerHTML='';
-    const mics=devs.filter(d=>d.kind==='audioinput');
-    if(!mics.length){sel.innerHTML='<option>No devices</option>';return;}
-    mics.forEach((d,i)=>{const o=document.createElement('option');o.value=d.deviceId;
-      o.textContent=d.label||'Mic '+(i+1);sel.appendChild(o);});
-  }catch(e){setStatus('PERM DENIED',false);}
-}
-let audioCtx,processor,mediaStream;
-function setStatus(m,ok){const el=document.getElementById('status');el.textContent=m;el.className=ok?'ok':'err';}
-
-async function connectMic(){
-  const btn=document.getElementById('conn-btn');
-  if(window.isConnected){
-    if(processor){processor.disconnect();processor=null;}
-    if(audioCtx){await audioCtx.close();audioCtx=null;}
-    if(mediaStream){mediaStream.getTracks().forEach(t=>t.stop());mediaStream=null;}
-    window.isConnected=false;btn.textContent='▶ CONNECT';btn.className='';setStatus('OFFLINE',false);return;
-  }
-  const devId=document.getElementById('mic-sel').value;
-  try{
-    mediaStream=await navigator.mediaDevices.getUserMedia({audio:{
-      deviceId:devId?{exact:devId}:undefined,channelCount:{ideal:2},
-      echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    window.sampleRate=audioCtx.sampleRate;
-    const src=audioCtx.createMediaStreamSource(mediaStream);
-    processor=audioCtx.createScriptProcessor(2048,2,2);
-    processor.onaudioprocess=e=>{
-      const ib=e.inputBuffer,L=ib.getChannelData(0),R=ib.numberOfChannels>1?ib.getChannelData(1):L;
-      let wp=window.writePos;
-      for(let i=0;i<L.length;i++){window.samplesL[wp]=L[i];window.samplesR[wp]=R[i];if(++wp>=BUF)wp=0;}
-      window.writePos=wp;
-    };
-    src.connect(processor);processor.connect(audioCtx.destination);
-    window.isConnected=true;btn.textContent='■ DISCONNECT';btn.className='live';setStatus('● LIVE',true);
-  }catch(e){setStatus('ERR:'+e.message.slice(0,18).toUpperCase(),false);}
-}
-
-/* ── Canvas helpers ── */
-function pickTick(ms){for(const t of[0.05,.1,.2,.5,1,2,5,10,20,25,50,100,150,200,300])if(ms/t<=10)return t;return 100;}
-
-window.drawCh=function(id,samp,col){
-  const cv=document.getElementById(id),cx=cv.getContext('2d'),w=cv.width,h=cv.height;
-  cx.fillStyle='#030a03';cx.fillRect(0,0,w,h);
-  cx.strokeStyle='#0c1e0c';cx.lineWidth=1;
-  for(let i=1;i<4;i++){const y=h*i/4;cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
-  for(let i=1;i<8;i++){const x=w*i/8;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
-  cx.strokeStyle='#1a4a1a';cx.beginPath();cx.moveTo(0,h/2);cx.lineTo(w,h/2);cx.stroke();
-  if(!samp||samp.length<2)return;
-  cx.strokeStyle=col;cx.lineWidth=1.5;cx.beginPath();
-  const n=samp.length;
-  for(let i=0;i<n;i++){const x=w*i/(n-1),y=h/2-samp[i]*h/2*.85;i?cx.lineTo(x,y):cx.moveTo(x,y);}
-  cx.stroke();
-};
-
-window.drawScope=function(sA,sB,trigLvl,status,startMs,totalMs,trigCh){
-  const cv=document.getElementById('trig-canvas'),cx=cv.getContext('2d');
-  const w=cv.width,h=cv.height,PAD_B=26,PH=h-PAD_B;
-  cx.fillStyle='#030a03';cx.fillRect(0,0,w,h);
-
-  const tk=pickTick(totalMs),ft=Math.ceil(startMs/tk)*tk;
-  cx.lineWidth=1;cx.font='9px monospace';
-  for(let t=ft;t<=startMs+totalMs+.001;t+=tk){
-    const x=(t-startMs)/totalMs*w;
-    if(x<0||x>w)continue;
-    cx.strokeStyle='#0c1e0c';cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,PH);cx.stroke();
-    const lbl=(t===0?'0':(t>0?'+':'')+t.toFixed(Math.abs(t)<1?2:Math.abs(t)<10?1:0))+'ms';
-    cx.fillStyle='#446644';cx.fillText(lbl,Math.min(x+2,w-lbl.length*5.5-2),h-5);
-  }
-  for(let r=1;r<6;r++){const y=PH*r/6;cx.strokeStyle='#0c1e0c';cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
-  cx.strokeStyle='#1a4a1a';cx.lineWidth=1;cx.beginPath();cx.moveTo(0,PH/2);cx.lineTo(w,PH/2);cx.stroke();
-  cx.strokeStyle='#1a3a1a';cx.beginPath();cx.moveTo(0,PH);cx.lineTo(w,PH);cx.stroke();
-
-  const tx=(-startMs/totalMs)*w;
-  if(tx>=0&&tx<=w){
-    cx.strokeStyle='#ff660044';cx.lineWidth=1;cx.setLineDash([5,4]);
-    cx.beginPath();cx.moveTo(tx,0);cx.lineTo(tx,PH);cx.stroke();cx.setLineDash([]);
-    cx.fillStyle='#ff8833';cx.font='bold 10px monospace';cx.fillText('T',tx+3,13);
-  }
-  const ty=PH/2-trigLvl*PH/2*.85;
-  cx.strokeStyle='#ff6600';cx.lineWidth=1;cx.setLineDash([6,4]);
-  cx.beginPath();cx.moveTo(0,ty);cx.lineTo(w,ty);cx.stroke();cx.setLineDash([]);
-  cx.fillStyle='#ff6600';cx.font='10px monospace';
-  const tlbl='▶'+(trigLvl>=0?'+':'')+trigLvl.toFixed(2);
-  cx.fillText(tlbl,5,Math.min(PH-4,Math.max(13,ty-4)));
-  if(tx>=0&&tx<=w){cx.fillStyle='#ff6600';cx.beginPath();cx.arc(tx,ty,4,0,2*Math.PI);cx.fill();}
-
-  const sc={'trig':'#39ff14','armed':'#ffb800','hold':'#00aaff'}[status]||'#556655';
-  const st={'trig':'TRIG ●','armed':'ARMED ◉','hold':'HOLD ◈','wait':'WAIT ○'}[status]||'WAIT ○';
-  cx.fillStyle=sc;cx.font='bold 11px monospace';cx.fillText(st,w-82,14);
-  cx.fillStyle='#446644';cx.font='10px monospace';cx.fillText('TRIG:'+(trigCh==='L'?'CH1':'CH2'),w-82,27);
-
-  /* channel selector pills */
-  const vc=window.scopeViewCh;
-  const pills=[{ch:'L',lbl:'● CH1',col:'#39ff14'},{ch:'R',lbl:'● CH2',col:'#00aaff'},{ch:'both',lbl:'◈ BOTH',col:'#ffb800'}];
-  window._scopeHits=[];
-  let px=6;
-  for(const p of pills){
-    const active=(vc===p.ch);
-    const tw=cx.measureText(p.lbl).width+14;
-    cx.fillStyle=active?p.col+'22':'#0a120a';cx.strokeStyle=active?p.col:'#1a3a1a';cx.lineWidth=1;
-    cx.beginPath();cx.roundRect(px,4,tw,16,3);cx.fill();cx.stroke();
-    cx.fillStyle=active?p.col:'#335533';cx.font='bold 9px monospace';cx.fillText(p.lbl,px+7,14);
-    window._scopeHits.push({x:px,y:4,w:tw,h:16,ch:p.ch});
-    px+=tw+4;
-  }
-
-  function drawWave(samp,col,alpha,lw){
-    if(!samp||samp.length<2)return;
-    cx.globalAlpha=alpha;cx.strokeStyle=col;cx.lineWidth=lw;
-    cx.shadowBlur=alpha>0.5?5:0;cx.shadowColor=col+'55';cx.beginPath();
-    const n=samp.length;
-    for(let i=0;i<n;i++){const x=w*i/(n-1),y=PH/2-samp[i]*PH/2*.85;i?cx.lineTo(x,y):cx.moveTo(x,y);}
-    cx.stroke();cx.shadowBlur=0;cx.globalAlpha=1;
-  }
-  if(vc==='both'){ drawWave(sA,'#c8ff00',0.9,2); drawWave(sB,'#00ccff',0.5,1.5); }
-  else if(vc==='L'){ drawWave(sA,'#c8ff00',0.9,2); drawWave(sB,'#00ccff',0.18,1); }
-  else             { drawWave(sA,'#c8ff00',0.18,1); drawWave(sB,'#00ccff',0.9,2); }
-};
-
-window.showFFT=function(freqs,rdb){
-  window.fftData={freqs:Array.from(freqs), rdb:Array.from(rdb)};
-  document.getElementById('fft-box').style.display='block';
-  const{fMin,fMax}=getFftRange();
-  const cv=document.getElementById('fft-canvas'),cx=cv.getContext('2d');
-  const w=cv.width,h=cv.height,PL=40,PB=22,PW=w-PL,PH=h-PB;
-  cx.fillStyle='#030a03';cx.fillRect(0,0,w,h);
-  const lMin=Math.log10(Math.max(1,fMin)),lMax=Math.log10(fMax);
-  const fin=rdb.filter(v=>isFinite(v));
-  let dbMax=24,dbMin=-24;
-  if(fin.length){const mx=Math.max(...fin),mn=Math.min(...fin);dbMax=Math.max(6,Math.ceil((mx+3)/6)*6);dbMin=Math.min(-6,Math.floor((mn-3)/6)*6);}
-  const fX=f=>PL+PW*(Math.log10(Math.max(fMin,Math.min(fMax,f)))-lMin)/(lMax-lMin);
-  const dY=d=>PH*(1-(Math.max(dbMin,Math.min(dbMax,d))-dbMin)/(dbMax-dbMin));
-  cx.strokeStyle='#0c1e0c';cx.lineWidth=1;cx.font='9px monospace';
-  for(const f of[10,20,30,50,100,200,300,500,1000,2000,3000,5000,10000,15000,20000,22050]){
-    if(f<fMin*0.99||f>fMax*1.01)continue;
-    const x=fX(f);cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,PH);cx.stroke();
-    cx.fillStyle='#446644';cx.fillText(f>=1000?(f/1000)+'k':''+f,x+2,h-4);
-  }
-  const step=(dbMax-dbMin)<=24?6:12;
-  for(let d=Math.ceil(dbMin/step)*step;d<=dbMax;d+=step){
-    const y=dY(d);
-    cx.strokeStyle=d===0?'#1a4a1a':'#0c1e0c';cx.lineWidth=d===0?1.5:1;
-    cx.beginPath();cx.moveTo(PL,y);cx.lineTo(w,y);cx.stroke();
-    cx.fillStyle='#446644';cx.font='9px monospace';cx.fillText((d>=0?'+':'')+d,2,y+3);
-  }
-  cx.strokeStyle='#ff9900';cx.lineWidth=1.5;cx.shadowBlur=4;cx.shadowColor='#ff990055';cx.beginPath();
-  let first=true;
-  for(let i=1;i<freqs.length;i++){
-    if(freqs[i]<fMin||freqs[i]>fMax||!isFinite(rdb[i]))continue;
-    const x=fX(freqs[i]),y=dY(rdb[i]);
-    first?(cx.moveTo(x,y),first=false):cx.lineTo(x,y);
-  }
-  cx.stroke();cx.shadowBlur=0;
-  cx.fillStyle='#446644';cx.font='9px monospace';cx.fillText('Hz',PL+4,h-4);
-};
-window.hideFFT=function(){document.getElementById('fft-box').style.display='none';};
-
-/* ── Scope canvas click (channel selector) ── */
-document.getElementById('trig-canvas').addEventListener('click',e=>{
-  const cv=document.getElementById('trig-canvas'),r=cv.getBoundingClientRect();
-  const cx=(e.clientX-r.left)*cv.width/r.width, cy=(e.clientY-r.top)*cv.height/r.height;
-  for(const h of window._scopeHits){
-    if(cx>=h.x&&cx<=h.x+h.w&&cy>=h.y&&cy<=h.y+h.h){
-      window.scopeViewCh=h.ch; settingChanged(); return;
-    }
-  }
-});
-
-populateMics(); updTrig(); updZoom(); updPre();
-</script>
-
-<script type="py" async>
-import asyncio, js
-import numpy as np
-from pyodide.ffi import to_js
-
-BUF      = 65536
-DISP_N   = 4096
-DRAW_PTS = 300
-TDRAW    = 512
-SEARCH_N = 8192
-
-last_cap_l    = None
-last_cap_r    = None
-oneshot_fired = False
-
-def get_latest(arr_js, n, wp=None):
-    if wp is None: wp = int(js.window.writePos)
-    n  = min(n, BUF)
-    mv = arr_js.to_py()
-    return list(mv[wp-n:wp]) if wp >= n else list(mv[BUF-(n-wp):BUF]) + list(mv[0:wp])
-
-def dsamp(s, pts):
-    n = len(s)
-    if n <= pts: return s
-    step = n / pts
-    return [s[int(i * step)] for i in range(pts)]
-
-def sub_mean(lst):
-    if not lst: return lst
-    m = sum(lst) / len(lst)
-    return [x - m for x in lst]
-
-def find_trigger(samples, level, edge, win, start=0):
-    limit = len(samples) - win - 2
-    if limit <= start: return start, False
-    r = range(max(1, start), limit)
-    if edge == 'rising':
-        for i in r:
-            if samples[i-1] < level <= samples[i]: return i, True
-    else:
-        for i in r:
-            if samples[i-1] > level >= samples[i]: return i, True
-    return start, False
-
-async def render_loop():
-    global last_cap_l, last_cap_r, oneshot_fired
-
-    while True:
-        await asyncio.sleep(1/30)
-        if not js.window.isConnected:
-            continue
-        try:
-            sr       = float(js.window.sampleRate)
-            pre_ms   = float(js.document.getElementById('pre-trig').value)
-            pre_n    = int(sr * pre_ms / 1000.0)
-            post_n   = int(sr * 0.300)
-            total_n  = pre_n + post_n
-            need_n   = SEARCH_N + total_n + pre_n
-
-            wp = int(js.window.writePos)
-
-            lat_l = sub_mean(dsamp(get_latest(js.window.samplesL, DISP_N, wp), DRAW_PTS))
-            lat_r = sub_mean(dsamp(get_latest(js.window.samplesR, DISP_N, wp), DRAW_PTS))
-            js.window.drawCh('ch1', to_js(lat_l), '#39ff14')
-            js.window.drawCh('ch2', to_js(lat_r), '#00aaff')
-
-            trig_lvl = float(js.document.getElementById('trig-lvl').value) / 100.0
-            edge     = str(js.document.getElementById('edge-sel').value)
-            mode     = str(js.document.getElementById('trig-mode').value)
-            trig_ch  = str(js.document.getElementById('trig-ch').value)
-            zoom     = max(1, int(js.document.getElementById('zoom').value))
-
-            buf_l = sub_mean(get_latest(js.window.samplesL, need_n, wp))
-            buf_r = sub_mean(get_latest(js.window.samplesR, need_n, wp))
-            src   = buf_l if trig_ch == 'L' else buf_r
-
-            t_idx, found = find_trigger(src, trig_lvl, edge, post_n, start=pre_n)
-
-            if js.window.oneshotArm:
-                js.window.oneshotArm  = False
-                oneshot_fired         = False
-                js.document.getElementById('arm-btn').classList.remove('armed')
-
-            if found:
-                cl = buf_l[t_idx - pre_n : t_idx + post_n]
-                cr = buf_r[t_idx - pre_n : t_idx + post_n]
-                if len(cl) == total_n:
-                    last_cap_l, last_cap_r = cl, cr
-
-            status = 'wait'
-            if mode == 'auto':
-                if not found:
-                    mid = SEARCH_N // 2 + pre_n
-                    mid = max(pre_n, min(mid, len(buf_l) - post_n - 1))
-                    fl  = buf_l[mid - pre_n : mid + post_n]
-                    fr  = buf_r[mid - pre_n : mid + post_n]
-                    if len(fl) == total_n:
-                        last_cap_l, last_cap_r = fl, fr
-                status = 'trig' if found else 'wait'
-            elif mode == 'normal':
-                status = 'trig' if found else ('hold' if last_cap_l else 'wait')
-            elif mode == 'oneshot':
-                if not oneshot_fired:
-                    status = 'trig' if found else 'armed'
-                    if found: oneshot_fired = True
-                else:
-                    status = 'hold'
-
-            disp_l = last_cap_l or []
-            disp_r = last_cap_r or []
-            if disp_l and len(disp_l) > 1:
-                n_show    = max(4, total_n // zoom)
-                pre_show  = int(round(pre_n * n_show / total_n))
-                pre_show  = max(0, min(pre_n, pre_show))
-                post_show = n_show - pre_show
-                start_i   = pre_n - pre_show
-                end_i     = min(total_n, pre_n + post_show)
-                if end_i - start_i < n_show:
-                    start_i = max(0, end_i - n_show)
-                pts_a    = dsamp(disp_l[start_i:end_i], TDRAW)
-                pts_b    = dsamp(disp_r[start_i:end_i], TDRAW)
-                start_ms = (start_i - pre_n) / sr * 1000.0
-                total_ms = (end_i - start_i) / sr * 1000.0
-            else:
-                pts_a = pts_b = []
-                start_ms = -pre_ms
-                total_ms = pre_ms + 300.0
-
-            js.window.drawScope(
-                to_js(pts_a), to_js(pts_b),
-                trig_lvl, status, start_ms, total_ms, trig_ch
-            )
-
-            show_fft = status in ('trig', 'hold')
-            if show_fft and last_cap_l and len(last_cap_l) == total_n:
-                arr_l = np.array(last_cap_l, dtype=np.float32)
-                arr_r = np.array(last_cap_r, dtype=np.float32)
-                hann  = np.hanning(total_n)
-                fft_l = np.abs(np.fft.rfft(arr_l * hann))
-                fft_r = np.abs(np.fft.rfft(arr_r * hann))
-                eps   = 1e-10
-                rdb   = 20.0 * np.log10((fft_l + eps) / (fft_r + eps))
-                freqs = np.fft.rfftfreq(total_n, 1.0 / sr)
-                js.window.showFFT(to_js(freqs.tolist()), to_js(rdb.tolist()))
-            else:
-                js.window.hideFFT()
-
-        except Exception as e:
-            print(f'[PyScope] {e}')
-
-asyncio.ensure_future(render_loop())
-</script>
 </body>
 </html>
