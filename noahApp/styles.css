@@ -1,0 +1,230 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 10px 20px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ccc;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+#container {
+  flex: 1;
+  display: flex;
+  height: calc(100vh - 50px); /* subtract header height */
+  min-height: 0;
+}
+
+#sidebar {
+  padding: 12px;
+  border-right: 1px solid #ccc;
+  border-top: 1px solid #ccc;
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#sidebar button {
+  flex: 0 0 auto;         /* don’t stretch or shrink automatically */
+  min-width: fit-content; /* never get smaller than the text inside */
+  white-space: nowrap;    /* prevent text from breaking inside the button */
+}
+
+#file-info {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+#file-controls {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+#main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+  min-height: 0;  /* prevent vertical overflow */
+}
+
+.controls {
+  margin-bottom: 10px;  /* spacing */
+  flex: 0 0 auto;       /* don’t grow */
+}
+
+#plot {
+  flex: 1 1 auto;       /* expand to fill leftover space */
+  border: 1px solid #ccc;
+  background-color: #fff;
+  min-height: 0;        /* important to prevent overflow in flexbox */
+}
+
+#file-list {
+  list-style-type: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+input[type="color"] {
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    transform: scale(0.8);
+    vertical-align: middle;
+    margin-left: 10px;
+}
+
+#filtered-files {
+  flex: 1;
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding-left: 15px;
+}
+
+#filtered-list {
+  list-style-type: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+#filtered-list li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+
+#filtered-list li input[type="checkbox"] {
+  flex: 0 0 auto;  /* prevents checkbox from stretching */
+  max-width: 25px;
+  margin: 0;       /* reset any default margin */
+}
+
+#filtered-list li label {
+  flex: 1 1 auto;  /* label takes remaining space */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  margin-left: 6px; /* gap between checkbox and text */
+  margin-right: 6px
+}
+
+.filter-label {
+    display: block;
+    margin-top: 20px;
+    font-weight: bold;
+}
+
+.or-label {
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.filter-input {
+    margin-bottom: 12px;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.5);
+}
+
+/* Modal content box */
+.modal-content {
+  background-color: #fefefe;
+  margin: 10% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 50%;
+  border-radius: 10px;
+}
+
+.bands-modal-content {
+  position: relative;
+  margin: 10% auto;              /* centers horizontally and vertically with flex */
+  width: 60vw;
+  height: 70vh;
+  background-color: #fefefe;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bands-modal-content iframe {
+  flex: 1;                   /* take up remaining space */
+  width: 100%;
+  border: none;
+}
+
+/* Close button */
+.close {
+  float: right;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.modal input {
+  margin-top: 10px;
+  width: 100%;
+}
+
+#settings-modal .field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* label column */
+#settings-modal .field label {
+  flex: 0 0 80px;   /* fixed 60px column */
+  text-align: left; /* or left, your choice */
+}
+
+/* input grows to fill remaining space */
+#settings-modal .field input {
+  flex: 1 1 auto;
+  min-width: 0; /* important to allow shrink in flex layouts */
+  margin-right: 20px;
+}
+
+#settings-modal .checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  white-space: nowrap;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

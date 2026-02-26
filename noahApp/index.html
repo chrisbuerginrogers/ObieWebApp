@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>FRF Viewer</title>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="stylesheet" href="https://pyscript.net/releases/2025.7.3/core.css">
+    <script type="module" src="https://pyscript.net/releases/2025.7.3/core.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <script type="py" src="./main.py" config="./pyscript.toml"></script>
+    <h2 style = "text-align: center;"">FRF Viewer</h2>
+
+    <div style="position: absolute; top: 20px; left: 15px;">
+        <button id="acquire">Acquire Data</button>
+        <button id="analyze">Modal Analysis</button>
+    </div>
+
+    <div id="container">
+        <div id="sidebar">
+          <input type="file" id="fileRead" webkitdirectory multiple>
+
+          <div id="file-controls">
+              <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 10px; flex-wrap: wrap;">
+                  <label id="folder-info"><b>Folder:</b></label>
+                  <button id="search">Search</button>
+                  <button id="load-all">Load All</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap; width: 100%;">
+                  <button id="see-all">See All</button>
+                  <button id="see-none">See None</button>
+                  <button id="reduce">Reduce</button>
+                  <button id="clear">Clear</button>
+              </div>
+          </div>
+    
+          <div id="file-info">
+              <ul id='file-list'></ul>
+            <!-- Files and controls will go here -->
+          </div>
+        </div>
+
+        <div id="divider" style="width: 5px; background-color: #ccc; cursor: col-resize;"></div>
+    
+        <div id="main-content">
+          <div class="controls">
+            <select id="plot-dropdown">
+                <option value="magnitude">Magnitude</option>
+                <option value="phase_rad">Phase (rad)</option>
+                <option value="phase_deg">Phase (deg)</option>
+                <option value="real_imag">Real vs Imag</option>
+            </select>
+
+              <label for="xmin" style="margin-left: 50px">X:</label>
+        
+              <input type="number" id="xmin" step="any" style="width: 50px"/>
+              <label for="xmax"> - </label>
+              <input type="number" id="xmax" step="any" style="width: 50px"/>
+              <label for="logX">Log</label>
+              <input type="checkbox" id="logX" checked style="margin-left: -1px">
+              
+              <label for="dbrange" style="margin-left: 10px">Y:</label>
+              <input type="number" id="dbrange" step="any" style="width: 30px"/>
+              <label for="dbrange">dB</label>
+
+            <select id="bands" name="bands" style="width: 275px; margin-left: 50px"></select>
+            <button id="band-btn">Edit Bands</button>
+            <label for="settings-file" style="margin-left:50px">Upload settings:</label>
+            <input type="file" id="settings-file">
+          </div>
+          <div id="plot">
+            <!-- Plot (e.g. Plotly or canvas) goes here -->
+          </div>
+        </div>
+    </div>
+
+    <div id="search-modal" class="modal">
+      <div class="modal-content" style="position: relative; padding-bottom: 60px;">
+        <span class="close" id="close-modal">&times;</span>
+        <h3>Filter Files</h3>
+    
+        <div style="display: flex; gap: 20px;">
+          <!-- Left column: Filter options -->
+          <div style="flex: 0 0 40%;">
+
+            <div id="file-types" style="display: flex; gap: 20px;">
+              <div style="display: flex; align-items: center; line-height: 1;">
+                <input type="checkbox" id="trf" name="trf">
+                <label for="trf" style="margin-left: 4px;">.trf</label>
+              </div>
+              <div style="display: flex; align-items: center; line-height: 1;">
+                <input type="checkbox" id="tsv" name="tsv">
+                <label for="tsv" style="margin-left: 4px;">.tsv</label>
+              </div>
+              <div style="display: flex; align-items: center; line-height: 1;">
+                <input type="checkbox" id="avc" name="avc">
+                <label for="avc" style="margin-left: 4px;">.AvC</label>
+              </div>
+              <div style="display: flex; align-items: center; line-height: 1;">
+                <input type="checkbox" id="avr" name="avr">
+                <label for="avr" style="margin-left: 4px;">.AvR</label>
+              </div>
+            </div>
+
+            <label for="name-filter1" class="filter-label">Filename contains:</label>
+            <input type="text" id="name-filter1" placeholder="e.g., test or _2025" class="filter-input">
+            
+            <label for="name-filter2" class="or-label">OR</label>
+            <input type="text" id="name-filter2" class="filter-input">
+            
+            <label for="name-filter3" class="or-label">OR</label>
+            <input type="text" id="name-filter3" class="filter-input">
+          </div>
+    
+          <!-- Right column: Filtered file list -->
+          <div style="flex: 1; display: flex; flex-direction: column; max-width: 60%; height: 300px;">
+            <div id="filtered-files">
+              <ul id="filtered-list"></ul>
+            </div>
+              <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: flex-start;">
+                <button id="select-all" type="button">Select All</button>
+                <button id="deselect-all" type="button">Deselect All</button>
+              </div>
+          </div>
+        </div>
+    
+        <button id="add-files" style="position: absolute; bottom: 15px; right: 15px;">
+          Add
+        </button>
+      </div>
+    </div>
+
+    <div id="bands-modal" class="modal" style="display:none;">
+        <div class="bands-modal-content">
+            <iframe id="popup-frame" src="https://noahsaxenian.pyscriptapps.com/bands-builder/latest/"></iframe>
+            <span class="close" id="close-bands" style="position: absolute; top: 20px; right: 20px; cursor:pointer;">&times;</span>
+        </div>
+    </div>
+    
+    <script src="scripts.js"></script>
+</body>
+</html>
