@@ -1,6 +1,6 @@
 {
-    "name": "FRF Viewer Copy",
-    "export": true,
+    "name": "FRF Viewer",
+    "export": false,
     "packages": [
         "numpy"
     ],
