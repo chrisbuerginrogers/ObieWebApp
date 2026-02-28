@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Polytec IVS-500</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+<script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+<style>
+:root{--bg:#0d1117;--sf:#161b22;--s2:#21262d;--bd:#30363d;--tx:#e6edf3;
+  --mu:#7d8590;--bl:#58a6ff;--gn:#3fb950;--rd:#f85149;--yl:#d29922;--pu:#bc8cff}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--bg);color:var(--tx);font-size:13px;display:flex;flex-direction:column}
+#loading{position:fixed;inset:0;background:rgba(0,0,0,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:12px}
+#loading.gone{display:none}
+.spin{width:38px;height:38px;border:3px solid var(--bd);border-top-color:var(--bl);
+  border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+header{flex-shrink:0;height:52px;background:var(--sf);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;gap:12px;padding:0 16px}
+.logo{font-weight:700;font-size:15px}.logo b{color:var(--bl)}
+.sub{color:var(--mu);font-size:11px}.gap{flex:1}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--rd);transition:background .3s}
+.dot.on{background:var(--gn)}.dot.rec{background:var(--rd);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#hstatus{font-size:12px;color:var(--mu)}
+.wrap{flex:1;display:grid;grid-template-columns:268px 1fr;overflow:hidden}
+aside{background:var(--sf);border-right:1px solid var(--bd);
+  overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+aside::-webkit-scrollbar{width:5px}
+aside::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+.card{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px}
+.card.hl{border-color:var(--pu)}
+.ct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+  color:var(--mu);margin-bottom:8px}
+.ct.pu{color:var(--pu)}
+.btn{background:var(--s2);border:1px solid var(--bd);color:var(--tx);
+  border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;
+  transition:all .15s;font-family:inherit;white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--bd)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.pri{background:var(--bl);border-color:var(--bl);color:#000;font-weight:700}
+.btn.pri:hover:not(:disabled){opacity:.85}
+.btn.dng{background:var(--rd);border-color:var(--rd);color:#fff;font-weight:700}
+.btn.pu{background:var(--pu);border-color:var(--pu);color:#000;font-weight:700}
+.btn.pu:hover:not(:disabled){opacity:.85}
+.btn.rec{background:var(--rd);border-color:var(--rd);color:#fff;font-weight:700;animation:pulse 1s infinite}
+.btn.sm{padding:3px 7px;font-size:11px}
+.btn.full{width:100%;margin-top:4px}
+.fr{margin-bottom:8px}
+.fr label{display:block;font-size:11px;color:var(--mu);margin-bottom:3px}
+select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(--bd);
+  color:var(--tx);border-radius:5px;padding:5px 7px;font-size:12px;font-family:inherit}
+.row{display:flex;gap:6px}
+.row .fr{flex:1}
+.ig{display:flex;gap:6px;align-items:center}
+.ig input{width:65px}
+.pr{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.pl{font-family:monospace;font-size:11px;color:var(--mu);min-width:80px;flex-shrink:0}
+.pv{flex:1;font-family:monospace;font-size:11px;color:var(--bl);
+  background:var(--bg);border:1px solid var(--bd);border-radius:4px;
+  padding:2px 5px;min-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.big{font-size:30px;font-weight:700;font-family:monospace;color:var(--gn);
+  text-align:center;padding:6px 0 2px;letter-spacing:-1px}
+.unit{text-align:center;font-size:11px;color:var(--mu)}
+.notice{font-size:10px;color:var(--yl);margin-top:6px;line-height:1.5}
+.badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;
+  border-radius:3px;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle;margin-left:4px}
+.badge.serial{background:#1c3a5e;color:var(--bl)}
+.badge.audio{background:#2d1f47;color:var(--pu)}
+.plots{display:grid;grid-template-rows:1fr 1fr;background:var(--bd);gap:1px;overflow:hidden}
+.pw{background:var(--bg);overflow:hidden;position:relative}
+.mode-label{position:absolute;top:8px;right:12px;font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.5px;opacity:.6;z-index:1}
+.mode-label.serial{color:var(--bl)}
+.mode-label.audio{color:var(--pu)}
+.divider{height:1px;background:var(--bd);margin:4px 0}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spin"></div>
+  <div style="color:var(--mu);font-size:12px">Loading PyScript + NumPy…</div>
+  <div style="color:var(--mu);font-size:11px;margin-top:4px;max-width:280px;text-align:center">First load may take 15–30 s</div>
+</div>
+
+<header>
+  <div><div class="logo">Polytec <b>IVS-500</b></div><div class="sub">Industrial Vibration Sensor</div></div>
+  <div class="gap"></div>
+  <div id="hstatus">Not connected</div>
+  <div class="dot" id="dot"></div>
+  <button class="btn pri" id="cbtn" onclick="connectSerial()">Connect Serial</button>
+</header>
+
+<div class="wrap">
+<aside>
+
+  <!-- Serial connection -->
+  <div class="card">
+    <div class="ct">Serial Connection</div>
+    <div class="fr"><label>Baud Rate</label>
+      <select id="baud">
+        <option value="9600" selected>9600</option>
+        <option value="19200">19200</option>
+        <option value="38400">38400</option>
+        <option value="57600">57600</option>
+        <option value="115200">115200</option>
+      </select></div>
+    <div class="fr"><label>Poll Rate (Hz)</label>
+      <div class="ig">
+        <input type="number" id="prate" value="10" min="1" max="50">
+        <button class="btn sm" id="pbtn" onclick="togglePoll()" disabled>▶ Start</button>
+      </div></div>
+    <div class="notice">⚠ Chrome/Edge only. Run via <code>python -m http.server</code></div>
+  </div>
+
+  <!-- Live readout -->
+  <div class="card">
+    <div class="ct">Live Velocity</div>
+    <div class="big" id="lvel">—</div>
+    <div class="unit">mm/s (serial)</div>
+  </div>
+
+  <!-- ── Audio Capture ─────────────────────────────────────── -->
+  <div class="card hl">
+    <div class="ct pu">🎙 Audio Capture</div>
+
+    <button class="btn full" id="scanbtn" onclick="scanAudioDevices()" style="margin-bottom:8px">
+      🔍 Scan Input Devices
+    </button>
+
+    <div class="fr"><label>Input Device</label>
+      <select id="audiodev" disabled>
+        <option value="">— click Scan first —</option>
+      </select></div>
+
+    <div class="row">
+      <div class="fr"><label>Channel</label>
+        <select id="audioch" disabled>
+          <option value="0">Left / Mono</option>
+          <option value="1">Right</option>
+          <option value="mix">Mix (L+R)</option>
+        </select></div>
+      <div class="fr"><label>Sample Rate</label>
+        <select id="audiofs" disabled>
+          <option value="48000" selected>48 000 Hz</option>
+          <option value="44100">44 100 Hz</option>
+          <option value="96000">96 000 Hz</option>
+        </select></div>
+    </div>
+
+    <div class="fr"><label>Sensitivity (V per mm/s) — adjusts physical units</label>
+      <input type="number" id="sensit" value="1.0" step="0.01" min="0.001"></div>
+
+    <div style="display:flex;gap:6px;margin-top:2px">
+      <button class="btn pu full" id="recbtn" onclick="toggleAudioRecord()" disabled>▶ Record</button>
+      <button class="btn sm" id="dlbtn" onclick="downloadWAV()" disabled title="Download WAV">💾</button>
+    </div>
+
+    <div id="audstatus" style="font-size:10px;color:var(--mu);margin-top:6px;min-height:14px"></div>
+  </div>
+
+  <!-- Device info -->
+  <div class="card">
+    <div class="ct">Device Info</div>
+    <div class="pr"><span class="pl">ID?</span><span class="pv" id="v-id">—</span></div>
+    <div class="pr"><span class="pl">VER?</span><span class="pv" id="v-ver">—</span></div>
+    <div class="pr"><span class="pl">ST?</span><span class="pv" id="v-st">—</span></div>
+    <div class="pr"><span class="pl">BAUD?</span><span class="pv" id="v-baud">—</span></div>
+    <button class="btn sm full" id="ibtn" onclick="refreshInfo()" disabled style="margin-top:6px">↻ Refresh</button>
+  </div>
+
+  <!-- Measurement -->
+  <div class="card">
+    <div class="ct">Measurement</div>
+    <div class="pr"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
+    <div class="pr"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
+  </div>
+
+  <!-- Laser -->
+  <div class="card">
+    <div class="ct">Laser & Beam</div>
+    <div class="pr"><span class="pl">LAS?</span><span class="pv" id="v-las">—</span><button class="btn sm qb" onclick="qp('LAS?','v-las')" disabled>?</button></div>
+    <div class="pr"><span class="pl">BEAM?</span><span class="pv" id="v-beam">—</span><button class="btn sm qb" onclick="qp('BEAM?','v-beam')" disabled>?</button></div>
+    <div class="pr"><span class="pl">ASE?</span><span class="pv" id="v-ase">—</span><button class="btn sm qb" onclick="qp('ASE?','v-ase')" disabled>?</button></div>
+  </div>
+
+  <!-- Temperature -->
+  <div class="card">
+    <div class="ct">Temperature</div>
+    <div class="pr"><span class="pl">TEMP?</span><span class="pv" id="v-temp">—</span><button class="btn sm qb" onclick="qp('TEMP?','v-temp')" disabled>?</button></div>
+    <div class="pr"><span class="pl">OVERTEMP?</span><span class="pv" id="v-overtemp">—</span><button class="btn sm qb" onclick="qp('OVERTEMP?','v-overtemp')" disabled>?</button></div>
+  </div>
+
+  <!-- Autofocus -->
+  <div class="card">
+    <div class="ct">Autofocus</div>
+    <div class="pr"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
+    <div class="pr"><span class="pl">AFRES?</span><span class="pv" id="v-afres">—</span><button class="btn sm qb" onclick="qp('AFRES?','v-afres')" disabled>?</button></div>
+    <div class="pr"><span class="pl">AFMIN?</span><span class="pv" id="v-afmin">—</span><button class="btn sm qb" onclick="qp('AFMIN?','v-afmin')" disabled>?</button></div>
+    <div class="pr"><span class="pl">AFMAX?</span><span class="pv" id="v-afmax">—</span><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
+  </div>
+
+  <!-- Focus -->
+  <div class="card">
+    <div class="ct">Focus Position</div>
+    <div class="pr"><span class="pl">FPOS?</span><span class="pv" id="v-fpos">—</span><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
+    <div class="pr"><span class="pl">FPOSMIN?</span><span class="pv" id="v-fposmin">—</span><button class="btn sm qb" onclick="qp('FPOSMIN?','v-fposmin')" disabled>?</button></div>
+    <div class="pr"><span class="pl">FPOSMAX?</span><span class="pv" id="v-fposmax">—</span><button class="btn sm qb" onclick="qp('FPOSMAX?','v-fposmax')" disabled>?</button></div>
+    <div class="pr"><span class="pl">POWUP_FPOS?</span><span class="pv" id="v-pufpos">—</span><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
+  </div>
+
+  <!-- System -->
+  <div class="card">
+    <div class="ct">System</div>
+    <div class="pr"><span class="pl">POWUP?</span><span class="pv" id="v-powup">—</span><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
+    <div class="pr"><span class="pl">USER?</span><span class="pv" id="v-user">—</span><button class="btn sm qb" onclick="qp('USER?','v-user')" disabled>?</button></div>
+    <div class="pr"><span class="pl">TRIGIN?</span><span class="pv" id="v-trigin">—</span><button class="btn sm qb" onclick="qp('TRIGIN?','v-trigin')" disabled>?</button></div>
+    <div class="pr"><span class="pl">FTRIGIN?</span><span class="pv" id="v-ftrigin">—</span><button class="btn sm qb" onclick="qp('FTRIGIN?','v-ftrigin')" disabled>?</button></div>
+  </div>
+
+  <button class="btn full" id="qabtn" onclick="queryAll()" disabled>Query All Parameters</button>
+
+</aside>
+
+<!-- Plots -->
+<div class="plots">
+  <div class="pw" id="vel-plot">
+    <div class="mode-label serial" id="vmode">Serial Velocity</div>
+  </div>
+  <div class="pw" id="fft-plot">
+    <div class="mode-label serial" id="fmode">Serial FFT</div>
+  </div>
+</div>
+</div>
+
+<!-- ══ JavaScript ══════════════════════════════════════════════════ -->
+<script>
+// ── Plotly setup ───────────────────────────────────────────────────
+const BG='#0d1117',SF='#161b22',GR='#21262d',TX='#e6edf3';
+const base={paper_bgcolor:BG,plot_bgcolor:SF,font:{color:TX,size:11},
+  xaxis:{gridcolor:GR,zerolinecolor:GR,linecolor:GR},
+  yaxis:{gridcolor:GR,zerolinecolor:GR,linecolor:GR},
+  margin:{l:58,r:16,t:38,b:42},autosize:true};
+
+function makeLayout(title,xl,yl){
+  return {...base,title:{text:title,font:{color:TX,size:12}},
+    xaxis:{...base.xaxis,title:xl},yaxis:{...base.yaxis,title:yl}};
+}
+
+const VL=makeLayout('Velocity — Time Domain','Time (s)','mm / s');
+const FL=makeLayout('FFT — Frequency Domain','Frequency (Hz)','Magnitude (mm/s)');
+const AL=makeLayout('Audio — Time Domain','Time (s)','Amplitude (V)');
+const AFL=makeLayout('Audio FFT','Frequency (Hz)','Magnitude');
+const cfg={responsive:true,displayModeBar:true,
+  modeBarButtonsToRemove:['toImage','sendDataToCloud'],displaylogo:false};
+
+Plotly.newPlot('vel-plot',[{x:[],y:[],type:'scatter',mode:'lines',
+  line:{color:'#58a6ff',width:1.5},name:'Velocity'}],VL,cfg);
+Plotly.newPlot('fft-plot',[{x:[],y:[],type:'scatter',mode:'lines',
+  line:{color:'#3fb950',width:1.5},name:'FFT'}],FL,cfg);
+
+// ── Serial manager ─────────────────────────────────────────────────
+class SM{
+  constructor(){this.port=this.wr=this.res=this.tmr=null;this.buf='';this.ok=this.on=false}
+  async connect(baud){
+    this.port=await navigator.serial.requestPort();
+    await this.port.open({baudRate:+baud});
+    this.wr=this.port.writable.getWriter();
+    this.on=true;this._loop();this.ok=true;
+    await this.cmd('REM');
+  }
+  async _loop(){
+    const rd=this.port.readable.getReader();
+    try{
+      while(this.on){
+        const{value,done}=await rd.read();if(done)break;
+        this.buf+=new TextDecoder().decode(value);
+        const nl=this.buf.indexOf('\n');
+        if(nl!==-1&&this.res){
+          const ln=this.buf.substring(0,nl).trim();
+          this.buf=this.buf.substring(nl+1);
+          if(this.tmr)clearTimeout(this.tmr);
+          const r=this.res;this.res=null;r(ln);
+        }
+      }
+    }catch(e){}finally{rd.releaseLock()}
+  }
+  cmd(s,ms=1500){
+    return new Promise(async res=>{
+      this.res=res;
+      this.tmr=setTimeout(()=>{if(this.res){this.res=null;res('')}},ms);
+      await this.wr.write(new TextEncoder().encode(s+'\n'));
+    });
+  }
+  async disconnect(){
+    this.on=this.ok=false;
+    try{this.wr?.releaseLock();await this.port?.close()}catch(e){}
+  }
+}
+const S=new SM();
+let polling=false,ptmr=null;
+
+// ── Serial UI ──────────────────────────────────────────────────────
+async function connectSerial(){
+  if(S.ok){stopPoll();await S.disconnect();uiState(false);return}
+  try{
+    document.getElementById('cbtn').textContent='Connecting…';
+    await S.connect(document.getElementById('baud').value);
+    uiState(true);await refreshInfo();
+  }catch(e){
+    document.getElementById('cbtn').textContent='Connect Serial';
+    document.getElementById('hstatus').textContent='Failed: '+e.message;
+  }
+}
+function uiState(on){
+  document.getElementById('dot').className=on?'dot on':'dot';
+  const b=document.getElementById('cbtn');
+  b.className=on?'btn dng':'btn pri';
+  b.textContent=on?'Disconnect':'Connect Serial';
+  document.getElementById('hstatus').textContent=on?'Connected':'Not connected';
+  ['pbtn','ibtn','qabtn'].forEach(id=>document.getElementById(id).disabled=!on);
+  document.querySelectorAll('.qb').forEach(b=>b.disabled=!on);
+}
+async function qp(cmd,id){
+  if(!S.ok)return;
+  document.getElementById(id).textContent='…';
+  const r=await S.cmd(cmd);
+  document.getElementById(id).textContent=r||'—';
+  return r;
+}
+async function refreshInfo(){
+  await qp('ID?','v-id');await qp('VER?','v-ver');
+  await qp('ST?','v-st');await qp('BAUD?','v-baud');
+}
+async function queryAll(){
+  for(const[c,id]of[
+    ['BW?','v-bw'],['HP?','v-hp'],['LAS?','v-las'],['BEAM?','v-beam'],['ASE?','v-ase'],
+    ['TEMP?','v-temp'],['OVERTEMP?','v-overtemp'],['AF?','v-af'],['AFRES?','v-afres'],
+    ['AFMIN?','v-afmin'],['AFMAX?','v-afmax'],['FPOS?','v-fpos'],['FPOSMIN?','v-fposmin'],
+    ['FPOSMAX?','v-fposmax'],['POWUP_FPOS?','v-pufpos'],['POWUP?','v-powup'],
+    ['USER?','v-user'],['TRIGIN?','v-trigin'],['FTRIGIN?','v-ftrigin'],
+  ]) await qp(c,id);
+}
+
+// ── Serial polling ─────────────────────────────────────────────────
+function togglePoll(){polling?stopPoll():startPoll()}
+function startPoll(){
+  polling=true;
+  document.getElementById('pbtn').textContent='⏹ Stop';
+  tick();
+}
+function stopPoll(){
+  polling=false;if(ptmr)clearTimeout(ptmr);
+  document.getElementById('pbtn').textContent='▶ Start';
+}
+async function tick(){
+  if(!polling||!S.ok)return;
+  const r=await S.cmd('VELO?');
+  if(r){
+    const m=r.match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/);
+    if(m&&window.pyAddVelocity){
+      const v=parseFloat(m[0]);
+      document.getElementById('lvel').textContent=v.toFixed(4);
+      window.pyAddVelocity(v,parseFloat(document.getElementById('prate').value)||10);
+    }
+  }
+  ptmr=setTimeout(tick,1000/(parseFloat(document.getElementById('prate').value)||10));
+}
+
+// ── Audio ──────────────────────────────────────────────────────────
+let audioCtx=null, audioStream=null, processor=null, analyser=null;
+let audioRecording=false, audioChunks=[], audioSR=48000;
+let audioAnimId=null;
+const PROC_BUF=4096, DISP_AUDIO=8192;
+
+async function scanAudioDevices(){
+  try{
+    // Request permission first — labels are empty without it
+    const tmp=await navigator.mediaDevices.getUserMedia({audio:true});
+    tmp.getTracks().forEach(t=>t.stop());
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const inputs=devs.filter(d=>d.kind==='audioinput');
+    const sel=document.getElementById('audiodev');
+    sel.innerHTML='';
+    inputs.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId;
+      o.textContent=d.label||`Input device ${i+1}`;
+      sel.appendChild(o);
+    });
+    sel.disabled=false;
+    document.getElementById('audioch').disabled=false;
+    document.getElementById('audiofs').disabled=false;
+    document.getElementById('recbtn').disabled=false;
+    setAudStatus(`Found ${inputs.length} input device(s)`);
+  }catch(e){setAudStatus('Permission denied: '+e.message)}
+}
+
+async function toggleAudioRecord(){
+  audioRecording?stopAudio():await startAudio();
+}
+
+async function startAudio(){
+  const devId=document.getElementById('audiodev').value;
+  const ch=document.getElementById('audioch').value;
+  audioSR=parseInt(document.getElementById('audiofs').value);
+
+  try{
+    audioStream=await navigator.mediaDevices.getUserMedia({audio:{
+      deviceId:{exact:devId},
+      sampleRate:audioSR,
+      channelCount:2,
+      echoCancellation:false,
+      noiseSuppression:false,
+      autoGainControl:false,
+    }});
+
+    audioCtx=new AudioContext({sampleRate:audioSR});
+    const src=audioCtx.createMediaStreamSource(audioStream);
+
+    // Analyser for FFT
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=4096;
+    analyser.smoothingTimeConstant=0.5;
+    src.connect(analyser);
+
+    // ScriptProcessor for raw samples + WAV recording
+    processor=audioCtx.createScriptProcessor(PROC_BUF,2,2);
+    audioChunks=[];
+
+    processor.onaudioprocess=e=>{
+      const L=e.inputBuffer.getChannelData(0);
+      let samples;
+      if(ch==='mix'){
+        const R=e.inputBuffer.getChannelData(1);
+        samples=new Float32Array(L.length);
+        for(let i=0;i<L.length;i++) samples[i]=(L[i]+R[i])*0.5;
+      } else {
+        samples=new Float32Array(e.inputBuffer.getChannelData(+ch));
+      }
+      audioChunks.push(samples);
+      if(window.pyAddAudio) window.pyAddAudio(Array.from(samples), audioSR,
+        parseFloat(document.getElementById('sensit').value)||1.0);
+    };
+
+    src.connect(processor);
+    processor.connect(audioCtx.destination);
+
+    audioRecording=true;
+    document.getElementById('recbtn').className='btn rec full';
+    document.getElementById('recbtn').textContent='⏹ Stop';
+    document.getElementById('dlbtn').disabled=true;
+    document.getElementById('dot').className='dot rec';
+    setModeAudio(true);
+    setAudStatus('Recording…');
+    drawAnalyser();
+  }catch(e){setAudStatus('Error: '+e.message)}
+}
+
+function stopAudio(){
+  audioRecording=false;
+  if(audioAnimId)cancelAnimationFrame(audioAnimId);
+  processor?.disconnect();processor=null;
+  analyser?.disconnect();analyser=null;
+  audioStream?.getTracks().forEach(t=>t.stop());
+  audioCtx?.close();
+  document.getElementById('recbtn').className='btn pu full';
+  document.getElementById('recbtn').textContent='▶ Record';
+  document.getElementById('dlbtn').disabled=audioChunks.length===0;
+  document.getElementById('dot').className=S.ok?'dot on':'dot';
+  const total=(audioChunks.reduce((a,c)=>a+c.length,0)/audioSR).toFixed(2);
+  setAudStatus(`Recorded ${total} s — ready to download`);
+}
+
+// Live analyser draw loop
+function drawAnalyser(){
+  if(!audioRecording||!analyser){return}
+  audioAnimId=requestAnimationFrame(drawAnalyser);
+  const n=analyser.frequencyBinCount;
+  const fd=new Float32Array(n);
+  analyser.getFloatFrequencyData(fd);
+  const freqs=Array.from({length:n},(_,i)=>i*audioSR/(2*n));
+  // Convert dBFS to linear magnitude
+  const mag=Array.from(fd,v=>Math.pow(10,(v+120)/40));
+  Plotly.react('fft-plot',[{x:freqs,y:mag,type:'scatter',mode:'lines',
+    line:{color:'#bc8cff',width:1},name:'Audio FFT'}],AFL,cfg);
+}
+
+// ── WAV encoder ────────────────────────────────────────────────────
+function downloadWAV(){
+  if(!audioChunks.length)return;
+  const all=mergeChunks(audioChunks);
+  const buf=encodeWAV(all,audioSR);
+  const url=URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+  const a=document.createElement('a');
+  a.href=url;a.download=`ivs500_${Date.now()}.wav`;a.click();
+  URL.revokeObjectURL(url);
+}
+function mergeChunks(chunks){
+  const len=chunks.reduce((a,c)=>a+c.length,0);
+  const out=new Float32Array(len);
+  let off=0;chunks.forEach(c=>{out.set(c,off);off+=c.length});
+  return out;
+}
+function encodeWAV(samples,sr){
+  const buf=new ArrayBuffer(44+samples.length*2);
+  const v=new DataView(buf);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  ws(0,'RIFF');v.setUint32(4,36+samples.length*2,true);ws(8,'WAVE');
+  ws(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);
+  v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);
+  v.setUint16(32,2,true);v.setUint16(34,16,true);
+  ws(36,'data');v.setUint32(40,samples.length*2,true);
+  let o=44;samples.forEach(s=>{v.setInt16(o,Math.max(-1,Math.min(1,s))*0x7FFF,true);o+=2});
+  return buf;
+}
+
+// ── Plot mode helpers ──────────────────────────────────────────────
+function setModeAudio(on){
+  const vm=document.getElementById('vmode'),fm=document.getElementById('fmode');
+  if(on){
+    vm.textContent='Audio Waveform';vm.className='mode-label audio';
+    fm.textContent='Audio FFT (live)';fm.className='mode-label audio';
+    Plotly.react('vel-plot',[{x:[],y:[],type:'scatter',mode:'lines',
+      line:{color:'#bc8cff',width:1},name:'Audio'}],AL,cfg);
+  }else{
+    vm.textContent='Serial Velocity';vm.className='mode-label serial';
+    fm.textContent='Serial FFT';fm.className='mode-label serial';
+  }
+}
+function setAudStatus(msg){document.getElementById('audstatus').textContent=msg}
+</script>
+
+<!-- ══ PyScript ══════════════════════════════════════════════════════ -->
+<script type="py" config='{"packages":["numpy"]}'>
+import numpy as np, json, js
+from pyodide.ffi import create_proxy
+
+MAX=4096; DISP=512; NFFT=1024
+vbuf=[]; tbuf=[]; sr=[10.0]
+abuf=[]; asr=[48000]; ach=0
+
+BG='#0d1117'; SF='#161b22'; GR='#21262d'; TX='#e6edf3'
+base_layout={"paper_bgcolor":BG,"plot_bgcolor":SF,"font":{"color":TX,"size":11},
+  "xaxis":{"gridcolor":GR,"zerolinecolor":GR},"yaxis":{"gridcolor":GR,"zerolinecolor":GR},
+  "margin":{"l":58,"r":16,"t":38,"b":42},"autosize":True}
+VL={**base_layout,"title":{"text":"Velocity — Time Domain","font":{"color":TX,"size":12}},
+  "xaxis":{**base_layout["xaxis"],"title":"Time (s)"},
+  "yaxis":{**base_layout["yaxis"],"title":"mm / s"}}
+FL={**base_layout,"title":{"text":"FFT — Frequency Domain","font":{"color":TX,"size":12}},
+  "xaxis":{**base_layout["xaxis"],"title":"Frequency (Hz)"},
+  "yaxis":{**base_layout["yaxis"],"title":"Magnitude (mm/s)"}}
+AL={**base_layout,"title":{"text":"Audio — Time Domain","font":{"color":TX,"size":12}},
+  "xaxis":{**base_layout["xaxis"],"title":"Time (s)"},
+  "yaxis":{**base_layout["yaxis"],"title":"Amplitude (V)"}}
+
+cfg={"responsive":True,"displayModeBar":True,"displaylogo":False}
+
+def add_velocity(val, rate):
+    sr[0]=float(rate); vbuf.append(float(val))
+    tbuf.append((len(vbuf)-1)/sr[0])
+    if len(vbuf)>MAX: vbuf.pop(0); tbuf.pop(0)
+    _draw_serial()
+
+def _draw_serial():
+    n=min(len(vbuf),DISP)
+    vdata=js.JSON.parse(json.dumps([{"x":tbuf[-n:],"y":vbuf[-n:],
+      "type":"scatter","mode":"lines","line":{"color":"#58a6ff","width":1.5},"name":"Velocity"}]))
+    js.Plotly.react("vel-plot",vdata,js.JSON.parse(json.dumps(VL)))
+    if len(vbuf)<64: return
+    nf=min(len(vbuf),NFFT); sig=np.array(vbuf[-nf:])
+    win=np.hanning(nf); mag=np.abs(np.fft.rfft(sig*win))*2/win.sum()
+    freqs=np.fft.rfftfreq(nf,d=1/sr[0])
+    fdata=js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
+      "type":"scatter","mode":"lines","line":{"color":"#3fb950","width":1.5},"name":"FFT"}]))
+    js.Plotly.react("fft-plot",fdata,js.JSON.parse(json.dumps(FL)))
+
+def add_audio(samples, sample_rate, sensitivity):
+    asr[0]=int(sample_rate); sens=float(sensitivity)
+    chunk=[s/sens for s in samples]  # convert V → physical units
+    abuf.extend(chunk)
+    if len(abuf)>MAX*8: del abuf[:len(abuf)-MAX*8]
+    # Show last 4096 samples on waveform
+    n=min(len(abuf),4096)
+    t=[i/asr[0] for i in range(n)]
+    vdata=js.JSON.parse(json.dumps([{"x":t,"y":abuf[-n:],
+      "type":"scatter","mode":"lines","line":{"color":"#bc8cff","width":1},"name":"Audio"}]))
+    js.Plotly.react("vel-plot",vdata,js.JSON.parse(json.dumps(AL)))
+
+js.window.pyAddVelocity=create_proxy(add_velocity)
+js.window.pyAddAudio=create_proxy(add_audio)
+js.document.getElementById("loading").classList.add("gone")
+</script>
+</body>
+</html>
