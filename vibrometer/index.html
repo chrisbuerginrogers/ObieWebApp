@@ -649,7 +649,8 @@ RING = 65536
 aring        = np.zeros(RING, dtype=np.float32)
 aring_wp     = [0]
 asr_val      = [48000]
-last_cap     = [None]          # most recent triggered window
+last_cap      = [None]          # most recent triggered window
+last_drawn_cap= [None]          # cap we last plotted (to detect new triggers)
 oneshot_fired = [False]
 
 # ── Plotly layout templates ──────────────────────────────────────────
@@ -664,6 +665,21 @@ def _layout(title, xl, yl):
         "title":{"text":title,"font":{"color":TX,"size":12}},
         "xaxis":{**_base["xaxis"],"title":xl},
         "yaxis":{**_base["yaxis"],"title":yl}}
+
+def _audio_layout(trig_level):
+    """Waveform layout with trigger-level line and t=0 marker."""
+    return {**_base,
+        "title":{"text":"Audio — Triggered Waveform","font":{"color":TX,"size":12}},
+        "xaxis":{**_base["xaxis"],"title":"Time rel. trigger (s)"},
+        "yaxis":{**_base["yaxis"],"title":"Physical units"},
+        "shapes":[
+            {"type":"line","xref":"paper","x0":0,"x1":1,
+             "yref":"y","y0":trig_level,"y1":trig_level,
+             "line":{"color":"#f85149","width":1.5,"dash":"dot"}},
+            {"type":"line","xref":"x","x0":0,"x1":0,
+             "yref":"paper","y0":0,"y1":1,
+             "line":{"color":"#d29922","width":1.2,"dash":"dash"}},
+        ]}
 
 VL  = _layout("Velocity — Time Domain",       "Time (s)",                  "mm / s")
 FL  = _layout("FFT — Frequency Domain",        "Frequency (Hz)",             "Magnitude (mm/s)")
@@ -783,17 +799,26 @@ def add_audio(samples, sample_rate, sensitivity):
 
     js.window.setTrigStatus(status)
 
-    # ── Draw waveform plot ──────────────────────────────────────────
+    # ── Only redraw when there is genuinely new data ─────────────────
+    # During 'hold' or 'armed' the user may be zooming — don't clobber it.
+    is_new_trig = (status == 'trig')
+    is_rolling  = (status == 'wait')   # auto-mode rolling fallback
+    if not (is_new_trig or is_rolling):
+        return   # leave plots alone so Plotly stays interactive
+
+    # ── Draw waveform plot ───────────────────────────────────────────
     disp = last_cap[0]
+    al   = _audio_layout(trig_level)   # layout carries trigger lines
+
     if disp and len(disp) > 1:
-        # Time axis: 0 is trigger moment
-        t_ax = [(-pre_n + i) / sr for i in range(len(disp))]
+        t_ax  = [(-pre_n + i) / sr for i in range(len(disp))]
         vdata = js.JSON.parse(json.dumps([{"x":t_ax,"y":disp,
             "type":"scatter","mode":"lines",
             "line":{"color":"#bc8cff","width":1},"name":"Audio"}]))
-        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(AL)))
+        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
+        last_drawn_cap[0] = disp
 
-        # ── Draw FFT of triggered window ────────────────────────────
+        # ── Draw FFT of triggered window ─────────────────────────────
         if len(disp) >= 64:
             sig   = np.array(disp, dtype=np.float32)
             win   = np.hanning(len(sig))
@@ -810,14 +835,15 @@ def add_audio(samples, sample_rate, sensitivity):
         vdata = js.JSON.parse(json.dumps([{"x":t2,"y":buf[-n2:].tolist(),
             "type":"scatter","mode":"lines",
             "line":{"color":"#bc8cff","width":1},"name":"Audio (rolling)"}]))
-        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(AL)))
+        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
 
 # ── Reset audio state on new recording ───────────────────────────────
 def reset_audio():
-    last_cap[0]       = None
-    oneshot_fired[0]  = False
-    aring[:]          = 0.0
-    aring_wp[0]       = 0
+    last_cap[0]        = None
+    last_drawn_cap[0]  = None
+    oneshot_fired[0]   = False
+    aring[:]           = 0.0
+    aring_wp[0]        = 0
 
 # ── Reset one-shot arm (called from JS arm button) ───────────────────
 def arm_oneshot():
