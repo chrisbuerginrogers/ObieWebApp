@@ -19,13 +19,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .spin{width:38px;height:38px;border:3px solid var(--bd);border-top-color:var(--bl);
   border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 header{flex-shrink:0;height:52px;background:var(--sf);border-bottom:1px solid var(--bd);
   display:flex;align-items:center;gap:12px;padding:0 16px}
 .logo{font-weight:700;font-size:15px}.logo b{color:var(--bl)}
 .sub{color:var(--mu);font-size:11px}.gap{flex:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--rd);transition:background .3s}
 .dot.on{background:var(--gn)}.dot.rec{background:var(--rd);animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 #hstatus{font-size:12px;color:var(--mu)}
 .wrap{flex:1;display:grid;grid-template-columns:268px 1fr;overflow:hidden}
 aside{background:var(--sf);border-right:1px solid var(--bd);
@@ -48,6 +48,8 @@ aside::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 .btn.pu{background:var(--pu);border-color:var(--pu);color:#000;font-weight:700}
 .btn.pu:hover:not(:disabled){opacity:.85}
 .btn.rec{background:var(--rd);border-color:var(--rd);color:#fff;font-weight:700;animation:pulse 1s infinite}
+.btn.armed{border-color:var(--yl) !important;color:var(--yl) !important;
+  background:var(--s2) !important;animation:pulse 1s infinite}
 .btn.sm{padding:3px 7px;font-size:11px}
 .btn.full{width:100%;margin-top:4px}
 .fr{margin-bottom:8px}
@@ -67,17 +69,14 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
   text-align:center;padding:6px 0 2px;letter-spacing:-1px}
 .unit{text-align:center;font-size:11px;color:var(--mu)}
 .notice{font-size:10px;color:var(--yl);margin-top:6px;line-height:1.5}
-.badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;
-  border-radius:3px;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle;margin-left:4px}
-.badge.serial{background:#1c3a5e;color:var(--bl)}
-.badge.audio{background:#2d1f47;color:var(--pu)}
 .plots{display:grid;grid-template-rows:1fr 1fr;background:var(--bd);gap:1px;overflow:hidden}
 .pw{background:var(--bg);overflow:hidden;position:relative}
 .mode-label{position:absolute;top:8px;right:12px;font-size:10px;
   font-weight:700;text-transform:uppercase;letter-spacing:.5px;opacity:.6;z-index:1}
 .mode-label.serial{color:var(--bl)}
 .mode-label.audio{color:var(--pu)}
-.divider{height:1px;background:var(--bd);margin:4px 0}
+.divider{height:1px;background:var(--bd);margin:8px 0}
+.trig-row{display:flex;gap:6px;align-items:center;margin-top:4px}
 </style>
 </head>
 <body>
@@ -99,11 +98,23 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 <div class="wrap">
 <aside>
 
-  <!-- Serial connection -->
+  <!-- ── Folder & Settings ── -->
+  <div class="card">
+    <div class="ct">📁 Folder &amp; Settings</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn sm" id="folder-btn" onclick="pickFolder()"
+        style="white-space:nowrap;flex-shrink:0">📁 Select Folder</button>
+      <span id="folder-status"
+        style="font-size:10px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">no folder connected</span>
+    </div>
+    <div class="notice" style="margin-top:6px">Settings auto-save when a folder is connected.</div>
+  </div>
+
+  <!-- ── Serial connection ── -->
   <div class="card">
     <div class="ct">Serial Connection</div>
     <div class="fr"><label>Baud Rate</label>
-      <select id="baud">
+      <select id="baud" onchange="settingChanged()">
         <option value="9600" selected>9600</option>
         <option value="19200">19200</option>
         <option value="38400">38400</option>
@@ -112,20 +123,20 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
       </select></div>
     <div class="fr"><label>Poll Rate (Hz)</label>
       <div class="ig">
-        <input type="number" id="prate" value="10" min="1" max="50">
+        <input type="number" id="prate" value="10" min="1" max="50" onchange="settingChanged()">
         <button class="btn sm" id="pbtn" onclick="togglePoll()" disabled>▶ Start</button>
       </div></div>
     <div class="notice">⚠ Chrome/Edge only. Run via <code>python -m http.server</code></div>
   </div>
 
-  <!-- Live readout -->
+  <!-- ── Live readout ── -->
   <div class="card">
     <div class="ct">Live Velocity</div>
     <div class="big" id="lvel">—</div>
     <div class="unit">mm/s (serial)</div>
   </div>
 
-  <!-- ── Audio Capture ─────────────────────────────────────── -->
+  <!-- ── Audio Capture ── -->
   <div class="card hl">
     <div class="ct pu">🎙 Audio Capture</div>
 
@@ -140,21 +151,51 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 
     <div class="row">
       <div class="fr"><label>Channel</label>
-        <select id="audioch" disabled>
+        <select id="audioch" disabled onchange="settingChanged()">
           <option value="0">Left / Mono</option>
           <option value="1">Right</option>
           <option value="mix">Mix (L+R)</option>
         </select></div>
       <div class="fr"><label>Sample Rate</label>
-        <select id="audiofs" disabled>
+        <select id="audiofs" disabled onchange="settingChanged()">
           <option value="48000" selected>48 000 Hz</option>
           <option value="44100">44 100 Hz</option>
           <option value="96000">96 000 Hz</option>
         </select></div>
     </div>
 
-    <div class="fr"><label>Sensitivity (V per mm/s) — adjusts physical units</label>
-      <input type="number" id="sensit" value="1.0" step="0.01" min="0.001"></div>
+    <div class="fr"><label>Sensitivity (V per mm/s)</label>
+      <input type="number" id="sensit" value="1.0" step="0.01" min="0.001"
+        onchange="settingChanged()"></div>
+
+    <!-- ── Trigger section ── -->
+    <div class="divider"></div>
+    <div class="ct pu" style="margin-bottom:6px">⚡ Trigger (0.01 s pre · 0.30 s post)</div>
+
+    <div class="row">
+      <div class="fr"><label>Mode</label>
+        <select id="trig-mode" onchange="trigModeChange();settingChanged()">
+          <option value="auto">Auto</option>
+          <option value="normal">Normal</option>
+          <option value="oneshot">One-Shot</option>
+        </select></div>
+      <div class="fr"><label>Edge</label>
+        <select id="trig-edge" onchange="settingChanged()">
+          <option value="rising">↑ Rise</option>
+          <option value="falling">↓ Fall</option>
+        </select></div>
+    </div>
+
+    <div class="fr"><label>Level (scaled units after sensitivity)</label>
+      <input type="number" id="trig-level" value="0.05" step="0.01"
+        onchange="settingChanged()"></div>
+
+    <div class="trig-row">
+      <span id="trig-status" style="font-size:11px;color:var(--mu);flex:1;font-family:monospace">WAIT ○</span>
+      <button class="btn sm" id="arm-btn" onclick="armOneshot()" style="display:none">◉ ARM</button>
+    </div>
+
+    <div class="divider"></div>
 
     <div style="display:flex;gap:6px;margin-top:2px">
       <button class="btn pu full" id="recbtn" onclick="toggleAudioRecord()" disabled>▶ Record</button>
@@ -164,7 +205,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div id="audstatus" style="font-size:10px;color:var(--mu);margin-top:6px;min-height:14px"></div>
   </div>
 
-  <!-- Device info -->
+  <!-- ── Device info ── -->
   <div class="card">
     <div class="ct">Device Info</div>
     <div class="pr"><span class="pl">ID?</span><span class="pv" id="v-id">—</span></div>
@@ -174,29 +215,29 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <button class="btn sm full" id="ibtn" onclick="refreshInfo()" disabled style="margin-top:6px">↻ Refresh</button>
   </div>
 
-  <!-- Measurement -->
+  <!-- ── Measurement ── -->
   <div class="card">
     <div class="ct">Measurement</div>
     <div class="pr"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
     <div class="pr"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
   </div>
 
-  <!-- Laser -->
+  <!-- ── Laser ── -->
   <div class="card">
-    <div class="ct">Laser & Beam</div>
+    <div class="ct">Laser &amp; Beam</div>
     <div class="pr"><span class="pl">LAS?</span><span class="pv" id="v-las">—</span><button class="btn sm qb" onclick="qp('LAS?','v-las')" disabled>?</button></div>
     <div class="pr"><span class="pl">BEAM?</span><span class="pv" id="v-beam">—</span><button class="btn sm qb" onclick="qp('BEAM?','v-beam')" disabled>?</button></div>
     <div class="pr"><span class="pl">ASE?</span><span class="pv" id="v-ase">—</span><button class="btn sm qb" onclick="qp('ASE?','v-ase')" disabled>?</button></div>
   </div>
 
-  <!-- Temperature -->
+  <!-- ── Temperature ── -->
   <div class="card">
     <div class="ct">Temperature</div>
     <div class="pr"><span class="pl">TEMP?</span><span class="pv" id="v-temp">—</span><button class="btn sm qb" onclick="qp('TEMP?','v-temp')" disabled>?</button></div>
     <div class="pr"><span class="pl">OVERTEMP?</span><span class="pv" id="v-overtemp">—</span><button class="btn sm qb" onclick="qp('OVERTEMP?','v-overtemp')" disabled>?</button></div>
   </div>
 
-  <!-- Autofocus -->
+  <!-- ── Autofocus ── -->
   <div class="card">
     <div class="ct">Autofocus</div>
     <div class="pr"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
@@ -205,7 +246,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div class="pr"><span class="pl">AFMAX?</span><span class="pv" id="v-afmax">—</span><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
   </div>
 
-  <!-- Focus -->
+  <!-- ── Focus ── -->
   <div class="card">
     <div class="ct">Focus Position</div>
     <div class="pr"><span class="pl">FPOS?</span><span class="pv" id="v-fpos">—</span><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
@@ -214,7 +255,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div class="pr"><span class="pl">POWUP_FPOS?</span><span class="pv" id="v-pufpos">—</span><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
   </div>
 
-  <!-- System -->
+  <!-- ── System ── -->
   <div class="card">
     <div class="ct">System</div>
     <div class="pr"><span class="pl">POWUP?</span><span class="pv" id="v-powup">—</span><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
@@ -227,7 +268,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 
 </aside>
 
-<!-- Plots -->
+<!-- ── Plots ── -->
 <div class="plots">
   <div class="pw" id="vel-plot">
     <div class="mode-label serial" id="vmode">Serial Velocity</div>
@@ -248,14 +289,14 @@ const base={paper_bgcolor:BG,plot_bgcolor:SF,font:{color:TX,size:11},
   margin:{l:58,r:16,t:38,b:42},autosize:true};
 
 function makeLayout(title,xl,yl){
-  return {...base,title:{text:title,font:{color:TX,size:12}},
+  return{...base,title:{text:title,font:{color:TX,size:12}},
     xaxis:{...base.xaxis,title:xl},yaxis:{...base.yaxis,title:yl}};
 }
 
-const VL=makeLayout('Velocity — Time Domain','Time (s)','mm / s');
-const FL=makeLayout('FFT — Frequency Domain','Frequency (Hz)','Magnitude (mm/s)');
-const AL=makeLayout('Audio — Time Domain','Time (s)','Amplitude (V)');
-const AFL=makeLayout('Audio FFT','Frequency (Hz)','Magnitude');
+const VL =makeLayout('Velocity — Time Domain','Time (s)','mm / s');
+const FL =makeLayout('FFT — Frequency Domain','Frequency (Hz)','Magnitude (mm/s)');
+const AL =makeLayout('Audio — Triggered Waveform','Time rel. trigger (s)','Physical units');
+const AFL=makeLayout('Audio FFT — Triggered Window','Frequency (Hz)','Magnitude');
 const cfg={responsive:true,displayModeBar:true,
   modeBarButtonsToRemove:['toImage','sendDataToCloud'],displaylogo:false};
 
@@ -263,6 +304,77 @@ Plotly.newPlot('vel-plot',[{x:[],y:[],type:'scatter',mode:'lines',
   line:{color:'#58a6ff',width:1.5},name:'Velocity'}],VL,cfg);
 Plotly.newPlot('fft-plot',[{x:[],y:[],type:'scatter',mode:'lines',
   line:{color:'#3fb950',width:1.5},name:'FFT'}],FL,cfg);
+
+// ── Folder & Settings ──────────────────────────────────────────────
+const SETTINGS_FILE='ivs500_settings.json';
+window.dirHandle=null;
+let _saveTimer=null;
+
+function getSettings(){
+  return{
+    baud:      document.getElementById('baud').value,
+    prate:     document.getElementById('prate').value,
+    audioch:   document.getElementById('audioch').value,
+    audiofs:   document.getElementById('audiofs').value,
+    sensit:    document.getElementById('sensit').value,
+    trigMode:  document.getElementById('trig-mode').value,
+    trigEdge:  document.getElementById('trig-edge').value,
+    trigLevel: document.getElementById('trig-level').value,
+  };
+}
+
+function applySettings(s){
+  if(s.baud      !== undefined) document.getElementById('baud').value      = s.baud;
+  if(s.prate     !== undefined) document.getElementById('prate').value     = s.prate;
+  if(s.audioch   !== undefined) document.getElementById('audioch').value   = s.audioch;
+  if(s.audiofs   !== undefined) document.getElementById('audiofs').value   = s.audiofs;
+  if(s.sensit    !== undefined) document.getElementById('sensit').value    = s.sensit;
+  if(s.trigMode  !== undefined){ document.getElementById('trig-mode').value = s.trigMode; trigModeChange(); }
+  if(s.trigEdge  !== undefined) document.getElementById('trig-edge').value = s.trigEdge;
+  if(s.trigLevel !== undefined) document.getElementById('trig-level').value = s.trigLevel;
+}
+
+function settingChanged(){
+  if(!window.dirHandle) return;
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(saveSettingsToFolder, 800);
+}
+
+async function saveSettingsToFolder(){
+  try{
+    const fh=await window.dirHandle.getFileHandle(SETTINGS_FILE,{create:true});
+    const w=await fh.createWritable();
+    await w.write(JSON.stringify(getSettings(),null,2));
+    await w.close();
+    document.getElementById('folder-status').textContent='✓ settings saved';
+  }catch(e){ console.warn('Settings save:',e); }
+}
+
+async function loadSettingsFromFolder(){
+  try{
+    const fh=await window.dirHandle.getFileHandle(SETTINGS_FILE);
+    const file=await fh.getFile();
+    applySettings(JSON.parse(await file.text()));
+    document.getElementById('folder-status').textContent='✓ settings loaded';
+  }catch(e){
+    document.getElementById('folder-status').textContent='(no saved settings found)';
+  }
+}
+
+async function pickFolder(){
+  if(!window.showDirectoryPicker){ alert('File System Access API requires Chrome or Edge.'); return; }
+  try{
+    window.dirHandle=await window.showDirectoryPicker({mode:'readwrite'});
+    const btn=document.getElementById('folder-btn');
+    btn.textContent='📁 '+window.dirHandle.name;
+    btn.style.borderColor='var(--bl)';btn.style.color='var(--bl)';
+    document.getElementById('folder-status').textContent='loading settings…';
+    await loadSettingsFromFolder();
+  }catch(e){
+    if(e.name!=='AbortError')
+      document.getElementById('folder-status').textContent='error: '+e.message;
+  }
+}
 
 // ── Serial manager ─────────────────────────────────────────────────
 class SM{
@@ -373,14 +485,11 @@ async function tick(){
 }
 
 // ── Audio ──────────────────────────────────────────────────────────
-let audioCtx=null, audioStream=null, processor=null, analyser=null;
-let audioRecording=false, audioChunks=[], audioSR=48000;
-let audioAnimId=null;
-const PROC_BUF=4096, DISP_AUDIO=8192;
+let audioCtx=null,audioStream=null,processor=null;
+let audioRecording=false,audioChunks=[],audioSR=48000;
 
 async function scanAudioDevices(){
   try{
-    // Request permission first — labels are empty without it
     const tmp=await navigator.mediaDevices.getUserMedia({audio:true});
     tmp.getTracks().forEach(t=>t.stop());
     const devs=await navigator.mediaDevices.enumerateDevices();
@@ -401,38 +510,22 @@ async function scanAudioDevices(){
   }catch(e){setAudStatus('Permission denied: '+e.message)}
 }
 
-async function toggleAudioRecord(){
-  audioRecording?stopAudio():await startAudio();
-}
+async function toggleAudioRecord(){audioRecording?stopAudio():await startAudio()}
 
 async function startAudio(){
   const devId=document.getElementById('audiodev').value;
   const ch=document.getElementById('audioch').value;
   audioSR=parseInt(document.getElementById('audiofs').value);
-
   try{
     audioStream=await navigator.mediaDevices.getUserMedia({audio:{
-      deviceId:{exact:devId},
-      sampleRate:audioSR,
-      channelCount:2,
-      echoCancellation:false,
-      noiseSuppression:false,
-      autoGainControl:false,
-    }});
-
+      deviceId:{exact:devId},sampleRate:audioSR,channelCount:2,
+      echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     audioCtx=new AudioContext({sampleRate:audioSR});
     const src=audioCtx.createMediaStreamSource(audioStream);
-
-    // Analyser for FFT
-    analyser=audioCtx.createAnalyser();
-    analyser.fftSize=4096;
-    analyser.smoothingTimeConstant=0.5;
-    src.connect(analyser);
-
-    // ScriptProcessor for raw samples + WAV recording
-    processor=audioCtx.createScriptProcessor(PROC_BUF,2,2);
+    processor=audioCtx.createScriptProcessor(4096,2,2);
     audioChunks=[];
-
+    // Reset Python trigger state for fresh recording
+    if(window.pyResetAudio) window.pyResetAudio();
     processor.onaudioprocess=e=>{
       const L=e.inputBuffer.getChannelData(0);
       let samples;
@@ -444,13 +537,11 @@ async function startAudio(){
         samples=new Float32Array(e.inputBuffer.getChannelData(+ch));
       }
       audioChunks.push(samples);
-      if(window.pyAddAudio) window.pyAddAudio(Array.from(samples), audioSR,
-        parseFloat(document.getElementById('sensit').value)||1.0);
+      if(window.pyAddAudio)
+        window.pyAddAudio(Array.from(samples), audioSR,
+          parseFloat(document.getElementById('sensit').value)||1.0);
     };
-
-    src.connect(processor);
-    processor.connect(audioCtx.destination);
-
+    src.connect(processor);processor.connect(audioCtx.destination);
     audioRecording=true;
     document.getElementById('recbtn').className='btn rec full';
     document.getElementById('recbtn').textContent='⏹ Stop';
@@ -458,38 +549,48 @@ async function startAudio(){
     document.getElementById('dot').className='dot rec';
     setModeAudio(true);
     setAudStatus('Recording…');
-    drawAnalyser();
   }catch(e){setAudStatus('Error: '+e.message)}
 }
 
 function stopAudio(){
   audioRecording=false;
-  if(audioAnimId)cancelAnimationFrame(audioAnimId);
   processor?.disconnect();processor=null;
-  analyser?.disconnect();analyser=null;
   audioStream?.getTracks().forEach(t=>t.stop());
   audioCtx?.close();
   document.getElementById('recbtn').className='btn pu full';
   document.getElementById('recbtn').textContent='▶ Record';
   document.getElementById('dlbtn').disabled=audioChunks.length===0;
   document.getElementById('dot').className=S.ok?'dot on':'dot';
+  document.getElementById('trig-status').textContent='WAIT ○';
+  document.getElementById('trig-status').style.color='var(--mu)';
   const total=(audioChunks.reduce((a,c)=>a+c.length,0)/audioSR).toFixed(2);
   setAudStatus(`Recorded ${total} s — ready to download`);
 }
 
-// Live analyser draw loop
-function drawAnalyser(){
-  if(!audioRecording||!analyser){return}
-  audioAnimId=requestAnimationFrame(drawAnalyser);
-  const n=analyser.frequencyBinCount;
-  const fd=new Float32Array(n);
-  analyser.getFloatFrequencyData(fd);
-  const freqs=Array.from({length:n},(_,i)=>i*audioSR/(2*n));
-  // Convert dBFS to linear magnitude
-  const mag=Array.from(fd,v=>Math.pow(10,(v+120)/40));
-  Plotly.react('fft-plot',[{x:freqs,y:mag,type:'scatter',mode:'lines',
-    line:{color:'#bc8cff',width:1},name:'Audio FFT'}],AFL,cfg);
+// ── Trigger UI ─────────────────────────────────────────────────────
+function trigModeChange(){
+  const mode=document.getElementById('trig-mode').value;
+  document.getElementById('arm-btn').style.display=mode==='oneshot'?'inline-block':'none';
 }
+
+function armOneshot(){
+  if(window.pyArmOneshot) window.pyArmOneshot();
+  const btn=document.getElementById('arm-btn');
+  btn.classList.add('armed');
+}
+
+// Called from Python to update the trigger status badge
+function setTrigStatus(st){
+  const el=document.getElementById('trig-status');
+  const map={trig:['TRIG ●','var(--gn)'],armed:['ARMED ◉','var(--yl)'],
+             hold:['HOLD ◈','var(--bl)'],wait:['WAIT ○','var(--mu)']};
+  const[txt,col]=map[st]||map.wait;
+  el.textContent=txt; el.style.color=col;
+  // Clear arm button animation once triggered
+  if(st==='trig'||st==='hold')
+    document.getElementById('arm-btn').classList.remove('armed');
+}
+window.setTrigStatus=setTrigStatus;
 
 // ── WAV encoder ────────────────────────────────────────────────────
 function downloadWAV(){
@@ -524,10 +625,8 @@ function encodeWAV(samples,sr){
 function setModeAudio(on){
   const vm=document.getElementById('vmode'),fm=document.getElementById('fmode');
   if(on){
-    vm.textContent='Audio Waveform';vm.className='mode-label audio';
-    fm.textContent='Audio FFT (live)';fm.className='mode-label audio';
-    Plotly.react('vel-plot',[{x:[],y:[],type:'scatter',mode:'lines',
-      line:{color:'#bc8cff',width:1},name:'Audio'}],AL,cfg);
+    vm.textContent='Audio Triggered';vm.className='mode-label audio';
+    fm.textContent='Audio FFT (triggered)';fm.className='mode-label audio';
   }else{
     vm.textContent='Serial Velocity';vm.className='mode-label serial';
     fm.textContent='Serial FFT';fm.className='mode-label serial';
@@ -541,59 +640,194 @@ function setAudStatus(msg){document.getElementById('audstatus').textContent=msg}
 import numpy as np, json, js
 from pyodide.ffi import create_proxy
 
-MAX=4096; DISP=512; NFFT=1024
-vbuf=[]; tbuf=[]; sr=[10.0]
-abuf=[]; asr=[48000]; ach=0
+# ── Serial data state ────────────────────────────────────────────────
+MAX=4096; NFFT=1024
+vbuf=[]; tbuf=[]; sr_s=[10.0]
 
+# ── Audio ring buffer ────────────────────────────────────────────────
+RING = 65536
+aring        = np.zeros(RING, dtype=np.float32)
+aring_wp     = [0]
+asr_val      = [48000]
+last_cap     = [None]          # most recent triggered window
+oneshot_fired = [False]
+
+# ── Plotly layout templates ──────────────────────────────────────────
 BG='#0d1117'; SF='#161b22'; GR='#21262d'; TX='#e6edf3'
-base_layout={"paper_bgcolor":BG,"plot_bgcolor":SF,"font":{"color":TX,"size":11},
-  "xaxis":{"gridcolor":GR,"zerolinecolor":GR},"yaxis":{"gridcolor":GR,"zerolinecolor":GR},
+_base = {"paper_bgcolor":BG,"plot_bgcolor":SF,"font":{"color":TX,"size":11},
+  "xaxis":{"gridcolor":GR,"zerolinecolor":GR},
+  "yaxis":{"gridcolor":GR,"zerolinecolor":GR},
   "margin":{"l":58,"r":16,"t":38,"b":42},"autosize":True}
-VL={**base_layout,"title":{"text":"Velocity — Time Domain","font":{"color":TX,"size":12}},
-  "xaxis":{**base_layout["xaxis"],"title":"Time (s)"},
-  "yaxis":{**base_layout["yaxis"],"title":"mm / s"}}
-FL={**base_layout,"title":{"text":"FFT — Frequency Domain","font":{"color":TX,"size":12}},
-  "xaxis":{**base_layout["xaxis"],"title":"Frequency (Hz)"},
-  "yaxis":{**base_layout["yaxis"],"title":"Magnitude (mm/s)"}}
-AL={**base_layout,"title":{"text":"Audio — Time Domain","font":{"color":TX,"size":12}},
-  "xaxis":{**base_layout["xaxis"],"title":"Time (s)"},
-  "yaxis":{**base_layout["yaxis"],"title":"Amplitude (V)"}}
 
-cfg={"responsive":True,"displayModeBar":True,"displaylogo":False}
+def _layout(title, xl, yl):
+    return {**_base,
+        "title":{"text":title,"font":{"color":TX,"size":12}},
+        "xaxis":{**_base["xaxis"],"title":xl},
+        "yaxis":{**_base["yaxis"],"title":yl}}
 
+VL  = _layout("Velocity — Time Domain",       "Time (s)",                  "mm / s")
+FL  = _layout("FFT — Frequency Domain",        "Frequency (Hz)",             "Magnitude (mm/s)")
+AL  = _layout("Audio — Triggered Waveform",    "Time rel. trigger (s)",      "Physical units")
+AFL = _layout("Audio FFT — Triggered Window",  "Frequency (Hz)",             "Magnitude")
+
+cfg = {"responsive":True,"displayModeBar":True,"displaylogo":False}
+
+# ── Trigger detection (vectorised) ───────────────────────────────────
+def find_trigger(buf, level, edge, pre_n, post_n):
+    """Return index of first crossing in buf[pre_n .. len-post_n-1], or -1."""
+    end = len(buf) - post_n - 1
+    if end <= pre_n:
+        return -1
+    prev = buf[pre_n - 1 : end]
+    curr = buf[pre_n     : end + 1]
+    if edge == 'rising':
+        mask = (prev < level) & (curr >= level)
+    else:
+        mask = (prev > level) & (curr <= level)
+    idxs = np.where(mask)[0]
+    return int(idxs[0]) + pre_n if len(idxs) else -1
+
+# ── Serial velocity callback ─────────────────────────────────────────
 def add_velocity(val, rate):
-    sr[0]=float(rate); vbuf.append(float(val))
-    tbuf.append((len(vbuf)-1)/sr[0])
-    if len(vbuf)>MAX: vbuf.pop(0); tbuf.pop(0)
+    sr_s[0] = float(rate)
+    vbuf.append(float(val))
+    tbuf.append((len(vbuf) - 1) / sr_s[0])
+    if len(vbuf) > MAX:
+        vbuf.pop(0); tbuf.pop(0)
     _draw_serial()
 
 def _draw_serial():
-    n=min(len(vbuf),DISP)
-    vdata=js.JSON.parse(json.dumps([{"x":tbuf[-n:],"y":vbuf[-n:],
-      "type":"scatter","mode":"lines","line":{"color":"#58a6ff","width":1.5},"name":"Velocity"}]))
-    js.Plotly.react("vel-plot",vdata,js.JSON.parse(json.dumps(VL)))
-    if len(vbuf)<64: return
-    nf=min(len(vbuf),NFFT); sig=np.array(vbuf[-nf:])
-    win=np.hanning(nf); mag=np.abs(np.fft.rfft(sig*win))*2/win.sum()
-    freqs=np.fft.rfftfreq(nf,d=1/sr[0])
-    fdata=js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
-      "type":"scatter","mode":"lines","line":{"color":"#3fb950","width":1.5},"name":"FFT"}]))
-    js.Plotly.react("fft-plot",fdata,js.JSON.parse(json.dumps(FL)))
+    n = min(len(vbuf), 512)
+    vdata = js.JSON.parse(json.dumps([{"x":tbuf[-n:],"y":vbuf[-n:],
+        "type":"scatter","mode":"lines",
+        "line":{"color":"#58a6ff","width":1.5},"name":"Velocity"}]))
+    js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(VL)))
+    if len(vbuf) < 64:
+        return
+    nf  = min(len(vbuf), NFFT)
+    sig = np.array(vbuf[-nf:])
+    win = np.hanning(nf)
+    mag = np.abs(np.fft.rfft(sig * win)) * 2 / win.sum()
+    freqs = np.fft.rfftfreq(nf, d=1.0 / sr_s[0])
+    fdata = js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
+        "type":"scatter","mode":"lines",
+        "line":{"color":"#3fb950","width":1.5},"name":"FFT"}]))
+    js.Plotly.react("fft-plot", fdata, js.JSON.parse(json.dumps(FL)))
 
+# ── Audio callback ───────────────────────────────────────────────────
 def add_audio(samples, sample_rate, sensitivity):
-    asr[0]=int(sample_rate); sens=float(sensitivity)
-    chunk=[s/sens for s in samples]  # convert V → physical units
-    abuf.extend(chunk)
-    if len(abuf)>MAX*8: del abuf[:len(abuf)-MAX*8]
-    # Show last 4096 samples on waveform
-    n=min(len(abuf),4096)
-    t=[i/asr[0] for i in range(n)]
-    vdata=js.JSON.parse(json.dumps([{"x":t,"y":abuf[-n:],
-      "type":"scatter","mode":"lines","line":{"color":"#bc8cff","width":1},"name":"Audio"}]))
-    js.Plotly.react("vel-plot",vdata,js.JSON.parse(json.dumps(AL)))
+    sr   = int(sample_rate)
+    sens = float(sensitivity) if float(sensitivity) != 0 else 1.0
+    asr_val[0] = sr
 
-js.window.pyAddVelocity=create_proxy(add_velocity)
-js.window.pyAddAudio=create_proxy(add_audio)
+    # Scale raw audio to physical units and write into ring buffer
+    chunk = np.array(samples, dtype=np.float32) / sens
+    n_chunk = len(chunk)
+    wp = aring_wp[0]
+    end_pos = wp + n_chunk
+    if end_pos <= RING:
+        aring[wp:end_pos] = chunk
+        aring_wp[0] = end_pos % RING   # handle exact-RING case
+    else:
+        first = RING - wp
+        aring[wp:] = chunk[:first]
+        rest = n_chunk - first
+        aring[:rest] = chunk[first:]
+        aring_wp[0] = rest
+
+    wp = aring_wp[0]
+
+    # Read trigger parameters from DOM
+    trig_level = float(js.document.getElementById('trig-level').value)
+    trig_edge  = str(js.document.getElementById('trig-edge').value)
+    trig_mode  = str(js.document.getElementById('trig-mode').value)
+
+    # Window: 0.01 s pre-trigger + 0.30 s post-trigger
+    pre_n   = int(0.010 * sr)
+    post_n  = int(0.300 * sr)
+    total_n = pre_n + post_n
+    need_n  = total_n + n_chunk + pre_n   # enough room to search in
+
+    # Extract the most recent `need_n` samples from ring buffer
+    n_get = min(need_n, RING)
+    if wp >= n_get:
+        buf = aring[wp - n_get : wp].copy()
+    else:
+        buf = np.concatenate([aring[RING - (n_get - wp):], aring[:wp]])
+
+    # Trigger search
+    t_idx = find_trigger(buf, trig_level, trig_edge, pre_n, post_n)
+    found = (t_idx >= 0)
+
+    if found:
+        cap = buf[t_idx - pre_n : t_idx + post_n]
+        if len(cap) == total_n:
+            last_cap[0] = cap.tolist()
+
+    # Determine status
+    status = 'wait'
+    if trig_mode == 'auto':
+        if not found and len(buf) >= total_n:
+            # Rolling window — always show something
+            last_cap[0] = buf[-total_n:].tolist()
+        status = 'trig' if found else 'wait'
+    elif trig_mode == 'normal':
+        status = 'trig' if found else ('hold' if last_cap[0] else 'wait')
+    elif trig_mode == 'oneshot':
+        if not oneshot_fired[0]:
+            status = 'trig' if found else 'armed'
+            if found:
+                oneshot_fired[0] = True
+        else:
+            status = 'hold'
+
+    js.window.setTrigStatus(status)
+
+    # ── Draw waveform plot ──────────────────────────────────────────
+    disp = last_cap[0]
+    if disp and len(disp) > 1:
+        # Time axis: 0 is trigger moment
+        t_ax = [(-pre_n + i) / sr for i in range(len(disp))]
+        vdata = js.JSON.parse(json.dumps([{"x":t_ax,"y":disp,
+            "type":"scatter","mode":"lines",
+            "line":{"color":"#bc8cff","width":1},"name":"Audio"}]))
+        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(AL)))
+
+        # ── Draw FFT of triggered window ────────────────────────────
+        if len(disp) >= 64:
+            sig   = np.array(disp, dtype=np.float32)
+            win   = np.hanning(len(sig))
+            mag   = np.abs(np.fft.rfft(sig * win)) * 2 / win.sum()
+            freqs = np.fft.rfftfreq(len(sig), d=1.0 / sr)
+            fdata = js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
+                "type":"scatter","mode":"lines",
+                "line":{"color":"#bc8cff","width":1.5},"name":"Audio FFT"}]))
+            js.Plotly.react("fft-plot", fdata, js.JSON.parse(json.dumps(AFL)))
+    else:
+        # Fallback: show last 4096 samples as rolling waveform
+        n2  = min(len(buf), 4096)
+        t2  = [i / sr for i in range(n2)]
+        vdata = js.JSON.parse(json.dumps([{"x":t2,"y":buf[-n2:].tolist(),
+            "type":"scatter","mode":"lines",
+            "line":{"color":"#bc8cff","width":1},"name":"Audio (rolling)"}]))
+        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(AL)))
+
+# ── Reset audio state on new recording ───────────────────────────────
+def reset_audio():
+    last_cap[0]       = None
+    oneshot_fired[0]  = False
+    aring[:]          = 0.0
+    aring_wp[0]       = 0
+
+# ── Reset one-shot arm (called from JS arm button) ───────────────────
+def arm_oneshot():
+    oneshot_fired[0] = False
+
+# ── Expose to JavaScript ─────────────────────────────────────────────
+js.window.pyAddVelocity = create_proxy(add_velocity)
+js.window.pyAddAudio    = create_proxy(add_audio)
+js.window.pyResetAudio  = create_proxy(reset_audio)
+js.window.pyArmOneshot  = create_proxy(arm_oneshot)
 js.document.getElementById("loading").classList.add("gone")
 </script>
 </body>
