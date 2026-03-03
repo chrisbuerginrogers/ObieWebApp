@@ -225,12 +225,12 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div class="pr" data-tip="Beam steering / attenuator state — controls whether the measurement beam is enabled and on-target"><span class="pl">BEAM?</span><span class="pv" id="v-beam">—</span><button class="btn sm qb" onclick="qp('BEAM?','v-beam')" disabled>?</button></div>
     <div class="pr" data-tip="ASE (Amplified Spontaneous Emission) level — internal laser health indicator"><span class="pl">ASE?</span><span class="pv" id="v-ase">—</span><button class="btn sm qb" onclick="qp('ASE?','v-ase')" disabled>?</button></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:8px">
-      <button class="btn sm beam-ctrl" id="beam-on-btn" onclick="setBeam('ON')" disabled
-        style="border-color:var(--gn);color:var(--gn)" title="Enable the measurement beam">💡 On</button>
-      <button class="btn sm beam-ctrl" id="beam-focus-btn" onclick="setBeam('FOCUS')" disabled
-        style="border-color:var(--yl);color:var(--yl)" title="Run autofocus routine with beam active">🎯 Focus</button>
-      <button class="btn sm beam-ctrl" id="beam-off-btn" onclick="setBeam('OFF')" disabled
-        style="border-color:var(--mu);color:var(--mu)" title="Disable the measurement beam">⬛ Off</button>
+      <button class="btn sm beam-ctrl" id="beam-block-btn" onclick="toggleBeamBlock()" disabled
+        style="border-color:var(--bl);color:var(--bl)" title="Toggle beam blocker ON/OFF (BEAM ON = beam passes through)">🔵 Block: —</button>
+      <button class="btn sm beam-ctrl" id="beam-focus-btn" onclick="runFocus()" disabled
+        style="border-color:var(--yl);color:var(--yl)" title="Run autofocus routine">🎯 Focus</button>
+      <button class="btn sm beam-ctrl" id="laser-toggle-btn" onclick="toggleLaser()" disabled
+        style="border-color:var(--rd);color:var(--rd)" title="Toggle laser emission ON/OFF">⭕ Laser: —</button>
     </div>
     <div id="beam-status" style="font-size:10px;color:var(--mu);text-align:center;margin-top:4px;min-height:13px"></div>
   </div>
@@ -470,41 +470,94 @@ function uiState(on){
   document.getElementById('hstatus').textContent=on?'Connected':'Not connected';
   ['pbtn','ibtn','qabtn'].forEach(id=>document.getElementById(id).disabled=!on);
   document.querySelectorAll('.qb,.beam-ctrl').forEach(b=>b.disabled=!on);
-  if(!on){ document.getElementById('beam-status').textContent=''; _beamOn=null; }
+  if(!on){ document.getElementById('beam-status').textContent=''; _beamOn=null; _lasOn=null; _updateBeamBtns(); }
 }
 
-// ── Beam controls ──────────────────────────────────────────────────
-let _beamOn=null;
+// ── Beam & Laser controls ──────────────────────────────────────────
+let _beamOn=null;   // BEAM state: true=ON(unblocked), false=OFF(blocked), null=unknown
+let _lasOn=null;    // LAS state:  true=ON, false=OFF, null=unknown
 
-async function setBeam(state){
+function _beamCtrlBusy(busy){
+  document.querySelectorAll('.beam-ctrl').forEach(b=>b.disabled=busy);
+}
+
+async function toggleBeamBlock(){
   if(!S.ok)return;
-  document.querySelectorAll('.beam-ctrl').forEach(b=>b.disabled=true);
+  const wasPoll=polling; if(wasPoll)stopPoll();
+  _beamCtrlBusy(true);
   document.getElementById('beam-status').textContent='…';
-  // FOCUS is a special autofocus command; ON/OFF set beam state directly
-  if(state==='FOCUS'){
-    await S.cmd('AF ON', 5000);   // trigger autofocus — may take a few seconds
+  // Query current state if unknown
+  if(_beamOn===null){
     const r=await S.cmd('BEAM?');
-    document.getElementById('v-beam').textContent=r||'—';
     _beamOn = r.trim().toUpperCase()==='ON';
-    document.getElementById('beam-status').textContent='Autofocus complete';
-  } else {
-    await S.cmd('BEAM '+state);
-    const r=await S.cmd('BEAM?');
-    document.getElementById('v-beam').textContent=r||'—';
-    _beamOn = r.trim().toUpperCase()==='ON';
-    document.getElementById('beam-status').textContent=
-      _beamOn ? '● Beam is ON' : '○ Beam is OFF';
   }
-  _highlightBeamBtn();
-  document.querySelectorAll('.beam-ctrl').forEach(b=>b.disabled=false);
+  const newState = _beamOn ? 'OFF' : 'ON';
+  await S.cmd('BEAM '+newState);
+  // Read back to confirm
+  const r2=await S.cmd('BEAM?');
+  document.getElementById('v-beam').textContent=r2||'—';
+  _beamOn = r2.trim().toUpperCase()==='ON';
+  _updateBeamBtns();
+  _beamCtrlBusy(false);
+  if(wasPoll)startPoll();
 }
 
-function _highlightBeamBtn(){
-  // Bold-border the active state button
-  document.getElementById('beam-on-btn').style.fontWeight   = _beamOn===true  ? '700' : '400';
-  document.getElementById('beam-off-btn').style.fontWeight  = _beamOn===false ? '700' : '400';
-  document.getElementById('beam-on-btn').style.background   = _beamOn===true  ? '#1a3a1a' : '';
-  document.getElementById('beam-off-btn').style.background  = _beamOn===false ? '#2a1a1a' : '';
+async function runFocus(){
+  if(!S.ok)return;
+  const wasPoll=polling; if(wasPoll)stopPoll();
+  _beamCtrlBusy(true);
+  document.getElementById('beam-status').textContent='Autofocusing…';
+  await S.cmd('AF ON', 8000);
+  // Refresh both LAS and BEAM after focus
+  const lb=await S.cmd('BEAM?');
+  const ll=await S.cmd('LAS?');
+  document.getElementById('v-beam').textContent=lb||'—';
+  document.getElementById('v-las').textContent=ll||'—';
+  _beamOn = lb.trim().toUpperCase()==='ON';
+  _lasOn  = ll.trim().toUpperCase()==='ON';
+  _updateBeamBtns();
+  document.getElementById('beam-status').textContent='✓ Autofocus complete';
+  _beamCtrlBusy(false);
+  if(wasPoll)startPoll();
+}
+
+async function toggleLaser(){
+  if(!S.ok)return;
+  const wasPoll=polling; if(wasPoll)stopPoll();
+  _beamCtrlBusy(true);
+  document.getElementById('beam-status').textContent='…';
+  if(_lasOn===null){
+    const r=await S.cmd('LAS?');
+    _lasOn = r.trim().toUpperCase()==='ON';
+  }
+  const newState = _lasOn ? 'OFF' : 'ON';
+  await S.cmd('LAS '+newState);
+  const r2=await S.cmd('LAS?');
+  document.getElementById('v-las').textContent=r2||'—';
+  _lasOn = r2.trim().toUpperCase()==='ON';
+  _updateBeamBtns();
+  _beamCtrlBusy(false);
+  if(wasPoll)startPoll();
+}
+
+function _updateBeamBtns(){
+  // Block button — reflects BEAM state
+  const bb=document.getElementById('beam-block-btn');
+  if(_beamOn===null){ bb.textContent='🔵 Block: —'; bb.style.background=''; }
+  else if(_beamOn){   bb.textContent='🟢 Unblocked'; bb.style.background='#0d2a0d'; bb.style.borderColor='var(--gn)'; bb.style.color='var(--gn)'; }
+  else{               bb.textContent='🔵 Blocked';   bb.style.background='#0d1a2a'; bb.style.borderColor='var(--bl)'; bb.style.color='var(--bl)'; }
+
+  // Laser button — reflects LAS state
+  const lb=document.getElementById('laser-toggle-btn');
+  if(_lasOn===null){ lb.textContent='⭕ Laser: —'; lb.style.background=''; }
+  else if(_lasOn){   lb.textContent='🔴 Laser: ON';  lb.style.background='#2a0d0d'; lb.style.borderColor='var(--rd)'; lb.style.color='var(--rd)'; }
+  else{              lb.textContent='⭕ Laser: OFF'; lb.style.background='';        lb.style.borderColor='var(--mu)'; lb.style.color='var(--mu)'; }
+
+  // Status line
+  const parts=[];
+  if(_beamOn!==null) parts.push(_beamOn?'Beam unblocked':'Beam blocked');
+  if(_lasOn!==null)  parts.push(_lasOn?'Laser ON':'Laser OFF');
+  if(parts.length) document.getElementById('beam-status').textContent=parts.join(' · ');
 }
 async function qp(cmd,id){
   if(!S.ok)return;
@@ -517,11 +570,14 @@ async function refreshInfo(){
   const wasPoll=polling; if(wasPoll)stopPoll();
   await qp('ID?','v-id');await qp('VER?','v-ver');
   await qp('ST?','v-st');await qp('BAUD?','v-baud');
-  // Also refresh beam state so button label is accurate
+  // Refresh beam + laser state so button labels are accurate
   const beamR=await S.cmd('BEAM?');
+  const lasR =await S.cmd('LAS?');
   document.getElementById('v-beam').textContent=beamR||'—';
+  document.getElementById('v-las').textContent=lasR||'—';
   _beamOn = beamR.trim().toUpperCase()==='ON';
-  _highlightBeamBtn();
+  _lasOn  = lasR.trim().toUpperCase()==='ON';
+  _updateBeamBtns();
   if(wasPoll)startPoll();
 }
 async function queryAll(){
