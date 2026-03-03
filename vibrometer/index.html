@@ -77,6 +77,19 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 .mode-label.audio{color:var(--pu)}
 .divider{height:1px;background:var(--bd);margin:8px 0}
 .trig-row{display:flex;gap:6px;align-items:center;margin-top:4px}
+
+/* ── Tooltips — appear above the row so they stay inside the sidebar ── */
+[data-tip]{position:relative;cursor:default}
+[data-tip]::after{
+  content:attr(data-tip);
+  position:absolute;left:0;bottom:calc(100% + 5px);top:auto;
+  transform:none;margin-left:0;
+  background:#2d333b;border:1px solid var(--bd);color:var(--tx);
+  font-size:10px;line-height:1.4;white-space:normal;width:220px;
+  padding:5px 8px;border-radius:5px;z-index:999;
+  pointer-events:none;opacity:0;transition:opacity .15s;
+}
+[data-tip]:hover::after{opacity:1}
 </style>
 </head>
 <body>
@@ -205,63 +218,72 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div id="audstatus" style="font-size:10px;color:var(--mu);margin-top:6px;min-height:14px"></div>
   </div>
 
+  <!-- ── Laser & Beam ── -->
+  <div class="card">
+    <div class="ct">Laser &amp; Beam</div>
+    <div class="pr" data-tip="Laser emission state — ON means the laser is active and emitting"><span class="pl">LAS?</span><span class="pv" id="v-las">—</span><button class="btn sm qb" onclick="qp('LAS?','v-las')" disabled>?</button></div>
+    <div class="pr" data-tip="Beam steering / attenuator state — controls whether the measurement beam is enabled and on-target"><span class="pl">BEAM?</span><span class="pv" id="v-beam">—</span><button class="btn sm qb" onclick="qp('BEAM?','v-beam')" disabled>?</button></div>
+    <div class="pr" data-tip="ASE (Amplified Spontaneous Emission) level — internal laser health indicator"><span class="pl">ASE?</span><span class="pv" id="v-ase">—</span><button class="btn sm qb" onclick="qp('ASE?','v-ase')" disabled>?</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:8px">
+      <button class="btn sm beam-ctrl" id="beam-on-btn" onclick="setBeam('ON')" disabled
+        style="border-color:var(--gn);color:var(--gn)" title="Enable the measurement beam">💡 On</button>
+      <button class="btn sm beam-ctrl" id="beam-focus-btn" onclick="setBeam('FOCUS')" disabled
+        style="border-color:var(--yl);color:var(--yl)" title="Run autofocus routine with beam active">🎯 Focus</button>
+      <button class="btn sm beam-ctrl" id="beam-off-btn" onclick="setBeam('OFF')" disabled
+        style="border-color:var(--mu);color:var(--mu)" title="Disable the measurement beam">⬛ Off</button>
+    </div>
+    <div id="beam-status" style="font-size:10px;color:var(--mu);text-align:center;margin-top:4px;min-height:13px"></div>
+  </div>
+
   <!-- ── Device info ── -->
   <div class="card">
     <div class="ct">Device Info</div>
-    <div class="pr"><span class="pl">ID?</span><span class="pv" id="v-id">—</span></div>
-    <div class="pr"><span class="pl">VER?</span><span class="pv" id="v-ver">—</span></div>
-    <div class="pr"><span class="pl">ST?</span><span class="pv" id="v-st">—</span></div>
-    <div class="pr"><span class="pl">BAUD?</span><span class="pv" id="v-baud">—</span></div>
+    <div class="pr" data-tip="Instrument model identifier (e.g. IVS-500)"><span class="pl">ID?</span><span class="pv" id="v-id">—</span></div>
+    <div class="pr" data-tip="Firmware version string"><span class="pl">VER?</span><span class="pv" id="v-ver">—</span></div>
+    <div class="pr" data-tip="Device status code — bit field reporting current operating state and fault flags"><span class="pl">ST?</span><span class="pv" id="v-st">—</span></div>
+    <div class="pr" data-tip="Currently active baud rate for the serial interface"><span class="pl">BAUD?</span><span class="pv" id="v-baud">—</span></div>
     <button class="btn sm full" id="ibtn" onclick="refreshInfo()" disabled style="margin-top:6px">↻ Refresh</button>
   </div>
 
   <!-- ── Measurement ── -->
   <div class="card">
     <div class="ct">Measurement</div>
-    <div class="pr"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
-    <div class="pr"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
-  </div>
-
-  <!-- ── Laser ── -->
-  <div class="card">
-    <div class="ct">Laser &amp; Beam</div>
-    <div class="pr"><span class="pl">LAS?</span><span class="pv" id="v-las">—</span><button class="btn sm qb" onclick="qp('LAS?','v-las')" disabled>?</button></div>
-    <div class="pr"><span class="pl">BEAM?</span><span class="pv" id="v-beam">—</span><button class="btn sm qb" onclick="qp('BEAM?','v-beam')" disabled>?</button></div>
-    <div class="pr"><span class="pl">ASE?</span><span class="pv" id="v-ase">—</span><button class="btn sm qb" onclick="qp('ASE?','v-ase')" disabled>?</button></div>
+    <div class="pr" data-tip="Velocity output bandwidth — measurement frequency range (e.g. 5 kHz, 22 kHz)"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
+    <div class="pr" data-tip="High-pass filter state — removes DC or very low-frequency components from the velocity output"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
   </div>
 
   <!-- ── Temperature ── -->
   <div class="card">
     <div class="ct">Temperature</div>
-    <div class="pr"><span class="pl">TEMP?</span><span class="pv" id="v-temp">—</span><button class="btn sm qb" onclick="qp('TEMP?','v-temp')" disabled>?</button></div>
-    <div class="pr"><span class="pl">OVERTEMP?</span><span class="pv" id="v-overtemp">—</span><button class="btn sm qb" onclick="qp('OVERTEMP?','v-overtemp')" disabled>?</button></div>
+    <div class="pr" data-tip="Internal sensor temperature in °C"><span class="pl">TEMP?</span><span class="pv" id="v-temp">—</span><button class="btn sm qb" onclick="qp('TEMP?','v-temp')" disabled>?</button></div>
+    <div class="pr" data-tip="Over-temperature fault flag — ON if the device has exceeded its safe operating temperature"><span class="pl">OVERTEMP?</span><span class="pv" id="v-overtemp">—</span><button class="btn sm qb" onclick="qp('OVERTEMP?','v-overtemp')" disabled>?</button></div>
   </div>
 
   <!-- ── Autofocus ── -->
   <div class="card">
     <div class="ct">Autofocus</div>
-    <div class="pr"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
-    <div class="pr"><span class="pl">AFRES?</span><span class="pv" id="v-afres">—</span><button class="btn sm qb" onclick="qp('AFRES?','v-afres')" disabled>?</button></div>
-    <div class="pr"><span class="pl">AFMIN?</span><span class="pv" id="v-afmin">—</span><button class="btn sm qb" onclick="qp('AFMIN?','v-afmin')" disabled>?</button></div>
-    <div class="pr"><span class="pl">AFMAX?</span><span class="pv" id="v-afmax">—</span><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
+    <div class="pr" data-tip="Autofocus system state — ON means autofocus is actively maintaining focus"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
+    <div class="pr" data-tip="Autofocus resolution — step size used during focus search (μm)"><span class="pl">AFRES?</span><span class="pv" id="v-afres">—</span><button class="btn sm qb" onclick="qp('AFRES?','v-afres')" disabled>?</button></div>
+    <div class="pr" data-tip="Minimum focus distance for autofocus search range (mm from head)"><span class="pl">AFMIN?</span><span class="pv" id="v-afmin">—</span><button class="btn sm qb" onclick="qp('AFMIN?','v-afmin')" disabled>?</button></div>
+    <div class="pr" data-tip="Maximum focus distance for autofocus search range (mm from head)"><span class="pl">AFMAX?</span><span class="pv" id="v-afmax">—</span><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
   </div>
 
   <!-- ── Focus ── -->
   <div class="card">
     <div class="ct">Focus Position</div>
-    <div class="pr"><span class="pl">FPOS?</span><span class="pv" id="v-fpos">—</span><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
-    <div class="pr"><span class="pl">FPOSMIN?</span><span class="pv" id="v-fposmin">—</span><button class="btn sm qb" onclick="qp('FPOSMIN?','v-fposmin')" disabled>?</button></div>
-    <div class="pr"><span class="pl">FPOSMAX?</span><span class="pv" id="v-fposmax">—</span><button class="btn sm qb" onclick="qp('FPOSMAX?','v-fposmax')" disabled>?</button></div>
-    <div class="pr"><span class="pl">POWUP_FPOS?</span><span class="pv" id="v-pufpos">—</span><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
+    <div class="pr" data-tip="Current focus motor position (mm) — distance from the sensor head to the focal point"><span class="pl">FPOS?</span><span class="pv" id="v-fpos">—</span><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
+    <div class="pr" data-tip="Minimum allowed focus motor position (hardware limit, mm)"><span class="pl">FPOSMIN?</span><span class="pv" id="v-fposmin">—</span><button class="btn sm qb" onclick="qp('FPOSMIN?','v-fposmin')" disabled>?</button></div>
+    <div class="pr" data-tip="Maximum allowed focus motor position (hardware limit, mm)"><span class="pl">FPOSMAX?</span><span class="pv" id="v-fposmax">—</span><button class="btn sm qb" onclick="qp('FPOSMAX?','v-fposmax')" disabled>?</button></div>
+    <div class="pr" data-tip="Focus position that will be restored on next power-up"><span class="pl">POWUP_FPOS?</span><span class="pv" id="v-pufpos">—</span><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
   </div>
 
   <!-- ── System ── -->
   <div class="card">
     <div class="ct">System</div>
-    <div class="pr"><span class="pl">POWUP?</span><span class="pv" id="v-powup">—</span><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
-    <div class="pr"><span class="pl">USER?</span><span class="pv" id="v-user">—</span><button class="btn sm qb" onclick="qp('USER?','v-user')" disabled>?</button></div>
-    <div class="pr"><span class="pl">TRIGIN?</span><span class="pv" id="v-trigin">—</span><button class="btn sm qb" onclick="qp('TRIGIN?','v-trigin')" disabled>?</button></div>
-    <div class="pr"><span class="pl">FTRIGIN?</span><span class="pv" id="v-ftrigin">—</span><button class="btn sm qb" onclick="qp('FTRIGIN?','v-ftrigin')" disabled>?</button></div>
+    <div class="pr" data-tip="Power-up behaviour — defines what the device does on startup (e.g. laser state, beam state)"><span class="pl">POWUP?</span><span class="pv" id="v-powup">—</span><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
+    <div class="pr" data-tip="User-defined label string stored on the device"><span class="pl">USER?</span><span class="pv" id="v-user">—</span><button class="btn sm qb" onclick="qp('USER?','v-user')" disabled>?</button></div>
+    <div class="pr" data-tip="External hardware trigger input state — whether the BNC trigger input is active"><span class="pl">TRIGIN?</span><span class="pv" id="v-trigin">—</span><button class="btn sm qb" onclick="qp('TRIGIN?','v-trigin')" disabled>?</button></div>
+    <div class="pr" data-tip="Filtered trigger input state — debounced / conditioned version of the hardware trigger signal"><span class="pl">FTRIGIN?</span><span class="pv" id="v-ftrigin">—</span><button class="btn sm qb" onclick="qp('FTRIGIN?','v-ftrigin')" disabled>?</button></div>
   </div>
 
   <button class="btn full" id="qabtn" onclick="queryAll()" disabled>Query All Parameters</button>
@@ -447,7 +469,42 @@ function uiState(on){
   b.textContent=on?'Disconnect':'Connect Serial';
   document.getElementById('hstatus').textContent=on?'Connected':'Not connected';
   ['pbtn','ibtn','qabtn'].forEach(id=>document.getElementById(id).disabled=!on);
-  document.querySelectorAll('.qb').forEach(b=>b.disabled=!on);
+  document.querySelectorAll('.qb,.beam-ctrl').forEach(b=>b.disabled=!on);
+  if(!on){ document.getElementById('beam-status').textContent=''; _beamOn=null; }
+}
+
+// ── Beam controls ──────────────────────────────────────────────────
+let _beamOn=null;
+
+async function setBeam(state){
+  if(!S.ok)return;
+  document.querySelectorAll('.beam-ctrl').forEach(b=>b.disabled=true);
+  document.getElementById('beam-status').textContent='…';
+  // FOCUS is a special autofocus command; ON/OFF set beam state directly
+  if(state==='FOCUS'){
+    await S.cmd('AF ON', 5000);   // trigger autofocus — may take a few seconds
+    const r=await S.cmd('BEAM?');
+    document.getElementById('v-beam').textContent=r||'—';
+    _beamOn = r.trim().toUpperCase()==='ON';
+    document.getElementById('beam-status').textContent='Autofocus complete';
+  } else {
+    await S.cmd('BEAM '+state);
+    const r=await S.cmd('BEAM?');
+    document.getElementById('v-beam').textContent=r||'—';
+    _beamOn = r.trim().toUpperCase()==='ON';
+    document.getElementById('beam-status').textContent=
+      _beamOn ? '● Beam is ON' : '○ Beam is OFF';
+  }
+  _highlightBeamBtn();
+  document.querySelectorAll('.beam-ctrl').forEach(b=>b.disabled=false);
+}
+
+function _highlightBeamBtn(){
+  // Bold-border the active state button
+  document.getElementById('beam-on-btn').style.fontWeight   = _beamOn===true  ? '700' : '400';
+  document.getElementById('beam-off-btn').style.fontWeight  = _beamOn===false ? '700' : '400';
+  document.getElementById('beam-on-btn').style.background   = _beamOn===true  ? '#1a3a1a' : '';
+  document.getElementById('beam-off-btn').style.background  = _beamOn===false ? '#2a1a1a' : '';
 }
 async function qp(cmd,id){
   if(!S.ok)return;
@@ -460,6 +517,11 @@ async function refreshInfo(){
   const wasPoll=polling; if(wasPoll)stopPoll();
   await qp('ID?','v-id');await qp('VER?','v-ver');
   await qp('ST?','v-st');await qp('BAUD?','v-baud');
+  // Also refresh beam state so button label is accurate
+  const beamR=await S.cmd('BEAM?');
+  document.getElementById('v-beam').textContent=beamR||'—';
+  _beamOn = beamR.trim().toUpperCase()==='ON';
+  _highlightBeamBtn();
   if(wasPoll)startPoll();
 }
 async function queryAll(){
