@@ -303,7 +303,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
       display:flex;flex-direction:column;gap:1px;word-break:break-all;
     "></div>
     <div style="display:flex;gap:5px">
-      <input id="console-input" type="text" placeholder="e.g. LAS? or BEAM OFF"
+      <input id="console-input" type="text" placeholder="e.g. LAS? or BEAM0"
         style="flex:1;font-family:monospace;font-size:11px;padding:4px 6px;
           background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px"
         onkeydown="if(event.key==='Enter')sendRaw()"
@@ -317,7 +317,7 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 <!-- ── Plots ── -->
 <div class="plots">
   <div class="pw" id="vel-plot">
-    <div class="mode-label serial" id="vmode">Serial Velocity</div>
+    <div class="mode-label serial" id="vmode" style="right:190px">Serial Velocity</div>
   </div>
   <div class="pw" style="position:relative;display:flex;flex-direction:column" id="fft-wrap">
     <!-- overlay bar sits above the Plotly canvas -->
@@ -630,7 +630,9 @@ async function qp(cmd,id){
   const el=document.getElementById(id);
   const isInput=(el.tagName==='INPUT');
   if(isInput){el.placeholder='…';}else{el.textContent='…';}
+  _clog('▶ '+cmd,'#58a6ff');
   const r=await S.cmd(cmd);
+  _clog('◀ '+(r||'(no response)'),'#3fb950');
   if(isInput){el.value=r||'';el.placeholder=r?'':'—';}else{el.textContent=r||'—';}
   return r;
 }
