@@ -376,9 +376,9 @@ async function pickFolder(){
   }
 }
 
-// ── Serial manager ─────────────────────────────────────────────────
+// ── Serial manager (queue-based — one cmd in flight at a time) ────────
 class SM{
-  constructor(){this.port=this.wr=this.res=this.tmr=null;this.buf='';this.ok=this.on=false}
+  constructor(){this.port=this.wr=null;this.buf='';this.ok=this.on=false;this._q=[];this._busy=false;}
   async connect(baud){
     this.port=await navigator.serial.requestPort();
     await this.port.open({baudRate:+baud});
@@ -392,30 +392,41 @@ class SM{
       while(this.on){
         const{value,done}=await rd.read();if(done)break;
         this.buf+=new TextDecoder().decode(value);
-        const nl=this.buf.indexOf('\n');
-        if(nl!==-1&&this.res){
+        let nl;
+        while((nl=this.buf.indexOf('\n'))!==-1){
           const ln=this.buf.substring(0,nl).trim();
           this.buf=this.buf.substring(nl+1);
-          if(this.tmr)clearTimeout(this.tmr);
-          const r=this.res;this.res=null;r(ln);
+          if(this._q.length){
+            const{resolve,timer}=this._q.shift();
+            clearTimeout(timer);this._busy=false;
+            resolve(ln);this._pump();
+          }
         }
       }
-    }catch(e){}finally{rd.releaseLock()}
+    }catch(e){}finally{rd.releaseLock();}
   }
   cmd(s,ms=1500){
-    return new Promise(async res=>{
-      this.res=res;
-      this.tmr=setTimeout(()=>{if(this.res){this.res=null;res('')}},ms);
-      await this.wr.write(new TextEncoder().encode(s+'\n'));
+    return new Promise(resolve=>{
+      this._q.push({s,resolve,timer:null,ms});
+      this._pump();
     });
   }
+  async _pump(){
+    if(this._busy||!this._q.length||!this.on)return;
+    this._busy=true;
+    const item=this._q[0];
+    item.timer=setTimeout(()=>{
+      const i=this._q.indexOf(item);if(i!==-1)this._q.splice(i,1);
+      this._busy=false;item.resolve('');this._pump();
+    },item.ms);
+    await this.wr.write(new TextEncoder().encode(item.s+'\n'));
+  }
   async disconnect(){
-    this.on=this.ok=false;
+    this.on=this.ok=false;this._q=[];this._busy=false;
     try{this.wr?.releaseLock();await this.port?.close()}catch(e){}
   }
 }
 const S=new SM();
-let polling=false,ptmr=null;
 
 // ── Serial UI ──────────────────────────────────────────────────────
 async function connectSerial(){
@@ -446,10 +457,13 @@ async function qp(cmd,id){
   return r;
 }
 async function refreshInfo(){
+  const wasPoll=polling; if(wasPoll)stopPoll();
   await qp('ID?','v-id');await qp('VER?','v-ver');
   await qp('ST?','v-st');await qp('BAUD?','v-baud');
+  if(wasPoll)startPoll();
 }
 async function queryAll(){
+  const wasPoll=polling; if(wasPoll)stopPoll();
   for(const[c,id]of[
     ['BW?','v-bw'],['HP?','v-hp'],['LAS?','v-las'],['BEAM?','v-beam'],['ASE?','v-ase'],
     ['TEMP?','v-temp'],['OVERTEMP?','v-overtemp'],['AF?','v-af'],['AFRES?','v-afres'],
@@ -457,9 +471,11 @@ async function queryAll(){
     ['FPOSMAX?','v-fposmax'],['POWUP_FPOS?','v-pufpos'],['POWUP?','v-powup'],
     ['USER?','v-user'],['TRIGIN?','v-trigin'],['FTRIGIN?','v-ftrigin'],
   ]) await qp(c,id);
+  if(wasPoll)startPoll();
 }
 
 // ── Serial polling ─────────────────────────────────────────────────
+let polling=false,ptmr=null;
 function togglePoll(){polling?stopPoll():startPoll()}
 function startPoll(){
   polling=true;
@@ -467,21 +483,23 @@ function startPoll(){
   tick();
 }
 function stopPoll(){
-  polling=false;if(ptmr)clearTimeout(ptmr);
+  polling=false;if(ptmr){clearTimeout(ptmr);ptmr=null;}
   document.getElementById('pbtn').textContent='▶ Start';
 }
 async function tick(){
   if(!polling||!S.ok)return;
   const r=await S.cmd('VELO?');
-  if(r){
+  if(r&&polling){
     const m=r.match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/);
-    if(m&&window.pyAddVelocity){
+    if(m){
       const v=parseFloat(m[0]);
       document.getElementById('lvel').textContent=v.toFixed(4);
-      window.pyAddVelocity(v,parseFloat(document.getElementById('prate').value)||10);
+      // Only push to Python serial plot if audio is NOT recording
+      if(!audioRecording && window.pyAddVelocity)
+        window.pyAddVelocity(v,parseFloat(document.getElementById('prate').value)||10);
     }
   }
-  ptmr=setTimeout(tick,1000/(parseFloat(document.getElementById('prate').value)||10));
+  if(polling) ptmr=setTimeout(tick,1000/(parseFloat(document.getElementById('prate').value)||10));
 }
 
 // ── Audio ──────────────────────────────────────────────────────────
@@ -565,6 +583,8 @@ function stopAudio(){
   document.getElementById('trig-status').style.color='var(--mu)';
   const total=(audioChunks.reduce((a,c)=>a+c.length,0)/audioSR).toFixed(2);
   setAudStatus(`Recorded ${total} s — ready to download`);
+  // Restore serial plot labels if serial is connected
+  if(S.ok) setModeAudio(false);
 }
 
 // ── Trigger UI ─────────────────────────────────────────────────────
