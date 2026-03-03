@@ -65,6 +65,11 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
 .pv{flex:1;font-family:monospace;font-size:11px;color:var(--bl);
   background:var(--bg);border:1px solid var(--bd);border-radius:4px;
   padding:2px 5px;min-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pe{flex:1;font-family:monospace;font-size:11px;color:var(--yl);
+  background:var(--bg);border:1px solid #2a3a2a;border-radius:4px;
+  padding:2px 5px;min-height:22px;outline:none;width:0}
+.pe:focus{border-color:var(--bl)}
+.pe:disabled{color:var(--mu);border-color:var(--bd)}
 .big{font-size:30px;font-weight:700;font-family:monospace;color:var(--gn);
   text-align:center;padding:6px 0 2px;letter-spacing:-1px}
 .unit{text-align:center;font-size:11px;color:var(--mu)}
@@ -248,26 +253,8 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
   <!-- ── Measurement ── -->
   <div class="card">
     <div class="ct">Measurement</div>
-    <div class="pr" data-tip="Velocity output bandwidth — measurement frequency range (e.g. 5 kHz, 22 kHz)"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
-    <div class="pr" data-tip="High-pass filter state — removes DC or very low-frequency components from the velocity output"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
-    <div style="display:flex;gap:5px;margin-top:6px">
-      <div style="flex:1">
-        <label style="font-size:10px;color:var(--mu);display:block;margin-bottom:2px">Set BW</label>
-        <div style="display:flex;gap:4px">
-          <input id="bw-val" type="number" min="0" placeholder="e.g. 5"
-            style="flex:1;font-size:11px;padding:3px 5px" disabled>
-          <button class="btn sm" id="bw-set" onclick="setParam('BW','bw-val','v-bw')" disabled>Set</button>
-        </div>
-      </div>
-      <div style="flex:1">
-        <label style="font-size:10px;color:var(--mu);display:block;margin-bottom:2px">Set HP</label>
-        <div style="display:flex;gap:4px">
-          <input id="hp-val" type="number" min="0" placeholder="e.g. 1"
-            style="flex:1;font-size:11px;padding:3px 5px" disabled>
-          <button class="btn sm" id="hp-set" onclick="setParam('HP','hp-val','v-hp')" disabled>Set</button>
-        </div>
-      </div>
-    </div>
+    <div class="pr" data-tip="Velocity output bandwidth — set integer index (e.g. 0–5 per device range). Query reads current index."><span class="pl">BW</span><input class="pe setable" id="v-bw" placeholder="—" onchange="setParamDirect('BW','v-bw')" disabled><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
+    <div class="pr" data-tip="High-pass filter — set integer index. Query reads current value."><span class="pl">HP</span><input class="pe setable" id="v-hp" placeholder="—" onchange="setParamDirect('HP','v-hp')" disabled><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
   </div>
 
   <!-- ── Temperature ── -->
@@ -280,28 +267,28 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
   <!-- ── Autofocus ── -->
   <div class="card">
     <div class="ct">Autofocus</div>
-    <div class="pr" data-tip="Autofocus system state — ON means autofocus is actively maintaining focus"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
-    <div class="pr" data-tip="Autofocus resolution — step size used during focus search (μm)"><span class="pl">AFRES?</span><span class="pv" id="v-afres">—</span><button class="btn sm qb" onclick="qp('AFRES?','v-afres')" disabled>?</button></div>
-    <div class="pr" data-tip="Minimum focus distance for autofocus search range (mm from head)"><span class="pl">AFMIN?</span><span class="pv" id="v-afmin">—</span><button class="btn sm qb" onclick="qp('AFMIN?','v-afmin')" disabled>?</button></div>
-    <div class="pr" data-tip="Maximum focus distance for autofocus search range (mm from head)"><span class="pl">AFMAX?</span><span class="pv" id="v-afmax">—</span><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
+    <div class="pr" data-tip="Autofocus system state — 1=active, 0=idle"><span class="pl">AF?</span><span class="pv" id="v-af">—</span><button class="btn sm qb" onclick="qp('AF?','v-af')" disabled>?</button></div>
+    <div class="pr" data-tip="Autofocus resolution step size (μm) — edit and press Enter to set"><span class="pl">AFRES</span><input class="pe setable" id="v-afres" placeholder="—" onchange="setParamDirect('AFRES','v-afres')" disabled><button class="btn sm qb" onclick="qp('AFRES?','v-afres')" disabled>?</button></div>
+    <div class="pr" data-tip="Minimum autofocus search distance (mm) — edit and press Enter to set"><span class="pl">AFMIN</span><input class="pe setable" id="v-afmin" placeholder="—" onchange="setParamDirect('AFMIN','v-afmin')" disabled><button class="btn sm qb" onclick="qp('AFMIN?','v-afmin')" disabled>?</button></div>
+    <div class="pr" data-tip="Maximum autofocus search distance (mm) — edit and press Enter to set"><span class="pl">AFMAX</span><input class="pe setable" id="v-afmax" placeholder="—" onchange="setParamDirect('AFMAX','v-afmax')" disabled><button class="btn sm qb" onclick="qp('AFMAX?','v-afmax')" disabled>?</button></div>
   </div>
 
   <!-- ── Focus ── -->
   <div class="card">
     <div class="ct">Focus Position</div>
-    <div class="pr" data-tip="Current focus motor position (mm) — distance from the sensor head to the focal point"><span class="pl">FPOS?</span><span class="pv" id="v-fpos">—</span><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
-    <div class="pr" data-tip="Minimum allowed focus motor position (hardware limit, mm)"><span class="pl">FPOSMIN?</span><span class="pv" id="v-fposmin">—</span><button class="btn sm qb" onclick="qp('FPOSMIN?','v-fposmin')" disabled>?</button></div>
-    <div class="pr" data-tip="Maximum allowed focus motor position (hardware limit, mm)"><span class="pl">FPOSMAX?</span><span class="pv" id="v-fposmax">—</span><button class="btn sm qb" onclick="qp('FPOSMAX?','v-fposmax')" disabled>?</button></div>
-    <div class="pr" data-tip="Focus position that will be restored on next power-up"><span class="pl">POWUP_FPOS?</span><span class="pv" id="v-pufpos">—</span><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
+    <div class="pr" data-tip="Current focus motor position (mm) — edit and press Enter to move"><span class="pl">FPOS</span><input class="pe setable" id="v-fpos" placeholder="—" onchange="setParamDirect('FPOS','v-fpos')" disabled><button class="btn sm qb" onclick="qp('FPOS?','v-fpos')" disabled>?</button></div>
+    <div class="pr" data-tip="Minimum allowed focus motor position (hardware limit, read-only)"><span class="pl">FPOSMIN?</span><span class="pv" id="v-fposmin">—</span><button class="btn sm qb" onclick="qp('FPOSMIN?','v-fposmin')" disabled>?</button></div>
+    <div class="pr" data-tip="Maximum allowed focus motor position (hardware limit, read-only)"><span class="pl">FPOSMAX?</span><span class="pv" id="v-fposmax">—</span><button class="btn sm qb" onclick="qp('FPOSMAX?','v-fposmax')" disabled>?</button></div>
+    <div class="pr" data-tip="Focus position restored on next power-up — edit and press Enter to set"><span class="pl">POWUP_FPOS</span><input class="pe setable" id="v-pufpos" placeholder="—" onchange="setParamDirect('POWUP_FPOS','v-pufpos')" disabled><button class="btn sm qb" onclick="qp('POWUP_FPOS?','v-pufpos')" disabled>?</button></div>
   </div>
 
   <!-- ── System ── -->
   <div class="card">
     <div class="ct">System</div>
-    <div class="pr" data-tip="Power-up behaviour — defines what the device does on startup (e.g. laser state, beam state)"><span class="pl">POWUP?</span><span class="pv" id="v-powup">—</span><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
-    <div class="pr" data-tip="User-defined label string stored on the device"><span class="pl">USER?</span><span class="pv" id="v-user">—</span><button class="btn sm qb" onclick="qp('USER?','v-user')" disabled>?</button></div>
-    <div class="pr" data-tip="External hardware trigger input state — whether the BNC trigger input is active"><span class="pl">TRIGIN?</span><span class="pv" id="v-trigin">—</span><button class="btn sm qb" onclick="qp('TRIGIN?','v-trigin')" disabled>?</button></div>
-    <div class="pr" data-tip="Filtered trigger input state — debounced / conditioned version of the hardware trigger signal"><span class="pl">FTRIGIN?</span><span class="pv" id="v-ftrigin">—</span><button class="btn sm qb" onclick="qp('FTRIGIN?','v-ftrigin')" disabled>?</button></div>
+    <div class="pr" data-tip="Power-up behaviour index — edit and press Enter to set startup state"><span class="pl">POWUP</span><input class="pe setable" id="v-powup" placeholder="—" onchange="setParamDirect('POWUP','v-powup')" disabled><button class="btn sm qb" onclick="qp('POWUP?','v-powup')" disabled>?</button></div>
+    <div class="pr" data-tip="User-defined label string stored on the device — edit and press Enter to save"><span class="pl">USER</span><input class="pe setable" id="v-user" placeholder="—" onchange="setParamDirect('USER','v-user')" disabled><button class="btn sm qb" onclick="qp('USER?','v-user')" disabled>?</button></div>
+    <div class="pr" data-tip="External hardware trigger input state (read-only)"><span class="pl">TRIGIN?</span><span class="pv" id="v-trigin">—</span><button class="btn sm qb" onclick="qp('TRIGIN?','v-trigin')" disabled>?</button></div>
+    <div class="pr" data-tip="Filtered trigger input state (read-only)"><span class="pl">FTRIGIN?</span><span class="pv" id="v-ftrigin">—</span><button class="btn sm qb" onclick="qp('FTRIGIN?','v-ftrigin')" disabled>?</button></div>
   </div>
 
   <button class="btn full" id="qabtn" onclick="queryAll()" disabled>Query All Parameters</button>
@@ -332,8 +319,21 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
   <div class="pw" id="vel-plot">
     <div class="mode-label serial" id="vmode">Serial Velocity</div>
   </div>
-  <div class="pw" id="fft-plot">
-    <div class="mode-label serial" id="fmode">Serial FFT</div>
+  <div class="pw" style="position:relative;display:flex;flex-direction:column" id="fft-wrap">
+    <!-- overlay bar sits above the Plotly canvas -->
+    <div style="position:absolute;top:6px;left:10px;display:flex;gap:5px;z-index:10;pointer-events:all">
+      <button id="fft-xbtn" onclick="toggleFftX()"
+        style="background:#161b22cc;backdrop-filter:blur(4px);border:1px solid #30363d;color:#8b949e;
+               border-radius:4px;padding:2px 9px;font-size:10px;cursor:pointer;font-family:monospace;
+               letter-spacing:.5px">Log X</button>
+      <button id="fft-ybtn" onclick="toggleFftY()"
+        style="background:#161b22cc;backdrop-filter:blur(4px);border:1px solid #30363d;color:#8b949e;
+               border-radius:4px;padding:2px 9px;font-size:10px;cursor:pointer;font-family:monospace;
+               letter-spacing:.5px">dB Y</button>
+    </div>
+    <!-- mode label moved left enough to clear Plotly modebar (~180 px wide) -->
+    <div class="mode-label serial" id="fmode" style="right:190px">Serial FFT</div>
+    <div id="fft-plot" style="flex:1;min-height:0"></div>
   </div>
 </div>
 </div>
@@ -505,7 +505,8 @@ function uiState(on){
   b.className=on?'btn dng':'btn pri';
   b.textContent=on?'Disconnect':'Connect Serial';
   document.getElementById('hstatus').textContent=on?'Connected':'Not connected';
-  ['pbtn','ibtn','qabtn','console-input','console-send','bw-val','bw-set','hp-val','hp-set'].forEach(id=>document.getElementById(id).disabled=!on);
+  ['pbtn','ibtn','qabtn','console-input','console-send'].forEach(id=>document.getElementById(id).disabled=!on);
+  document.querySelectorAll('.qb,.beam-ctrl,.setable').forEach(b=>b.disabled=!on);
   document.querySelectorAll('.qb,.beam-ctrl').forEach(b=>b.disabled=!on);
   if(!on){ document.getElementById('beam-status').textContent=''; _beamOn=null; _lasOn=null; _updateBeamBtns(); }
 }
@@ -624,8 +625,18 @@ async function sendRaw(){
   if(wasPoll)startPoll();
 }
 
-// ── Generic numeric set helper (BW, HP, etc.) ──────────────────────
-async function setParam(prefix, inputId, displayId){
+async function qp(cmd,id){
+  if(!S.ok)return;
+  const el=document.getElementById(id);
+  const isInput=(el.tagName==='INPUT');
+  if(isInput){el.placeholder='…';}else{el.textContent='…';}
+  const r=await S.cmd(cmd);
+  if(isInput){el.value=r||'';el.placeholder=r?'':'—';}else{el.textContent=r||'—';}
+  return r;
+}
+
+// ── Inline editable param: fires on blur-with-change or Enter ─────
+async function setParamDirect(prefix, inputId){
   if(!S.ok)return;
   const val=document.getElementById(inputId).value.trim();
   if(val==='')return;
@@ -634,19 +645,85 @@ async function setParam(prefix, inputId, displayId){
   _clog('▶ '+cmd,'#58a6ff');
   const r=await S.cmd(cmd);
   _clog('◀ '+(r||'(no response)'),'#3fb950');
+  // Read back to confirm actual value
   const r2=await S.cmd(prefix+'?');
-  document.getElementById(displayId).textContent=r2||'—';
   _clog('▶ '+prefix+'?  ◀ '+(r2||'timeout'),'#aaa');
+  const el=document.getElementById(inputId);
+  el.value=r2||'';
   if(wasPoll)startPoll();
 }
 
-async function qp(cmd,id){
-  if(!S.ok)return;
-  document.getElementById(id).textContent='…';
-  const r=await S.cmd(cmd);
-  document.getElementById(id).textContent=r||'—';
-  return r;
+// ── FFT log/dB toggles ────────────────────────────────────────────
+let fftLogX=false, fftDbY=false;
+window._lastFFTData=null; // {x:[], y_raw:[], isAudio:bool}
+
+function toggleFftX(){
+  fftLogX=!fftLogX;
+  const btn=document.getElementById('fft-xbtn');
+  btn.textContent=fftLogX?'Lin X':'Log X';
+  btn.style.borderColor=fftLogX?'var(--bl)':'#30363d';
+  btn.style.color=fftLogX?'var(--bl)':'#8b949e';
+  _redrawFFT();
 }
+function toggleFftY(){
+  fftDbY=!fftDbY;
+  const btn=document.getElementById('fft-ybtn');
+  btn.textContent=fftDbY?'Mag Y':'dB Y';
+  btn.style.borderColor=fftDbY?'var(--pu)':'#30363d';
+  btn.style.color=fftDbY?'var(--pu)':'#8b949e';
+  _redrawFFT();
+}
+function _fftLayout(isAudio, preserveZoom){
+  const title=isAudio?'Audio FFT — Triggered Window':'FFT — Frequency Domain';
+  const yTitle=fftDbY?(isAudio?'dB (re 1)':'dB (re 1 mm/s)'):(isAudio?'Magnitude':'Magnitude (mm/s)');
+  const xax={...base.xaxis,title:'Frequency (Hz)',type:fftLogX?'log':'linear'};
+  const yax={...base.yaxis,title:yTitle};
+  // If user has zoomed, preserve their axis ranges instead of autorscaling
+  if(preserveZoom){
+    const el=document.getElementById('fft-plot');
+    const lay=el && el.layout;
+    if(lay){
+      if(lay.xaxis && lay.xaxis.autorange===false)
+        xax.range=lay.xaxis.range, xax.autorange=false;
+      if(lay.yaxis && lay.yaxis.autorange===false)
+        yax.range=lay.yaxis.range, yax.autorange=false;
+    }
+  }
+  return{...base,
+    title:{text:title,font:{color:TX,size:12}},
+    xaxis:xax, yaxis:yax};
+}
+function updateFFT(freqs,mag_raw,isAudio){
+  window._lastFFTData={x:Array.from(freqs),y_raw:Array.from(mag_raw),isAudio:!!isAudio};
+  _redrawFFT(true);  // preserve zoom on live data pushes
+}
+function _redrawFFT(preserveZoom){
+  if(!window._lastFFTData)return;
+  const{x,y_raw,isAudio}=window._lastFFTData;
+  const y=fftDbY?y_raw.map(v=>v>1e-12?20*Math.log10(v):-120):y_raw;
+  const color=isAudio?'#bc8cff':'#3fb950';
+  const name=isAudio?'Audio FFT':'FFT';
+  Plotly.react('fft-plot',[{x,y,type:'scatter',mode:'lines',line:{color,width:1.5},name}],
+    _fftLayout(isAudio,preserveZoom));
+}
+window.updateFFT=updateFFT;
+
+// Plotly.react wrapper that preserves user zoom on a named plot
+function reactPreserveZoom(divId, data, layout){
+  const el=document.getElementById(divId);
+  const lay=el && el.layout;
+  if(lay){
+    const L=JSON.parse(JSON.stringify(layout)); // deep copy
+    if(lay.xaxis && lay.xaxis.autorange===false){
+      L.xaxis=L.xaxis||{};L.xaxis.range=lay.xaxis.range;L.xaxis.autorange=false;}
+    if(lay.yaxis && lay.yaxis.autorange===false){
+      L.yaxis=L.yaxis||{};L.yaxis.range=lay.yaxis.range;L.yaxis.autorange=false;}
+    Plotly.react(divId,data,L);
+  } else {
+    Plotly.react(divId,data,layout);
+  }
+}
+window.reactPreserveZoom=reactPreserveZoom;
 async function refreshInfo(){
   const wasPoll=polling; if(wasPoll)stopPoll();
   await qp('ID?','v-id');await qp('VER?','v-ver');
@@ -857,7 +934,7 @@ function setAudStatus(msg){document.getElementById('audstatus').textContent=msg}
 <!-- ══ PyScript ══════════════════════════════════════════════════════ -->
 <script type="py" config='{"packages":["numpy"]}'>
 import numpy as np, json, js
-from pyodide.ffi import create_proxy
+from pyodide.ffi import create_proxy, to_js
 
 # ── Serial data state ────────────────────────────────────────────────
 MAX=4096; NFFT=1024
@@ -936,7 +1013,7 @@ def _draw_serial():
     vdata = js.JSON.parse(json.dumps([{"x":tbuf[-n:],"y":vbuf[-n:],
         "type":"scatter","mode":"lines",
         "line":{"color":"#58a6ff","width":1.5},"name":"Velocity"}]))
-    js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(VL)))
+    js.window.reactPreserveZoom("vel-plot", vdata, js.JSON.parse(json.dumps(VL)))
     if len(vbuf) < 64:
         return
     nf  = min(len(vbuf), NFFT)
@@ -944,10 +1021,7 @@ def _draw_serial():
     win = np.hanning(nf)
     mag = np.abs(np.fft.rfft(sig * win)) * 2 / win.sum()
     freqs = np.fft.rfftfreq(nf, d=1.0 / sr_s[0])
-    fdata = js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
-        "type":"scatter","mode":"lines",
-        "line":{"color":"#3fb950","width":1.5},"name":"FFT"}]))
-    js.Plotly.react("fft-plot", fdata, js.JSON.parse(json.dumps(FL)))
+    js.window.updateFFT(to_js(freqs.tolist()), to_js(mag.tolist()), False)
 
 # ── Audio callback ───────────────────────────────────────────────────
 def add_audio(samples, sample_rate, sensitivity):
@@ -1034,7 +1108,7 @@ def add_audio(samples, sample_rate, sensitivity):
         vdata = js.JSON.parse(json.dumps([{"x":t_ax,"y":disp,
             "type":"scatter","mode":"lines",
             "line":{"color":"#bc8cff","width":1},"name":"Audio"}]))
-        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
+        js.window.reactPreserveZoom("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
         last_drawn_cap[0] = disp
 
         # ── Draw FFT of triggered window ─────────────────────────────
@@ -1043,10 +1117,7 @@ def add_audio(samples, sample_rate, sensitivity):
             win   = np.hanning(len(sig))
             mag   = np.abs(np.fft.rfft(sig * win)) * 2 / win.sum()
             freqs = np.fft.rfftfreq(len(sig), d=1.0 / sr)
-            fdata = js.JSON.parse(json.dumps([{"x":freqs.tolist(),"y":mag.tolist(),
-                "type":"scatter","mode":"lines",
-                "line":{"color":"#bc8cff","width":1.5},"name":"Audio FFT"}]))
-            js.Plotly.react("fft-plot", fdata, js.JSON.parse(json.dumps(AFL)))
+            js.window.updateFFT(to_js(freqs.tolist()), to_js(mag.tolist()), True)
     else:
         # Fallback: show last 4096 samples as rolling waveform
         n2  = min(len(buf), 4096)
@@ -1054,7 +1125,7 @@ def add_audio(samples, sample_rate, sensitivity):
         vdata = js.JSON.parse(json.dumps([{"x":t2,"y":buf[-n2:].tolist(),
             "type":"scatter","mode":"lines",
             "line":{"color":"#bc8cff","width":1},"name":"Audio (rolling)"}]))
-        js.Plotly.react("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
+        js.window.reactPreserveZoom("vel-plot", vdata, js.JSON.parse(json.dumps(al)))
 
 # ── Reset audio state on new recording ───────────────────────────────
 def reset_audio():
