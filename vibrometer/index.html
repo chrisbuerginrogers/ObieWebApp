@@ -250,6 +250,24 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
     <div class="ct">Measurement</div>
     <div class="pr" data-tip="Velocity output bandwidth — measurement frequency range (e.g. 5 kHz, 22 kHz)"><span class="pl">BW?</span><span class="pv" id="v-bw">—</span><button class="btn sm qb" onclick="qp('BW?','v-bw')" disabled>?</button></div>
     <div class="pr" data-tip="High-pass filter state — removes DC or very low-frequency components from the velocity output"><span class="pl">HP?</span><span class="pv" id="v-hp">—</span><button class="btn sm qb" onclick="qp('HP?','v-hp')" disabled>?</button></div>
+    <div style="display:flex;gap:5px;margin-top:6px">
+      <div style="flex:1">
+        <label style="font-size:10px;color:var(--mu);display:block;margin-bottom:2px">Set BW</label>
+        <div style="display:flex;gap:4px">
+          <input id="bw-val" type="number" min="0" placeholder="e.g. 5"
+            style="flex:1;font-size:11px;padding:3px 5px" disabled>
+          <button class="btn sm" id="bw-set" onclick="setParam('BW','bw-val','v-bw')" disabled>Set</button>
+        </div>
+      </div>
+      <div style="flex:1">
+        <label style="font-size:10px;color:var(--mu);display:block;margin-bottom:2px">Set HP</label>
+        <div style="display:flex;gap:4px">
+          <input id="hp-val" type="number" min="0" placeholder="e.g. 1"
+            style="flex:1;font-size:11px;padding:3px 5px" disabled>
+          <button class="btn sm" id="hp-set" onclick="setParam('HP','hp-val','v-hp')" disabled>Set</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Temperature ── -->
@@ -287,6 +305,25 @@ select,input[type=number]{width:100%;background:var(--bg);border:1px solid var(-
   </div>
 
   <button class="btn full" id="qabtn" onclick="queryAll()" disabled>Query All Parameters</button>
+
+  <!-- ── Raw serial console ── -->
+  <div class="card" style="border-color:#444">
+    <div class="ct" style="color:#aaa">🖥 Raw Serial Console</div>
+    <div id="console-log" style="
+      background:var(--bg);border:1px solid var(--bd);border-radius:4px;
+      font-family:monospace;font-size:10px;color:#aaa;
+      height:130px;overflow-y:auto;padding:5px 6px;margin-bottom:6px;
+      display:flex;flex-direction:column;gap:1px;word-break:break-all;
+    "></div>
+    <div style="display:flex;gap:5px">
+      <input id="console-input" type="text" placeholder="e.g. LAS? or BEAM OFF"
+        style="flex:1;font-family:monospace;font-size:11px;padding:4px 6px;
+          background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px"
+        onkeydown="if(event.key==='Enter')sendRaw()"
+        disabled>
+      <button class="btn sm" id="console-send" onclick="sendRaw()" disabled>Send</button>
+    </div>
+  </div>
 
 </aside>
 
@@ -468,7 +505,7 @@ function uiState(on){
   b.className=on?'btn dng':'btn pri';
   b.textContent=on?'Disconnect':'Connect Serial';
   document.getElementById('hstatus').textContent=on?'Connected':'Not connected';
-  ['pbtn','ibtn','qabtn'].forEach(id=>document.getElementById(id).disabled=!on);
+  ['pbtn','ibtn','qabtn','console-input','console-send','bw-val','bw-set','hp-val','hp-set'].forEach(id=>document.getElementById(id).disabled=!on);
   document.querySelectorAll('.qb,.beam-ctrl').forEach(b=>b.disabled=!on);
   if(!on){ document.getElementById('beam-status').textContent=''; _beamOn=null; _lasOn=null; _updateBeamBtns(); }
 }
@@ -486,17 +523,18 @@ async function toggleBeamBlock(){
   const wasPoll=polling; if(wasPoll)stopPoll();
   _beamCtrlBusy(true);
   document.getElementById('beam-status').textContent='…';
-  // Query current state if unknown
   if(_beamOn===null){
     const r=await S.cmd('BEAM?');
-    _beamOn = r.trim().toUpperCase()==='ON';
+    _clog('▶ BEAM?  ◀ '+(r||'timeout'),'#aaa');
+    _beamOn = r.trim()==='1';
   }
-  const newState = _beamOn ? 'OFF' : 'ON';
-  await S.cmd('BEAM '+newState);
-  // Read back to confirm
+  const cmdStr = _beamOn ? 'BEAM0' : 'BEAM1';
+  const r1=await S.cmd(cmdStr);
+  _clog('▶ '+cmdStr+'  ◀ '+(r1||'(no response)'),'#58a6ff');
   const r2=await S.cmd('BEAM?');
+  _clog('▶ BEAM?  ◀ '+(r2||'timeout'),'#aaa');
   document.getElementById('v-beam').textContent=r2||'—';
-  _beamOn = r2.trim().toUpperCase()==='ON';
+  _beamOn = r2.trim()==='1';
   _updateBeamBtns();
   _beamCtrlBusy(false);
   if(wasPoll)startPoll();
@@ -507,14 +545,15 @@ async function runFocus(){
   const wasPoll=polling; if(wasPoll)stopPoll();
   _beamCtrlBusy(true);
   document.getElementById('beam-status').textContent='Autofocusing…';
-  await S.cmd('AF ON', 8000);
-  // Refresh both LAS and BEAM after focus
+  _clog('▶ AF1','#d29922');
+  const r=await S.cmd('AF1', 15000);
+  _clog('◀ '+(r||'(no response)'),'#d29922');
   const lb=await S.cmd('BEAM?');
   const ll=await S.cmd('LAS?');
   document.getElementById('v-beam').textContent=lb||'—';
   document.getElementById('v-las').textContent=ll||'—';
-  _beamOn = lb.trim().toUpperCase()==='ON';
-  _lasOn  = ll.trim().toUpperCase()==='ON';
+  _beamOn = lb.trim()==='1';
+  _lasOn  = ll.trim()==='1';
   _updateBeamBtns();
   document.getElementById('beam-status').textContent='✓ Autofocus complete';
   _beamCtrlBusy(false);
@@ -528,13 +567,16 @@ async function toggleLaser(){
   document.getElementById('beam-status').textContent='…';
   if(_lasOn===null){
     const r=await S.cmd('LAS?');
-    _lasOn = r.trim().toUpperCase()==='ON';
+    _clog('▶ LAS?  ◀ '+(r||'timeout'),'#aaa');
+    _lasOn = r.trim()==='1';
   }
-  const newState = _lasOn ? 'OFF' : 'ON';
-  await S.cmd('LAS '+newState);
+  const cmdStr = _lasOn ? 'LAS0' : 'LAS1';
+  const r1=await S.cmd(cmdStr);
+  _clog('▶ '+cmdStr+'  ◀ '+(r1||'(no response)'),'#f85149');
   const r2=await S.cmd('LAS?');
+  _clog('▶ LAS?  ◀ '+(r2||'timeout'),'#aaa');
   document.getElementById('v-las').textContent=r2||'—';
-  _lasOn = r2.trim().toUpperCase()==='ON';
+  _lasOn = r2.trim()==='1';
   _updateBeamBtns();
   _beamCtrlBusy(false);
   if(wasPoll)startPoll();
@@ -559,6 +601,45 @@ function _updateBeamBtns(){
   if(_lasOn!==null)  parts.push(_lasOn?'Laser ON':'Laser OFF');
   if(parts.length) document.getElementById('beam-status').textContent=parts.join(' · ');
 }
+// ── Raw serial console ─────────────────────────────────────────────
+function _clog(txt, col){
+  const box=document.getElementById('console-log');
+  const line=document.createElement('div');
+  line.style.color=col||'#aaa';
+  line.textContent=txt;
+  box.appendChild(line);
+  box.scrollTop=box.scrollHeight;
+}
+
+async function sendRaw(){
+  if(!S.ok)return;
+  const inp=document.getElementById('console-input');
+  const cmd=inp.value.trim();
+  if(!cmd)return;
+  inp.value='';
+  const wasPoll=polling; if(wasPoll)stopPoll();
+  _clog('▶ '+cmd,'#58a6ff');
+  const r=await S.cmd(cmd, 3000);
+  _clog('◀ '+(r||'(no response / timeout)'),'#3fb950');
+  if(wasPoll)startPoll();
+}
+
+// ── Generic numeric set helper (BW, HP, etc.) ──────────────────────
+async function setParam(prefix, inputId, displayId){
+  if(!S.ok)return;
+  const val=document.getElementById(inputId).value.trim();
+  if(val==='')return;
+  const wasPoll=polling; if(wasPoll)stopPoll();
+  const cmd=prefix+val;
+  _clog('▶ '+cmd,'#58a6ff');
+  const r=await S.cmd(cmd);
+  _clog('◀ '+(r||'(no response)'),'#3fb950');
+  const r2=await S.cmd(prefix+'?');
+  document.getElementById(displayId).textContent=r2||'—';
+  _clog('▶ '+prefix+'?  ◀ '+(r2||'timeout'),'#aaa');
+  if(wasPoll)startPoll();
+}
+
 async function qp(cmd,id){
   if(!S.ok)return;
   document.getElementById(id).textContent='…';
@@ -575,8 +656,8 @@ async function refreshInfo(){
   const lasR =await S.cmd('LAS?');
   document.getElementById('v-beam').textContent=beamR||'—';
   document.getElementById('v-las').textContent=lasR||'—';
-  _beamOn = beamR.trim().toUpperCase()==='ON';
-  _lasOn  = lasR.trim().toUpperCase()==='ON';
+  _beamOn = beamR.trim()==='1';
+  _lasOn  = lasR.trim()==='1';
   _updateBeamBtns();
   if(wasPoll)startPoll();
 }
