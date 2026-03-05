@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRF Viewer · ObieApps</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:      #07090c;
+    --s1:      #0e1219;
+    --s2:      #141b24;
+    --s3:      #1c2533;
+    --bd:      #253044;
+    --bd2:     #2e3d55;
+    --tx:      #d0dcea;
+    --mu:      #5d7a99;
+    --acc:     #4fc3f7;
+    --acc2:    #81d4fa;
+    --gold:    #ffd54f;
+    --green:   #69f0ae;
+    --red:     #ef5350;
+    --purple:  #ce93d8;
+    --mono:    'JetBrains Mono', monospace;
+    --sans:    'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--sans);
+    font-size: 13px;
+    overflow: hidden;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 20px;
+    background: var(--s1);
+    border-bottom: 1px solid var(--bd);
+    flex-shrink: 0;
+  }
+
+  .logo { font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--acc); letter-spacing: 2px; }
+  .logo span { color: var(--mu); font-weight: 300; }
+  .hgap { flex: 1; }
+  .hbadge {
+    font-family: var(--mono); font-size: 10px; color: var(--mu);
+    border: 1px solid var(--bd); border-radius: 4px; padding: 2px 8px;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    overflow: hidden;
+  }
+
+  aside {
+    background: var(--s1);
+    border-right: 1px solid var(--bd);
+    overflow-y: auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  aside::-webkit-scrollbar { width: 4px; }
+  aside::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 2px; }
+
+  .card {
+    background: var(--s2);
+    border: 1px solid var(--bd);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--mu);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--bd);
+  }
+
+  .dropzone {
+    border: 2px dashed var(--bd2);
+    border-radius: 8px;
+    padding: 28px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--s3);
+    position: relative;
+  }
+  .dropzone:hover, .dropzone.over {
+    border-color: var(--acc);
+    background: #0e1e32;
+  }
+  .dropzone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .dz-icon { font-size: 28px; margin-bottom: 8px; opacity: .7; }
+  .dz-label { font-size: 12px; color: var(--mu); line-height: 1.6; }
+  .dz-label strong { color: var(--acc); }
+
+  .file-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--bd);
+    background: var(--s3);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .file-item:hover { border-color: var(--bd2); background: var(--s2); }
+  .file-item.active { border-color: var(--acc); background: #0e1e32; color: var(--acc); }
+  .file-item .fi-icon { color: var(--gold); flex-shrink: 0; }
+  .file-item .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .fi-del {
+    color: var(--mu); cursor: pointer; padding: 2px 4px; border-radius: 3px;
+    font-size: 13px; line-height: 1;
+  }
+  .file-item .fi-del:hover { color: var(--red); }
+
+  .ctrl-row { display: flex; flex-direction: column; gap: 10px; }
+
+  .fr { display: flex; flex-direction: column; gap: 4px; }
+  .fr label { font-size: 10px; font-family: var(--mono); color: var(--mu); letter-spacing: 1px; text-transform: uppercase; }
+
+  select, input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    color: var(--tx);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input[type=number]:focus { border-color: var(--acc); }
+
+  .color-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .color-btn {
+    width: 26px; height: 26px; border-radius: 5px; border: 2px solid transparent;
+    cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .color-btn:hover { transform: scale(1.12); }
+  .color-btn.active { border-color: #fff; }
+
+  .range-row { display: flex; align-items: center; gap: 8px; }
+  input[type=range] {
+    flex: 1; accent-color: var(--acc); cursor: pointer;
+    background: transparent;
+  }
+  .rval { font-family: var(--mono); font-size: 11px; color: var(--acc); min-width: 28px; text-align: right; }
+
+  .btn {
+    background: var(--s3);
+    border: 1px solid var(--bd2);
+    color: var(--tx);
+    border-radius: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--mono);
+    transition: all 0.15s;
+    letter-spacing: .5px;
+  }
+  .btn:hover:not(:disabled) { background: var(--bd); border-color: var(--acc); color: var(--acc); }
+  .btn:disabled { opacity: .3; cursor: default; }
+  .btn.full { width: 100%; }
+
+  .meta-table { width: 100%; border-collapse: collapse; }
+  .meta-table td {
+    padding: 4px 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    border-bottom: 1px solid var(--bd);
+    vertical-align: top;
+  }
+  .meta-table td:first-child { color: var(--mu); white-space: nowrap; padding-right: 10px; }
+  .meta-table td:last-child { color: var(--green); word-break: break-all; }
+
+  main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .plot-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--s1);
+    border-bottom: 1px solid var(--bd);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .tb-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--mu);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .tb-sep { color: var(--bd2); margin: 0 2px; }
+
+  .tb-select {
+    background: var(--s2);
+    border: 1px solid var(--bd);
+    color: var(--tx);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-family: var(--mono);
+    outline: none;
+    cursor: pointer;
+  }
+
+  #plot-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--acc);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Axis-lock pill — shown in toolbar when user has zoomed/panned */
+  #lock-pill {
+    display: none;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #f78534;
+    border: 1px solid #f7853488;
+    border-radius: 4px;
+    padding: 2px 9px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  #lock-pill:hover { background: #2a1a0a; border-color: #f78534; }
+
+  #plot-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #plotly-div {
+    width: 100%;
+    height: 100%;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 14px;
+    color: var(--mu);
+    font-family: var(--mono);
+  }
+  .empty-state .es-icon { font-size: 48px; opacity: .3; }
+  .empty-state .es-msg { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+
+  #toast {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    background: #3a1515;
+    border: 1px solid var(--red);
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 10px 16px;
+    border-radius: 6px;
+    z-index: 999;
+    display: none;
+    max-width: 360px;
+    line-height: 1.5;
+  }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; }
+  .toggle {
+    position: relative; width: 34px; height: 18px; cursor: pointer; flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0; background: var(--bd); border-radius: 9px;
+    transition: background 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--acc); }
+  .toggle-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; background: #fff; border-radius: 50%;
+    transition: transform 0.2s;
+    pointer-events: none;
+  }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(16px); }
+  .toggle-label { font-size: 11px; font-family: var(--mono); color: var(--mu); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <div class="logo">TRF<span> ·</span> VIEWER</div>
+    <div class="hgap"></div>
+    <div class="hbadge">ObieApps</div>
+  </header>
+
+  <div class="body">
+    <aside>
+
+      <div class="card">
+        <div class="card-title">📂 Files</div>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept=".trf,.TRF" multiple>
+          <div class="dz-icon">📊</div>
+          <div class="dz-label">
+            <strong>Click to open</strong> or drag<br>
+            .TRF files here
+          </div>
+        </div>
+        <div class="file-list" id="file-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎨 Plot Style</div>
+        <div class="ctrl-row">
+
+          <div class="fr">
+            <label>Line Color</label>
+            <div class="color-row" id="color-row"></div>
+          </div>
+
+          <div class="fr">
+            <label>Line Width</label>
+            <div class="range-row">
+              <input type="range" id="lw-range" min="0.5" max="5" step="0.5" value="1.5"
+                oninput="updLineWidth(this.value)">
+              <span class="rval" id="lw-val">1.5</span>
+            </div>
+          </div>
+
+          <div class="fr">
+            <label>Display Mode</label>
+            <select id="disp-mode" onchange="redraw()">
+              <option value="magnitude">Magnitude</option>
+              <option value="magnitude_db" selected>Magnitude (dB)</option>
+              <option value="real">Real Part</option>
+              <option value="imag">Imaginary Part</option>
+              <option value="phase">Phase (deg)</option>
+            </select>
+          </div>
+
+          <div class="toggle-row">
+            <label class="toggle">
+              <input type="checkbox" id="logx-toggle" checked onchange="onAxisTypeChange()">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <span class="toggle-label">Log frequency axis</span>
+          </div>
+
+
+
+        </div>
+      </div>
+
+      <div class="card" id="meta-card" style="display:none">
+        <div class="card-title">ℹ️ Metadata</div>
+        <table class="meta-table" id="meta-table"></table>
+      </div>
+
+    </aside>
+
+    <main>
+      <div class="plot-toolbar">
+        <span class="tb-label">File</span>
+        <select class="tb-select" id="ch-sel" onchange="redraw()">
+          <option value="0">—</option>
+        </select>
+        <span class="tb-sep">│</span>
+        <span id="plot-title" style="color:var(--mu)">No file loaded</span>
+        <span id="lock-pill" onclick="resetAxes()" title="Axes locked to your zoom — click to auto-scale">
+          🔒 AXES LOCKED · click to reset
+        </span>
+      </div>
+      <div id="plot-wrap">
+        <div id="plotly-div"></div>
+        <div class="empty-state" id="empty-state">
+          <div class="es-icon">📂</div>
+          <div class="es-msg">Load a .TRF file to begin</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Color palette ─────────────────────────────────────────────────
+const PALETTE = [
+  { hex: '#4fc3f7', name: 'Cyan'    },
+  { hex: '#69f0ae', name: 'Green'   },
+  { hex: '#ffd54f', name: 'Amber'   },
+  { hex: '#ce93d8', name: 'Purple'  },
+  { hex: '#ef9a9a', name: 'Red'     },
+  { hex: '#80cbc4', name: 'Teal'    },
+  { hex: '#fff176', name: 'Yellow'  },
+  { hex: '#b0bec5', name: 'Grey'    },
+];
+
+let activeColor = PALETTE[0].hex;
+let lineWidth   = 1.5;
+let files       = [];
+let activeIdx   = -1;
+
+// ── Axis lock state ───────────────────────────────────────────────
+// Rather than intercepting events (unreliable timing), we read the
+// current ranges directly from the live Plotly layout object before
+// every redraw.  The only thing the relayout listener does is detect
+// a user-initiated "Reset axes" (autorange:true) so we can clear the
+// lock pill and let the next draw auto-scale again.
+let axisLocked  = false;   // true once user has zoomed/panned
+let plotlyReady = false;
+
+function setLockPill(locked) {
+  axisLocked = locked;
+  document.getElementById('lock-pill').style.display = locked ? 'inline-block' : 'none';
+}
+
+function resetAxes() {
+  setLockPill(false);
+  redraw();
+}
+
+// Changing log/linear makes the stored pixel ranges meaningless.
+function onAxisTypeChange() {
+  setLockPill(false);
+  redraw();
+}
+
+// Read current axis ranges from the live Plotly figure (if any).
+// Returns { x: [lo,hi]|null, y: [lo,hi]|null }
+function getCurrentRanges() {
+  if (!plotlyReady) return { x: null, y: null };
+  const div = document.getElementById('plotly-div');
+  // _fullLayout is Plotly's resolved internal layout
+  const fl  = div._fullLayout;
+  if (!fl) return { x: null, y: null };
+  const xa = fl.xaxis, ya = fl.yaxis;
+  return {
+    x: (xa && xa.autorange === false && xa.range) ? xa.range.slice() : null,
+    y: (ya && ya.autorange === false && ya.range) ? ya.range.slice() : null,
+  };
+}
+
+// ── Build color swatches ──────────────────────────────────────────
+const colorRow = document.getElementById('color-row');
+PALETTE.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'color-btn' + (i === 0 ? ' active' : '');
+  btn.style.background = p.hex;
+  btn.title = p.name;
+  btn.onclick = () => {
+    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeColor = p.hex;
+    redraw();
+  };
+  colorRow.appendChild(btn);
+});
+
+// ── TRF Binary Parser ─────────────────────────────────────────────
+function parseTRF(buffer) {
+  const v  = new DataView(buffer);
+  let off  = 0;
+  const LE = true;
+
+  const index         = v.getUint32(off, LE);    off += 4;
+  const Xr            = v.getFloat64(off, LE);   off += 8;
+  const Yr            = v.getFloat64(off, LE);   off += 8;
+  const Xactual       = v.getFloat64(off, LE);   off += 8;
+  const YActual       = v.getFloat64(off, LE);   off += 8;
+  const char_str      = String.fromCharCode(v.getUint8(off), v.getUint8(off+1)); off += 2;
+  const Hz_Resolution = v.getFloat64(off, LE);   off += 8;
+  const Start_Freq    = v.getFloat64(off, LE);   off += 8;
+  const End_Freq      = v.getFloat64(off, LE);   off += 8;
+  const fComplex      = v.getFloat32(off, LE);   off += 4;
+  const fLength       = v.getFloat32(off, LE);   off += 4;
+  const a2            = v.getFloat32(off, LE);   off += 4;
+  const fConditionCheck = v.getFloat32(off, LE); off += 4;
+  const Precision     = v.getFloat32(off, LE);   off += 4;
+  const MtxVecVersion = v.getFloat32(off, LE);   off += 4;
+  const SizeOf_TSample= v.getFloat32(off, LE);   off += 4;
+  const Tag           = v.getFloat32(off, LE);   off += 4;
+  const MtxVecFileCount=v.getFloat32(off, LE);   off += 4;
+  const a9            = v.getFloat32(off, LE);   off += 4;
+  const a10           = v.getFloat32(off, LE);   off += 4;
+
+  let caption = '';
+  for (let i = 0; i < 4; i++) {
+    const c = v.getUint8(off + i);
+    if (c !== 0) caption += String.fromCharCode(c);
+  }
+  off += 4;
+
+  const isComplex  = Math.round(fComplex) === 1;
+  const numDoubles = (buffer.byteLength - off) / 8;
+  const raw = [];
+  for (let i = 0; i < numDoubles; i++) raw.push(v.getFloat64(off + i * 8, LE));
+
+  let data;
+  if (isComplex) {
+    data = [];
+    for (let i = 0; i + 1 < raw.length; i += 2) data.push({ re: raw[i], im: raw[i+1] });
+  } else {
+    data = raw.map(x => ({ re: x, im: 0 }));
+  }
+
+  const nPoints = data.length;
+  const freqs   = Array.from({ length: nPoints }, (_, i) => Start_Freq + i * Hz_Resolution);
+
+  return {
+    index, Xr, Yr, Xactual, YActual, char_str,
+    Hz_Resolution, Start_Freq, End_Freq,
+    fComplex: isComplex, fLength,
+    a2, fConditionCheck, Precision, MtxVecVersion,
+    SizeOf_TSample, Tag, MtxVecFileCount, a9, a10,
+    caption, data, freqs, nPoints
+  };
+}
+
+// ── File loading ───────────────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', e => {
+  loadFileObjects([...e.target.files]);
+  e.target.value = '';
+});
+
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  loadFileObjects([...e.dataTransfer.files].filter(f => /\.trf$/i.test(f.name)));
+});
+
+function loadFileObjects(fileObjs) {
+  fileObjs.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const parsed = parseTRF(ev.target.result);
+        files.push({ name: f.name, parsed });
+        renderFileList();
+        selectFile(files.length - 1);
+      } catch(err) {
+        showToast(`Parse error in ${f.name}: ${err.message}`);
+      }
+    };
+    reader.readAsArrayBuffer(f);
+  });
+}
+
+function renderFileList() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '';
+  files.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item' + (i === activeIdx ? ' active' : '');
+    item.innerHTML = `<span class="fi-icon">📈</span>
+      <span class="fi-name" title="${f.name}">${f.name}</span>
+      <span class="fi-del" title="Remove" onclick="removeFile(event,${i})">×</span>`;
+    item.addEventListener('click', () => selectFile(i));
+    list.appendChild(item);
+  });
+}
+
+function removeFile(e, i) {
+  e.stopPropagation();
+  files.splice(i, 1);
+  if (activeIdx >= files.length) activeIdx = files.length - 1;
+  renderFileList();
+  if (activeIdx >= 0) selectFile(activeIdx);
+  else { clearPlot(); clearMeta(); }
+}
+
+function selectFile(i) {
+  activeIdx = i;
+  renderFileList();
+  populateChannelSel();
+  drawMeta();
+  redraw();
+}
+
+// ── File selector ──────────────────────────────────────────────────
+function populateChannelSel() {
+  const sel = document.getElementById('ch-sel');
+  sel.innerHTML = '';
+  if (activeIdx < 0) { sel.innerHTML = '<option>—</option>'; return; }
+  const opt = document.createElement('option');
+  opt.value = 0;
+  opt.textContent = files[activeIdx].name;
+  sel.appendChild(opt);
+}
+
+// ── Metadata panel ─────────────────────────────────────────────────
+function drawMeta() {
+  const card  = document.getElementById('meta-card');
+  const table = document.getElementById('meta-table');
+  if (activeIdx < 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const p = files[activeIdx].parsed;
+  const rows = [
+    ['Start Freq',  p.Start_Freq.toFixed(4)    + ' Hz'],
+    ['End Freq',    p.End_Freq.toFixed(4)       + ' Hz'],
+    ['Resolution',  p.Hz_Resolution.toFixed(6)  + ' Hz'],
+    ['Points',      p.nPoints],
+    ['Complex',     p.fComplex ? 'Yes' : 'No'],
+    ['fLength',     Math.round(p.fLength)],
+    ['Caption',     p.caption || '—'],
+    ['Index',       p.index],
+    ['Xr / Yr',     `${p.Xr.toFixed(3)} / ${p.Yr.toFixed(3)}`],
+    ['MtxVec Ver',  p.MtxVecVersion.toFixed(2)],
+  ];
+  table.innerHTML = rows.map(([k, v]) =>
+    `<tr><td>${k}</td><td>${v}</td></tr>`
+  ).join('');
+}
+
+// ── Display mode helper ────────────────────────────────────────────
+function applyDispMode(data, mode) {
+  switch(mode) {
+    case 'magnitude':    return { y: data.map(d => Math.hypot(d.re, d.im)), label: 'Magnitude' };
+    case 'magnitude_db': return { y: data.map(d => { const m = Math.hypot(d.re, d.im); return m > 0 ? 20*Math.log10(m) : -200; }), label: 'Magnitude (dB)' };
+    case 'real':         return { y: data.map(d => d.re),                   label: 'Real Part' };
+    case 'imag':         return { y: data.map(d => d.im),                   label: 'Imaginary Part' };
+    case 'phase':        return { y: data.map(d => Math.atan2(d.im, d.re) * 180 / Math.PI), label: 'Phase (deg)' };
+    default:             return { y: data.map(d => Math.hypot(d.re, d.im)), label: 'Magnitude' };
+  }
+}
+
+// ── Plot ───────────────────────────────────────────────────────────
+const BG = '#07090c', SF = '#0e1219', GR = '#1c2533', TX = '#d0dcea';
+const plotCfg = {
+  responsive: true,
+  displayModeBar: true,
+  displaylogo: false,
+  modeBarButtonsToRemove: ['sendDataToCloud', 'toImage'],
+};
+
+function redraw() {
+  const empty = document.getElementById('empty-state');
+  const pdiv  = document.getElementById('plotly-div');
+
+  if (activeIdx < 0 || files.length === 0) {
+    clearPlot();
+    empty.style.display = 'flex';
+    pdiv.style.visibility = 'hidden';
+    document.getElementById('plot-title').textContent = 'No file loaded';
+    document.getElementById('plot-title').style.color = 'var(--mu)';
+    return;
+  }
+
+  empty.style.display = 'none';
+  pdiv.style.visibility = 'visible';
+
+  const f    = files[activeIdx];
+  const p    = f.parsed;
+  const mode = document.getElementById('disp-mode').value;
+  const logX = document.getElementById('logx-toggle').checked;
+
+  // Disable imag/phase for real-only files
+  const dispEl = document.getElementById('disp-mode');
+  ['imag','phase'].forEach(v => {
+    const opt = [...dispEl.options].find(o => o.value === v);
+    if (opt) opt.disabled = !p.fComplex;
+  });
+
+  const { y: yRaw, label } = applyDispMode(p.data, mode);
+
+  // ── Strip DC bin (freq ≤ 0 blows up the scale) ──────────────────
+  const mask  = p.freqs.map((f, i) => f > 0 ? i : -1).filter(i => i >= 0);
+  const freqs = mask.map(i => p.freqs[i]);
+  const y     = mask.map(i => yRaw[i]);
+
+  document.getElementById('plot-title').textContent = f.name;
+  document.getElementById('plot-title').style.color = 'var(--acc)';
+
+  const trace = {
+    x: freqs,
+    y,
+    type: 'scatter',
+    mode: 'lines',
+    line: { color: activeColor, width: lineWidth },
+    name: label,
+    hovertemplate: '<b>%{x:.2f} Hz</b><br>%{y:.6g}<extra></extra>',
+  };
+
+  // ── Build axis configs — honour locked ranges ────────────────────
+  // Read the live ranges BEFORE writing the new layout so the user's
+  // zoom is preserved across style changes (color, line width, etc.)
+  const currentRanges = getCurrentRanges();
+  const useX = axisLocked && currentRanges.x;
+  const useY = axisLocked && currentRanges.y;
+
+  const xAxisCfg = {
+    title: 'Frequency (Hz)',
+    gridcolor: GR, zerolinecolor: GR, linecolor: GR,
+    type: logX ? 'log' : 'linear',
+    tickfont: { size: 10 },
+  };
+  const yAxisCfg = {
+    title: label,
+    gridcolor: GR, zerolinecolor: GR, linecolor: GR,
+    type: 'linear',
+    tickfont: { size: 10 },
+  };
+
+  if (useX) { xAxisCfg.range = currentRanges.x; xAxisCfg.autorange = false; }
+  if (useY) { yAxisCfg.range = currentRanges.y; yAxisCfg.autorange = false; }
+
+  const layout = {
+    paper_bgcolor: BG,
+    plot_bgcolor:  SF,
+    font: { color: TX, size: 11, family: "'JetBrains Mono', monospace" },
+    xaxis: xAxisCfg,
+    yaxis: yAxisCfg,
+    margin: { l: 64, r: 20, t: 24, b: 52 },
+    autosize: true,
+    showlegend: false,
+    hovermode: 'x unified',
+    hoverlabel: {
+      bgcolor: '#141b24',
+      bordercolor: '#253044',
+      font: { color: TX, size: 11, family: "'JetBrains Mono', monospace" },
+    },
+  };
+
+  Plotly.react('plotly-div', [trace], layout, plotCfg).then(() => {
+    if (!plotlyReady) {
+      attachPlotlyEvents();
+      plotlyReady = true;
+    }
+  });
+}
+
+// ── Listen for zoom / pan / reset from Plotly ─────────────────────
+// We only use this to detect user-initiated "Reset axes" (double-click
+// or Plotly toolbar).  The actual range values are read directly from
+// _fullLayout in getCurrentRanges(), which is always authoritative.
+function attachPlotlyEvents() {
+  const el = document.getElementById('plotly-div');
+  el.on('plotly_relayout', data => {
+    // User zoomed or panned — mark axes as locked
+    const userZoomed =
+      data['xaxis.range[0]'] !== undefined ||
+      data['xaxis.range']    !== undefined ||
+      data['yaxis.range[0]'] !== undefined ||
+      data['yaxis.range']    !== undefined;
+
+    // User reset axes (double-click or toolbar button)
+    const userReset =
+      data['xaxis.autorange'] === true ||
+      data['yaxis.autorange'] === true;
+
+    if (userZoomed) setLockPill(true);
+    if (userReset)  setLockPill(false);
+  });
+}
+
+function clearPlot() {
+  Plotly.purge('plotly-div');
+  plotlyReady = false;
+  setLockPill(false);
+}
+
+function clearMeta() {
+  document.getElementById('meta-card').style.display = 'none';
+}
+
+// ── Line width ─────────────────────────────────────────────────────
+function updLineWidth(val) {
+  lineWidth = parseFloat(val);
+  document.getElementById('lw-val').textContent = val;
+  redraw();
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.style.display = 'none'; }, 5000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+(function init() {
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('plotly-div').style.visibility = 'hidden';
+
+  const wrap = document.getElementById('plot-wrap');
+  new ResizeObserver(() => {
+    if (activeIdx >= 0) Plotly.Plots.resize('plotly-div');
+  }).observe(wrap);
+})();
+</script>
+</body>
+</html>
