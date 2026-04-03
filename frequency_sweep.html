@@ -444,6 +444,13 @@
         <span class="unit">cycles</span>
       </div>
     </div>
+    <div class="control-group">
+      <label>Gap Between Samples</label>
+      <div class="input-row">
+        <input type="number" id="gapMs" value="200" min="0" max="10000" step="10">
+        <span class="unit">ms</span>
+      </div>
+    </div>
   </div>
 
   <div class="device-section">
@@ -624,6 +631,11 @@ function setError(msg) {
   document.getElementById('errorMsg').textContent = msg;
 }
 
+function updateStatus(label) {
+  document.getElementById('freqDisplay').textContent = label;
+  document.getElementById('statusCurrent').textContent = label;
+}
+
 function updateProgress(current, total, currentFreq, step, remaining) {
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   document.getElementById('progressBar').style.width = pct + '%';
@@ -651,6 +663,7 @@ async function startSweep() {
   const endFreq   = parseFloat(document.getElementById('endFreq').value);
   const freqStep  = parseFloat(document.getElementById('freqStep').value);
   const cycles    = parseFloat(document.getElementById('cyclesPerFreq').value);
+  const gapMs     = parseFloat(document.getElementById('gapMs').value) || 0;
 
   if (isNaN(startFreq) || isNaN(endFreq) || isNaN(freqStep) || isNaN(cycles)) {
     setError('ERROR: All fields must be valid numbers.'); return;
@@ -666,6 +679,7 @@ async function startSweep() {
   }
   if (freqStep <= 0) { setError('ERROR: Step must be > 0 Hz.'); return; }
   if (cycles < 1)    { setError('ERROR: Cycles must be ≥ 1.');  return; }
+  if (isNaN(gapMs) || gapMs < 0) { setError('ERROR: Gap must be ≥ 0 ms.'); return; }
 
   const freqs = [];
   for (let f = startFreq; f <= endFreq + 1e-9; f += freqStep)
@@ -680,10 +694,15 @@ async function startSweep() {
   oscillator = audioCtx.createOscillator();
   oscillator.type = 'sine';
 
+  // GainNode lets us silence output during inter-sample gaps without stopping the oscillator
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.value = 1;
+
   // Route: oscillator → analyser → MediaStreamDestination (→ <audio> element)
   // The <audio> element is what we call setSinkId() on — much broader support.
   const streamDest = audioCtx.createMediaStreamDestination();
-  oscillator.connect(analyser);
+  oscillator.connect(gainNode);
+  gainNode.connect(analyser);
   analyser.connect(streamDest);
 
   audioEl = new Audio();
@@ -710,16 +729,28 @@ async function startSweep() {
   drawWaveform();
 
   let idx = 0;
-  function playNext() {
+
+  function playTone() {
     if (!running || idx >= freqs.length) { stopSweep(idx >= freqs.length); return; }
     const freq     = freqs[idx];
     const duration = cycles / freq;
+    gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
     oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
     updateProgress(idx, freqs.length, freq, freqStep, freqs.length - idx - 1);
     idx++;
-    sweepTimeout = setTimeout(playNext, duration * 1000);
+    // After tone duration, silence and schedule the gap
+    sweepTimeout = setTimeout(() => {
+      if (!running) return;
+      if (gapMs > 0) {
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        updateStatus('GAP');
+        sweepTimeout = setTimeout(playTone, gapMs);
+      } else {
+        playTone();
+      }
+    }, duration * 1000);
   }
-  playNext();
+  playTone();
 }
 
 function stopSweep(completed = false) {
