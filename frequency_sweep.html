@@ -486,39 +486,73 @@ const canvas = document.getElementById('scopeCanvas');
 const ctx = canvas.getContext('2d');
 let audioCtx = null;
 let oscillator = null;
+let audioEl  = null;   // <audio> element used for setSinkId routing
 let animFrameId = null;
 let analyser = null;
 let sweepTimeout = null;
 let running = false;
 
+// ── Browser capability detection ────────────────────────────────
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+const canSelectOutput = !isSafari && !!(document.createElement('audio').setSinkId);
+
+function initDeviceUI() {
+  const hint    = document.getElementById('deviceHint');
+  const scanBtn = document.getElementById('scanBtn');
+  const sel     = document.getElementById('deviceSelect');
+  if (isSafari) {
+    scanBtn.disabled = true;
+    scanBtn.style.opacity = '0.3';
+    sel.disabled = true;
+    sel.style.opacity = '0.3';
+    hint.style.color = '#ffaa00';
+    hint.textContent = 'Safari does not support web output-device selection. '
+      + 'To use AirPods: System Settings → Sound → Output → select your AirPods.';
+  } else if (!canSelectOutput) {
+    scanBtn.disabled = true;
+    sel.disabled = true;
+    hint.style.color = '#ffaa00';
+    hint.textContent = 'This browser does not support output device selection. Try Chrome or Edge.';
+  } else {
+    hint.textContent = 'Click Scan to detect available audio output devices.';
+  }
+}
+initDeviceUI();
+
 // ── Device enumeration ──────────────────────────────────────────
 async function scanDevices() {
+  if (!canSelectOutput) return;
   const hint = document.getElementById('deviceHint');
   const sel  = document.getElementById('deviceSelect');
-  hint.textContent = 'Requesting permission…';
-  try {
-    // A brief getUserMedia is needed so the browser reveals device labels
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(t => t.stop());
-  } catch(e) {
-    // Permission denied or no mic — we can still enumerate, labels may be empty
-  }
+  hint.style.color = '';
+  hint.textContent = 'Scanning…';
+
+  // NOTE: We deliberately do NOT call getUserMedia here.
+  // Requesting mic access forces Bluetooth headphones (e.g. AirPods) to switch
+  // from the high-quality A2DP profile to the low-quality HFP/HSP hands-free
+  // profile, which can make audio inaudible or severely degraded.
+  // Device labels may be generic on the very first scan, but Chrome remembers
+  // permission after that and will show real names on subsequent scans.
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const outputs = devices.filter(d => d.kind === 'audiooutput');
     const prev = sel.value;
     sel.innerHTML = '<option value="">— System Default —</option>';
+    const hasLabels = outputs.some(d => d.label);
     outputs.forEach((d, i) => {
       const opt = document.createElement('option');
       opt.value = d.deviceId;
       opt.textContent = d.label || `Output Device ${i + 1}`;
       sel.appendChild(opt);
     });
-    // Restore selection if still present
     if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
-    hint.textContent = outputs.length
-      ? `${outputs.length} output device(s) found. Select one before starting.`
-      : 'No output devices detected. Using system default.';
+    if (!outputs.length) {
+      hint.textContent = 'No output devices detected — using system default.';
+    } else if (!hasLabels) {
+      hint.textContent = `${outputs.length} device(s) found (labels need browser permission — scan again after first use).`;
+    } else {
+      hint.textContent = `${outputs.length} output device(s) found. Select one before starting.`;
+    }
   } catch(e) {
     hint.textContent = 'Could not enumerate devices: ' + e.message;
   }
@@ -614,89 +648,77 @@ function resetUI() {
 async function startSweep() {
   setError('');
   const startFreq = parseFloat(document.getElementById('startFreq').value);
-  const endFreq = parseFloat(document.getElementById('endFreq').value);
-  const freqStep = parseFloat(document.getElementById('freqStep').value);
-  const cycles = parseFloat(document.getElementById('cyclesPerFreq').value);
+  const endFreq   = parseFloat(document.getElementById('endFreq').value);
+  const freqStep  = parseFloat(document.getElementById('freqStep').value);
+  const cycles    = parseFloat(document.getElementById('cyclesPerFreq').value);
 
   if (isNaN(startFreq) || isNaN(endFreq) || isNaN(freqStep) || isNaN(cycles)) {
-    setError('ERROR: All fields must be valid numbers.');
-    return;
+    setError('ERROR: All fields must be valid numbers.'); return;
   }
   if (startFreq < 20 || endFreq < 20) {
-    setError('ERROR: Frequencies must be ≥ 20 Hz.');
-    return;
+    setError('ERROR: Frequencies must be ≥ 20 Hz.'); return;
   }
   if (startFreq > 20000 || endFreq > 20000) {
-    setError('ERROR: Frequencies must be ≤ 20000 Hz.');
-    return;
+    setError('ERROR: Frequencies must be ≤ 20000 Hz.'); return;
   }
   if (endFreq <= startFreq) {
-    setError('ERROR: End frequency must be greater than start frequency.');
-    return;
+    setError('ERROR: End frequency must be greater than start frequency.'); return;
   }
-  if (freqStep <= 0) {
-    setError('ERROR: Step must be > 0 Hz.');
-    return;
-  }
-  if (cycles < 1) {
-    setError('ERROR: Cycles must be ≥ 1.');
-    return;
-  }
+  if (freqStep <= 0) { setError('ERROR: Step must be > 0 Hz.'); return; }
+  if (cycles < 1)    { setError('ERROR: Cycles must be ≥ 1.');  return; }
 
-  // Build frequency list
   const freqs = [];
-  for (let f = startFreq; f <= endFreq + 1e-9; f += freqStep) {
+  for (let f = startFreq; f <= endFreq + 1e-9; f += freqStep)
     freqs.push(Math.round(f * 1000) / 1000);
-  }
-  if (freqs.length === 0) {
-    setError('ERROR: No frequencies in range.');
-    return;
-  }
+  if (freqs.length === 0) { setError('ERROR: No frequencies in range.'); return; }
 
+  // ── Audio graph ─────────────────────────────────────────────
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-  // Route to selected output device if supported
-  const deviceId = document.getElementById('deviceSelect').value;
-  if (deviceId && typeof audioCtx.setSinkId === 'function') {
-    try {
-      await audioCtx.setSinkId(deviceId);
-    } catch(e) {
-      setError('WARNING: Could not set output device — ' + e.message);
-    }
-  } else if (deviceId && typeof audioCtx.setSinkId !== 'function') {
-    setError('NOTE: Output device selection requires Chrome 110+. Using system default.');
-  }
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
 
   oscillator = audioCtx.createOscillator();
   oscillator.type = 'sine';
+
+  // Route: oscillator → analyser → MediaStreamDestination (→ <audio> element)
+  // The <audio> element is what we call setSinkId() on — much broader support.
+  const streamDest = audioCtx.createMediaStreamDestination();
   oscillator.connect(analyser);
-  analyser.connect(audioCtx.destination);
+  analyser.connect(streamDest);
+
+  audioEl = new Audio();
+  audioEl.srcObject = streamDest.stream;
+
+  const deviceId = document.getElementById('deviceSelect').value;
+  if (deviceId && canSelectOutput) {
+    try {
+      await audioEl.setSinkId(deviceId);
+    } catch(e) {
+      setError('WARNING: Could not route to selected device — ' + e.message);
+    }
+  }
+
+  // Must call play() before start() to avoid autoplay policy blocks
+  try { await audioEl.play(); } catch(e) { /* handled below */ }
   oscillator.start();
 
   running = true;
   document.getElementById('startBtn').disabled = true;
-  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('stopBtn').disabled  = false;
 
   cancelAnimationFrame(animFrameId);
   drawWaveform();
 
   let idx = 0;
-
   function playNext() {
-    if (!running || idx >= freqs.length) {
-      stopSweep(idx >= freqs.length);
-      return;
-    }
-    const freq = freqs[idx];
+    if (!running || idx >= freqs.length) { stopSweep(idx >= freqs.length); return; }
+    const freq     = freqs[idx];
     const duration = cycles / freq;
     oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
     updateProgress(idx, freqs.length, freq, freqStep, freqs.length - idx - 1);
     idx++;
     sweepTimeout = setTimeout(playNext, duration * 1000);
   }
-
   playNext();
 }
 
@@ -708,10 +730,15 @@ function stopSweep(completed = false) {
     oscillator.disconnect();
     oscillator = null;
   }
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.srcObject = null;
+    audioEl = null;
+  }
   if (audioCtx) {
     audioCtx.close();
     audioCtx = null;
-    analyser = null;
+    analyser  = null;
   }
   cancelAnimationFrame(animFrameId);
   drawIdle();
@@ -722,7 +749,7 @@ function stopSweep(completed = false) {
     document.getElementById('statusRemaining').textContent = '0 steps';
   }
   document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('stopBtn').disabled  = true;
 }
 
 document.getElementById('startBtn').addEventListener('click', startSweep);
