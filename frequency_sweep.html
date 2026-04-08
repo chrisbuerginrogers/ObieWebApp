@@ -547,6 +547,75 @@
 
   .spectrum-canvas { height: 200px !important; cursor: crosshair; }
 
+
+  .spec-controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.7rem 1.2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+  }
+
+  .spec-controls::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--phosphor-dim), transparent);
+    opacity: 0.3;
+  }
+
+  .spec-range {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .spec-range-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .spec-range input[type="number"] {
+    width: 72px !important;
+    font-size: 0.85rem !important;
+    padding: 0.3rem 0.5rem !important;
+    flex: none !important;
+  }
+
+  .spec-sep {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+  }
+
+  #logLinBtn {
+    flex: none !important;
+    width: auto !important;
+    padding: 0.4rem 1rem !important;
+    font-size: 0.7rem !important;
+    background: var(--phosphor) !important;
+    color: #001a0a !important;
+    border: none !important;
+    box-shadow: 0 0 12px var(--phosphor-glow) !important;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+  }
+
+  #logLinBtn.linear {
+    background: #000 !important;
+    color: var(--phosphor-dim) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: none !important;
+  }
+
   .error-msg {
     font-size: 0.7rem;
     color: var(--red);
@@ -655,6 +724,16 @@
       <span class="plot-label-text">Power Spectrum</span>
       <span class="plot-label-text" id="spectrumInfo"></span>
     </div>
+    <div class="spec-controls">
+      <div class="spec-range">
+        <span class="spec-range-label">Freq Range</span>
+        <input type="number" id="specMinFreq" value="20"   min="20"  max="4999" step="1">
+        <span class="spec-sep">&ndash;</span>
+        <input type="number" id="specMaxFreq" value="5500" min="21"  max="5500" step="1">
+        <span class="spec-range-label">Hz</span>
+      </div>
+      <button id="logLinBtn" title="Toggle log / linear frequency axis">LOG</button>
+    </div>
     <div class="plot-block">
       <canvas id="spectrumCanvas" class="spectrum-canvas"></canvas>
     </div>
@@ -702,7 +781,8 @@ let recTimer      = null;
 let recStartTime  = 0;
 let specData = null;          // { dB, binHz } stored for zoom/pan redraws
 let specZoom = { minFreq: 20, maxFreq: 5500 };
-let specPan  = null;          // { startX, startLogMin, startLogMax } while dragging
+let specPan  = null;          // drag state
+let specLogScale = true;       // log vs linear freq axis
 
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 const canSelectOutput = !isSafari && !!(document.createElement('audio').setSinkId);
@@ -1046,9 +1126,18 @@ function plotWaveformData(samples, sampleRate) {
 function plotSpectrumData(dBArr, binHz) {
   specData = { dB: dBArr, binHz };
   specZoom = { minFreq: 20, maxFreq: 5500 };  // reset on new recording
+  specLogScale = true;
+  document.getElementById('logLinBtn').textContent = 'LOG';
+  document.getElementById('logLinBtn').classList.remove('linear');
   document.getElementById('spectrumInfo').textContent =
-    `FFT 4096 \u00b7 ${binHz.toFixed(1)} Hz/bin \u00b7 log scale \u00b7 scroll=zoom \u00b7 drag=pan`;
+    `FFT 4096 \u00b7 ${binHz.toFixed(1)} Hz/bin \u00b7 log scale \u00b7 scroll=zoom drag=pan`;
+  syncSpecInputs();
   redrawSpectrum();
+}
+
+function syncSpecInputs() {
+  document.getElementById('specMinFreq').value = Math.round(specZoom.minFreq);
+  document.getElementById('specMaxFreq').value = Math.round(specZoom.maxFreq);
 }
 
 function redrawSpectrum(crossX = null, crossY = null) {
@@ -1061,7 +1150,15 @@ function redrawSpectrum(crossX = null, crossY = null) {
 
   const logMin = Math.log10(specZoom.minFreq);
   const logMax = Math.log10(specZoom.maxFreq);
-  const freqToPx = f => PAD.left + (Math.log10(Math.max(f, specZoom.minFreq)) - logMin) / (logMax - logMin) * plotW;
+
+  // Scale functions — swap based on mode
+  const freqToPx = specLogScale
+    ? f => PAD.left + (Math.log10(Math.max(f, specZoom.minFreq)) - logMin) / (logMax - logMin) * plotW
+    : f => PAD.left + (f - specZoom.minFreq) / (specZoom.maxFreq - specZoom.minFreq) * plotW;
+  const pxToFreq = specLogScale
+    ? x => Math.pow(10, logMin + (x - PAD.left) / plotW * (logMax - logMin))
+    : x => specZoom.minFreq + (x - PAD.left) / plotW * (specZoom.maxFreq - specZoom.minFreq);
+
   const maxBin = Math.min(dB.length, Math.ceil(specZoom.maxFreq / binHz) + 1);
 
   // dB autoscale within current zoom window
@@ -1076,9 +1173,20 @@ function redrawSpectrum(crossX = null, crossY = null) {
   dBMax = Math.ceil(dBMax / 10) * 10;
   dBMin = Math.max(dBMax - 80, Math.floor(dBMin / 10) * 10);
 
-  // Dynamic log-spaced x-ticks for current zoom
-  const allXTicks = [20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000];
-  const xTickFreqs = allXTicks.filter(f => f >= specZoom.minFreq * 0.9 && f <= specZoom.maxFreq * 1.1);
+  // X ticks — log-spaced or linear-spaced
+  let xTickFreqs;
+  if (specLogScale) {
+    const allLog = [20,30,50,100,200,300,500,1000,2000,3000,5000];
+    xTickFreqs = allLog.filter(f => f >= specZoom.minFreq * 0.9 && f <= specZoom.maxFreq * 1.1);
+  } else {
+    const range = specZoom.maxFreq - specZoom.minFreq;
+    const step  = Math.pow(10, Math.floor(Math.log10(range / 5)));
+    const nice  = [1,2,5,10].map(m => m * step).find(s => range / s <= 8) || step;
+    xTickFreqs  = [];
+    const start = Math.ceil(specZoom.minFreq / nice) * nice;
+    for (let f = start; f <= specZoom.maxFreq; f += nice) xTickFreqs.push(Math.round(f));
+  }
+
   const yStep = Math.ceil((dBMax - dBMin) / 5 / 5) * 5;
   const yTicks = [];
   for (let y = dBMin; y <= dBMax + 0.1; y += yStep) yTicks.push(Math.round(y));
@@ -1139,7 +1247,8 @@ function redrawSpectrum(crossX = null, crossY = null) {
   c.fillText('Power (dB)', 0, 0); c.restore();
 
   // Zoom hint
-  if (specZoom.minFreq > 21 || specZoom.maxFreq < 5400) {
+  const atDefault = specZoom.minFreq <= 21 && specZoom.maxFreq >= 5400;
+  if (!atDefault) {
     c.save(); c.fillStyle = 'rgba(0,170,85,0.55)'; c.font = '8px Share Tech Mono';
     c.textAlign = 'right'; c.textBaseline = 'top';
     c.fillText('dbl-click: reset zoom', W - PAD.right - 2, PAD.top + 2);
@@ -1148,8 +1257,7 @@ function redrawSpectrum(crossX = null, crossY = null) {
 
   // ── Crosshair ──────────────────────────────────────────────────────────
   if (crossX !== null && crossX > PAD.left && crossX < W - PAD.right) {
-    const plotX  = crossX - PAD.left;
-    const freq   = Math.pow(10, logMin + (plotX / plotW) * (logMax - logMin));
+    const freq   = pxToFreq(crossX);
     const binIdx = Math.max(1, Math.min(maxBin - 1, Math.round(freq / binHz)));
     const snapFreq = binIdx * binHz;
     const snapDB   = dB[binIdx];
@@ -1158,19 +1266,15 @@ function redrawSpectrum(crossX = null, crossY = null) {
     const snapY    = Math.max(PAD.top, Math.min(H - PAD.bottom, rawY));
 
     c.save();
-    // Dashed crosshair lines
     c.strokeStyle = 'rgba(0,255,136,0.28)'; c.lineWidth = 1; c.setLineDash([4, 4]);
     c.beginPath(); c.moveTo(snapX, PAD.top); c.lineTo(snapX, H - PAD.bottom); c.stroke();
     c.beginPath(); c.moveTo(PAD.left, snapY); c.lineTo(W - PAD.right, snapY); c.stroke();
     c.setLineDash([]);
-
-    // Intersection dot
     c.fillStyle = '#00ff88'; c.shadowColor = '#00ff88'; c.shadowBlur = 10;
     c.beginPath(); c.arc(snapX, snapY, 3.5, 0, 2 * Math.PI); c.fill();
     c.shadowBlur = 0;
 
-    // Info box
-    const fLabel = snapFreq >= 1000 ? `${(snapFreq / 1000).toFixed(3)} kHz` : `${snapFreq.toFixed(1)} Hz`;
+    const fLabel = snapFreq >= 1000 ? `${(snapFreq/1000).toFixed(3)} kHz` : `${snapFreq.toFixed(1)} Hz`;
     const dLabel = `${snapDB.toFixed(1)} dB`;
     c.font = 'bold 10px Orbitron, monospace';
     const fw  = Math.max(c.measureText(fLabel).width, c.measureText(dLabel).width);
@@ -1180,11 +1284,8 @@ function redrawSpectrum(crossX = null, crossY = null) {
     if (bx + bw > W - PAD.right - 2) bx = snapX - bw - 12;
     by = Math.max(PAD.top + 2, Math.min(H - PAD.bottom - bh - 2, by));
 
-    // Box background
     c.fillStyle = 'rgba(2,13,8,0.92)'; c.strokeStyle = '#00aa55'; c.lineWidth = 1;
     c.beginPath(); roundRect(c, bx, by, bw, bh, 3); c.fill(); c.stroke();
-
-    // Box text
     c.fillStyle = '#00ff88'; c.textAlign = 'left'; c.textBaseline = 'top';
     c.font = 'bold 10px Orbitron, monospace';
     c.shadowColor = '#00ff88'; c.shadowBlur = 4;
@@ -1198,34 +1299,70 @@ function redrawSpectrum(crossX = null, crossY = null) {
 
 function roundRect(c, x, y, w, h, r) {
   c.moveTo(x + r, y);
-  c.lineTo(x + w - r, y);  c.arcTo(x + w, y,     x + w, y + r,     r);
+  c.lineTo(x + w - r, y);     c.arcTo(x + w, y,     x + w, y + r,     r);
   c.lineTo(x + w, y + h - r); c.arcTo(x + w, y + h, x + w - r, y + h, r);
-  c.lineTo(x + r, y + h);  c.arcTo(x,     y + h, x,     y + h - r, r);
-  c.lineTo(x, y + r);      c.arcTo(x,     y,     x + r, y,         r);
+  c.lineTo(x + r, y + h);     c.arcTo(x,     y + h, x,     y + h - r, r);
+  c.lineTo(x, y + r);         c.arcTo(x,     y,     x + r, y,         r);
   c.closePath();
 }
 
 function setupSpectrumInteraction() {
   const el = document.getElementById('spectrumCanvas');
 
+  // ── Frequency range inputs ────────────────────────────────────────────
+  function applyRangeInputs() {
+    const lo = parseFloat(document.getElementById('specMinFreq').value);
+    const hi = parseFloat(document.getElementById('specMaxFreq').value);
+    if (!isNaN(lo) && !isNaN(hi) && hi > lo && lo >= 20 && hi <= 5500) {
+      specZoom.minFreq = lo;
+      specZoom.maxFreq = hi;
+      redrawSpectrum();
+    }
+  }
+  document.getElementById('specMinFreq').addEventListener('change', applyRangeInputs);
+  document.getElementById('specMaxFreq').addEventListener('change', applyRangeInputs);
+  document.getElementById('specMinFreq').addEventListener('keydown', e => { if (e.key === 'Enter') applyRangeInputs(); });
+  document.getElementById('specMaxFreq').addEventListener('keydown', e => { if (e.key === 'Enter') applyRangeInputs(); });
+
+  // ── Log/Linear toggle ─────────────────────────────────────────────────
+  const logLinBtn = document.getElementById('logLinBtn');
+  logLinBtn.addEventListener('click', () => {
+    specLogScale = !specLogScale;
+    logLinBtn.textContent = specLogScale ? 'LOG' : 'LIN';
+    logLinBtn.classList.toggle('linear', !specLogScale);
+    document.getElementById('spectrumInfo').textContent =
+      specData ? `FFT 4096 \u00b7 ${specData.binHz.toFixed(1)} Hz/bin \u00b7 ${specLogScale ? 'log' : 'linear'} scale` : '';
+    redrawSpectrum();
+  });
+
+  // ── Mouse crosshair ───────────────────────────────────────────────────
   el.addEventListener('mousemove', e => {
     if (!specData) return;
     const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-
     if (specPan && e.buttons === 1) {
       const plotW = rect.width - PAD.left - PAD.right;
-      const logRange = specPan.startLogMax - specPan.startLogMin;
-      const dLog = -(e.clientX - specPan.startX) / plotW * logRange;
-      const absMin = Math.log10(20), absMax = Math.log10(5500);
-      let nMin = specPan.startLogMin + dLog, nMax = specPan.startLogMax + dLog;
-      if (nMin < absMin) { nMax += absMin - nMin; nMin = absMin; }
-      if (nMax > absMax) { nMin -= nMax - absMax; nMax = absMax; }
-      specZoom.minFreq = Math.pow(10, nMin);
-      specZoom.maxFreq = Math.pow(10, nMax);
+      const dx = e.clientX - specPan.startX;
+      if (specLogScale) {
+        const logRange = specPan.startLogMax - specPan.startLogMin;
+        const dLog = -(dx / plotW) * logRange;
+        const absMin = Math.log10(20), absMax = Math.log10(5500);
+        let nMin = specPan.startLogMin + dLog, nMax = specPan.startLogMax + dLog;
+        if (nMin < absMin) { nMax += absMin - nMin; nMin = absMin; }
+        if (nMax > absMax) { nMin -= nMax - absMax; nMax = absMax; }
+        specZoom.minFreq = Math.pow(10, nMin);
+        specZoom.maxFreq = Math.pow(10, nMax);
+      } else {
+        const linRange = specPan.startMaxFreq - specPan.startMinFreq;
+        const dFreq = -(dx / plotW) * linRange;
+        let nMin = specPan.startMinFreq + dFreq, nMax = specPan.startMaxFreq + dFreq;
+        if (nMin < 20)   { nMax += 20 - nMin;   nMin = 20; }
+        if (nMax > 5500) { nMin -= nMax - 5500;  nMax = 5500; }
+        specZoom.minFreq = nMin; specZoom.maxFreq = nMax;
+      }
+      syncSpecInputs();
       redrawSpectrum();
     } else {
-      redrawSpectrum(x, e.clientY - rect.top);
+      redrawSpectrum(e.clientX - rect.left, e.clientY - rect.top);
     }
   });
 
@@ -1233,8 +1370,10 @@ function setupSpectrumInteraction() {
     if (!specData) return;
     specPan = {
       startX: e.clientX,
-      startLogMin: Math.log10(specZoom.minFreq),
-      startLogMax: Math.log10(specZoom.maxFreq)
+      startMinFreq:  specZoom.minFreq,
+      startMaxFreq:  specZoom.maxFreq,
+      startLogMin:   Math.log10(specZoom.minFreq),
+      startLogMax:   Math.log10(specZoom.maxFreq)
     };
     el.style.cursor = 'grabbing';
   });
@@ -1248,24 +1387,34 @@ function setupSpectrumInteraction() {
     const rect  = el.getBoundingClientRect();
     const x     = e.clientX - rect.left - PAD.left;
     const plotW = rect.width - PAD.left - PAD.right;
-    const logMin = Math.log10(specZoom.minFreq);
-    const logMax = Math.log10(specZoom.maxFreq);
-    const logM  = logMin + Math.max(0, Math.min(1, x / plotW)) * (logMax - logMin);
-    const f     = e.deltaY > 0 ? 1.25 : 1 / 1.25;
-    let nMin = logM + (logMin - logM) * f;
-    let nMax = logM + (logMax - logM) * f;
-    // Clamp to full range
-    nMin = Math.max(Math.log10(20),   nMin);
-    nMax = Math.min(Math.log10(5500), nMax);
-    // Prevent over-zoom (minimum ~half octave)
-    if (nMax - nMin < 0.3) { nMin = logM - 0.15; nMax = logM + 0.15; }
-    specZoom.minFreq = Math.pow(10, nMin);
-    specZoom.maxFreq = Math.pow(10, nMax);
+    const t     = Math.max(0, Math.min(1, x / plotW));  // 0..1 position
+    const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25;
+
+    if (specLogScale) {
+      const logMin = Math.log10(specZoom.minFreq);
+      const logMax = Math.log10(specZoom.maxFreq);
+      const logM   = logMin + t * (logMax - logMin);
+      let nMin = logM + (logMin - logM) * factor;
+      let nMax = logM + (logMax - logM) * factor;
+      nMin = Math.max(Math.log10(20),   nMin);
+      nMax = Math.min(Math.log10(5500), nMax);
+      if (nMax - nMin < 0.3) { nMin = logM - 0.15; nMax = logM + 0.15; }
+      specZoom.minFreq = Math.pow(10, nMin);
+      specZoom.maxFreq = Math.pow(10, nMax);
+    } else {
+      const midFreq = specZoom.minFreq + t * (specZoom.maxFreq - specZoom.minFreq);
+      const range   = specZoom.maxFreq - specZoom.minFreq;
+      const newRange = Math.min(5480, Math.max(50, range * factor));
+      specZoom.minFreq = Math.max(20,   midFreq - t * newRange);
+      specZoom.maxFreq = Math.min(5500, specZoom.minFreq + newRange);
+    }
+    syncSpecInputs();
     redrawSpectrum();
   }, { passive: false });
 
   el.addEventListener('dblclick', () => {
     specZoom = { minFreq: 20, maxFreq: 5500 };
+    syncSpecInputs();
     redrawSpectrum();
   });
 }
