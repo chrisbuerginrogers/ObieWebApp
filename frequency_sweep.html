@@ -651,14 +651,14 @@
     <div class="control-group">
       <label>End Frequency</label>
       <div class="input-row">
-        <input type="number" id="endFreq" value="5000" min="20" max="5000" step="1">
+        <input type="number" id="endFreq" value="2000" min="20" max="2000" step="1">
         <span class="unit">Hz</span>
       </div>
     </div>
     <div class="control-group">
       <label>Frequency Step</label>
       <div class="input-row">
-        <input type="number" id="freqStep" value="100" min="1" max="10000" step="1">
+        <input type="number" id="freqStep" value="10" min="1" max="10000" step="1">
         <span class="unit">Hz</span>
       </div>
     </div>
@@ -672,7 +672,7 @@
     <div class="control-group">
       <label>Gap Between Samples</label>
       <div class="input-row">
-        <input type="number" id="gapMs" value="2" min="0" max="10000" step="1">
+        <input type="number" id="gapMs" value="0" min="0" max="10000" step="1">
         <span class="unit">ms</span>
       </div>
     </div>
@@ -729,7 +729,7 @@
         <span class="spec-range-label">Freq Range</span>
         <input type="number" id="specMinFreq" value="20"   min="20"  max="4999" step="1">
         <span class="spec-sep">&ndash;</span>
-        <input type="number" id="specMaxFreq" value="5500" min="21"  max="5500" step="1">
+        <input type="number" id="specMaxFreq" value="2000" min="21"  max="2000" step="1">
         <span class="spec-range-label">Hz</span>
       </div>
       <button id="logLinBtn" title="Toggle log / linear frequency axis">LOG</button>
@@ -780,7 +780,7 @@ let recChunks     = [];
 let recTimer      = null;
 let recStartTime  = 0;
 let specData = null;          // { dB, binHz } stored for zoom/pan redraws
-let specZoom = { minFreq: 20, maxFreq: 5500 };
+let specZoom = { minFreq: 20, maxFreq: 2000 };
 let specPan  = null;          // drag state
 let specLogScale = true;       // log vs linear freq axis
 
@@ -1125,7 +1125,7 @@ function plotWaveformData(samples, sampleRate) {
 
 function plotSpectrumData(dBArr, binHz) {
   specData = { dB: dBArr, binHz };
-  specZoom = { minFreq: 20, maxFreq: 5500 };  // reset on new recording
+  specZoom = { minFreq: 20, maxFreq: 2000 };  // reset on new recording
   specLogScale = true;
   document.getElementById('logLinBtn').textContent = 'LOG';
   document.getElementById('logLinBtn').classList.remove('linear');
@@ -1176,7 +1176,7 @@ function redrawSpectrum(crossX = null, crossY = null) {
   // X ticks — log-spaced or linear-spaced
   let xTickFreqs;
   if (specLogScale) {
-    const allLog = [20,30,50,100,200,300,500,1000,2000,3000,5000];
+    const allLog = [20,30,50,100,200,300,500,1000,2000];
     xTickFreqs = allLog.filter(f => f >= specZoom.minFreq * 0.9 && f <= specZoom.maxFreq * 1.1);
   } else {
     const range = specZoom.maxFreq - specZoom.minFreq;
@@ -1313,7 +1313,7 @@ function setupSpectrumInteraction() {
   function applyRangeInputs() {
     const lo = parseFloat(document.getElementById('specMinFreq').value);
     const hi = parseFloat(document.getElementById('specMaxFreq').value);
-    if (!isNaN(lo) && !isNaN(hi) && hi > lo && lo >= 20 && hi <= 5500) {
+    if (!isNaN(lo) && !isNaN(hi) && hi > lo && lo >= 20 && hi <= 2000) {
       specZoom.minFreq = lo;
       specZoom.maxFreq = hi;
       redrawSpectrum();
@@ -1345,7 +1345,7 @@ function setupSpectrumInteraction() {
       if (specLogScale) {
         const logRange = specPan.startLogMax - specPan.startLogMin;
         const dLog = -(dx / plotW) * logRange;
-        const absMin = Math.log10(20), absMax = Math.log10(5500);
+        const absMin = Math.log10(20), absMax = Math.log10(2000);
         let nMin = specPan.startLogMin + dLog, nMax = specPan.startLogMax + dLog;
         if (nMin < absMin) { nMax += absMin - nMin; nMin = absMin; }
         if (nMax > absMax) { nMin -= nMax - absMax; nMax = absMax; }
@@ -1356,7 +1356,7 @@ function setupSpectrumInteraction() {
         const dFreq = -(dx / plotW) * linRange;
         let nMin = specPan.startMinFreq + dFreq, nMax = specPan.startMaxFreq + dFreq;
         if (nMin < 20)   { nMax += 20 - nMin;   nMin = 20; }
-        if (nMax > 5500) { nMin -= nMax - 5500;  nMax = 5500; }
+        if (nMax > 2000) { nMin -= nMax - 2000;  nMax = 2000; }
         specZoom.minFreq = nMin; specZoom.maxFreq = nMax;
       }
       syncSpecInputs();
@@ -1397,7 +1397,7 @@ function setupSpectrumInteraction() {
       let nMin = logM + (logMin - logM) * factor;
       let nMax = logM + (logMax - logM) * factor;
       nMin = Math.max(Math.log10(20),   nMin);
-      nMax = Math.min(Math.log10(5500), nMax);
+      nMax = Math.min(Math.log10(2000), nMax);
       if (nMax - nMin < 0.3) { nMin = logM - 0.15; nMax = logM + 0.15; }
       specZoom.minFreq = Math.pow(10, nMin);
       specZoom.maxFreq = Math.pow(10, nMax);
@@ -1406,14 +1406,14 @@ function setupSpectrumInteraction() {
       const range   = specZoom.maxFreq - specZoom.minFreq;
       const newRange = Math.min(5480, Math.max(50, range * factor));
       specZoom.minFreq = Math.max(20,   midFreq - t * newRange);
-      specZoom.maxFreq = Math.min(5500, specZoom.minFreq + newRange);
+      specZoom.maxFreq = Math.min(2000, specZoom.minFreq + newRange);
     }
     syncSpecInputs();
     redrawSpectrum();
   }, { passive: false });
 
   el.addEventListener('dblclick', () => {
-    specZoom = { minFreq: 20, maxFreq: 5500 };
+    specZoom = { minFreq: 20, maxFreq: 2000 };
     syncSpecInputs();
     redrawSpectrum();
   });
@@ -1506,7 +1506,7 @@ async function startSweep() {
   if (isNaN(startFreq)||isNaN(endFreq)||isNaN(freqStep)||isNaN(cycles)) {
     setError('ERROR: All fields must be valid numbers.'); return; }
   if (startFreq < 20 || endFreq < 20)      { setError('ERROR: Frequencies must be \u2265 20 Hz.'); return; }
-  if (startFreq > 5000 || endFreq > 5000)  { setError('ERROR: Frequencies must be \u2264 5000 Hz.'); return; }
+  if (startFreq > 2000 || endFreq > 2000)  { setError('ERROR: Frequencies must be \u2264 2000 Hz.'); return; }
   if (endFreq <= startFreq) { setError('ERROR: End frequency must be greater than start.'); return; }
   if (freqStep <= 0) { setError('ERROR: Step must be > 0 Hz.'); return; }
   if (cycles < 1)    { setError('ERROR: Cycles must be \u2265 1.'); return; }
