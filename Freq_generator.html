@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resonance Tone Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0a;
+    --bg2: #0f130f;
+    --panel: #111811;
+    --border: #1e2e1e;
+    --phosphor: #39ff14;
+    --phosphor-dim: #1a7a08;
+    --phosphor-glow: rgba(57, 255, 20, 0.15);
+    --amber: #ffb300;
+    --amber-dim: #7a5500;
+    --text: #c8e6c0;
+    --text-dim: #4a6644;
+    --danger: #ff4444;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-display: 'Orbitron', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(57,255,20,0.04) 0%, transparent 70%),
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(57,255,20,0.015) 2px, rgba(57,255,20,0.015) 4px);
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(0,0,0,0.08) 3px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .header {
+    padding: 24px 32px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .header h1 {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: var(--phosphor);
+    text-shadow: 0 0 20px rgba(57,255,20,0.6), 0 0 40px rgba(57,255,20,0.2);
+    letter-spacing: 0.12em;
+  }
+
+  .header .subtitle {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto auto;
+    gap: 0;
+    height: calc(100vh - 73px);
+  }
+
+  /* ── OSCILLOSCOPE ── */
+  .scope-panel {
+    grid-row: 1 / 3;
+    position: relative;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scope-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+
+  .scope-label {
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+  }
+
+  .freq-readout {
+    font-family: var(--font-display);
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--phosphor);
+    text-shadow: 0 0 12px rgba(57,255,20,0.7);
+    letter-spacing: 0.05em;
+    line-height: 1;
+  }
+
+  .freq-readout span {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--phosphor-dim);
+    letter-spacing: 0.15em;
+    margin-left: 4px;
+  }
+
+  .scope-wrap {
+    flex: 1;
+    padding: 16px;
+    position: relative;
+  }
+
+  #scopeCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: #050805;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.8), 0 0 1px var(--phosphor-dim);
+  }
+
+  /* Grid overlay on canvas */
+  .scope-grid {
+    position: absolute;
+    inset: 16px;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(57,255,20,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,255,20,0.06) 1px, transparent 1px);
+    background-size: 10% 20%;
+    border-radius: 2px;
+  }
+
+  /* ── RIGHT PANEL ── */
+  .controls-panel {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .info-panel {
+    background: var(--panel);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    margin-bottom: 2px;
+  }
+
+  /* ── POWER BUTTON ── */
+  .power-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  #powerBtn {
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    padding: 12px 24px;
+    border: 1px solid var(--phosphor-dim);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    flex: 1;
+  }
+
+  #powerBtn:hover {
+    border-color: var(--phosphor);
+    color: var(--phosphor);
+    background: var(--phosphor-glow);
+  }
+
+  #powerBtn.active {
+    border-color: var(--phosphor);
+    color: var(--bg);
+    background: var(--phosphor);
+    text-shadow: none;
+    box-shadow: 0 0 20px rgba(57,255,20,0.5);
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .status-dot.on {
+    background: var(--phosphor);
+    box-shadow: 0 0 8px var(--phosphor), 0 0 16px rgba(57,255,20,0.4);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* ── WAVEFORM SELECTOR ── */
+  .wave-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .wave-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+
+  .wave-btn:hover { border-color: var(--phosphor-dim); color: var(--text); }
+
+  .wave-btn.active {
+    border-color: var(--amber);
+    background: rgba(255,179,0,0.1);
+    color: var(--amber);
+    text-shadow: 0 0 8px rgba(255,179,0,0.5);
+  }
+
+  /* ── DIAL ── */
+  .dial-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dial-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+  }
+
+  #dialCanvas {
+    width: 140px;
+    height: 140px;
+    cursor: grab;
+    user-select: none;
+  }
+
+  #dialCanvas:active { cursor: grabbing; }
+
+  /* ── SLIDER ── */
+  .slider-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    outline: none;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--phosphor);
+    box-shadow: 0 0 8px rgba(57,255,20,0.6);
+    cursor: grab;
+    transition: box-shadow 0.15s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    box-shadow: 0 0 16px rgba(57,255,20,0.9);
+  }
+
+  input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--phosphor);
+    box-shadow: 0 0 8px rgba(57,255,20,0.6);
+    border: none;
+    cursor: grab;
+  }
+
+  /* Fine control buttons */
+  .fine-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .fine-btn {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+
+  .fine-btn:hover {
+    border-color: var(--phosphor-dim);
+    color: var(--phosphor);
+    background: var(--phosphor-glow);
+  }
+
+  .fine-btn:active {
+    background: rgba(57,255,20,0.2);
+  }
+
+  /* ── OUTPUT DEVICE ── */
+  #deviceRow {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  select#deviceSelect {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%234a6644'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  select#deviceSelect:focus {
+    border-color: var(--phosphor-dim);
+  }
+
+  .safari-note {
+    font-size: 0.65rem;
+    color: var(--amber-dim);
+    font-style: italic;
+  }
+
+  /* ── PHYSICS INFO ── */
+  .physics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .phys-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .phys-label {
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .phys-value {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    color: var(--amber);
+    text-shadow: 0 0 8px rgba(255,179,0,0.4);
+  }
+
+  .resonance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .res-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+
+  .res-item .res-n {
+    color: var(--phosphor-dim);
+    font-size: 0.6rem;
+  }
+
+  .res-item .res-len {
+    color: var(--text);
+  }
+
+  .volume-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .vol-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    min-width: 32px;
+  }
+
+  input[type=range].vol-slider {
+    height: 3px;
+  }
+
+  input[type=range].vol-slider::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--amber);
+    box-shadow: 0 0 6px rgba(255,179,0,0.5);
+  }
+
+  /* number input override */
+  .freq-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  #freqInput {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    width: 90px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--phosphor);
+    text-align: center;
+    outline: none;
+  }
+
+  #freqInput:focus { border-color: var(--phosphor-dim); }
+
+  .hz-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1>RESONANCE</h1>
+  <div class="subtitle">Tube Resonance Tone Generator &nbsp;·&nbsp; Web Audio API</div>
+</header>
+
+<div class="main">
+
+  <!-- OSCILLOSCOPE -->
+  <div class="scope-panel">
+    <div class="scope-header">
+      <div class="scope-label">OSCILLOSCOPE · TIME DOMAIN</div>
+      <div class="freq-readout" id="freqReadout">440<span>Hz</span></div>
+    </div>
+    <div class="scope-wrap">
+      <canvas id="scopeCanvas"></canvas>
+      <div class="scope-grid"></div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls-panel">
+
+    <!-- Power + waveform -->
+    <div>
+      <div class="section-label">Signal</div>
+      <div class="power-row" style="margin-bottom:10px; margin-top:8px;">
+        <button id="powerBtn" onclick="togglePower()">▶ PLAY</button>
+        <div class="status-dot" id="statusDot"></div>
+      </div>
+      <div class="wave-row">
+        <button class="wave-btn active" data-wave="sine" onclick="setWave(this)">SINE</button>
+        <button class="wave-btn" data-wave="square" onclick="setWave(this)">SQUARE</button>
+        <button class="wave-btn" data-wave="triangle" onclick="setWave(this)">TRIANGLE</button>
+        <button class="wave-btn" data-wave="sawtooth" onclick="setWave(this)">SAW</button>
+      </div>
+    </div>
+
+    <!-- Frequency -->
+    <div>
+      <div class="section-label">Frequency</div>
+      <div class="dial-section" style="margin-top:10px;">
+        <canvas id="dialCanvas" width="140" height="140"></canvas>
+        <div class="freq-input-row">
+          <input type="number" id="freqInput" value="440" min="20" max="20000" step="1">
+          <span class="hz-label">Hz</span>
+        </div>
+      </div>
+      <div class="slider-section" style="margin-top:12px;">
+        <div class="slider-labels">
+          <span id="sliderMinLabel">20 Hz</span>
+          <span id="sliderRangeLabel">LOG SCALE</span>
+          <span id="sliderMaxLabel">2000 Hz</span>
+        </div>
+        <input type="range" id="freqSlider" min="0" max="1000" value="500">
+        <div class="fine-row">
+          <button class="fine-btn" onclick="nudge(-10)">−10</button>
+          <button class="fine-btn" onclick="nudge(-1)">−1</button>
+          <button class="fine-btn" onclick="nudge(1)">+1</button>
+          <button class="fine-btn" onclick="nudge(10)">+10</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div>
+      <div class="section-label">Volume</div>
+      <div class="volume-row" style="margin-top:8px;">
+        <span class="vol-label">0</span>
+        <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="50">
+        <span class="vol-label" style="text-align:right;">100</span>
+      </div>
+    </div>
+
+    <!-- Output device -->
+    <div id="deviceRow">
+      <div class="section-label">Output Device</div>
+    </div>
+
+  </div>
+
+  <!-- INFO PANEL -->
+  <div class="info-panel">
+
+    <div>
+      <div class="section-label">Acoustics</div>
+      <div class="physics-grid" style="margin-top:8px;" id="physicsGrid">
+        <div class="phys-card">
+          <div class="phys-label">Frequency</div>
+          <div class="phys-value" id="pFreq">440 Hz</div>
+        </div>
+        <div class="phys-card">
+          <div class="phys-label">Wavelength</div>
+          <div class="phys-value" id="pWave">78.0 cm</div>
+        </div>
+        <div class="phys-card">
+          <div class="phys-label">½ λ (closed)</div>
+          <div class="phys-value" id="pHalf">39.0 cm</div>
+        </div>
+        <div class="phys-card">
+          <div class="phys-label">¼ λ (open)</div>
+          <div class="phys-value" id="pQuarter">19.5 cm</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Tube Resonance Lengths</div>
+      <div style="font-size:0.6rem; color:var(--text-dim); margin: 6px 0 8px; line-height:1.6;">
+        Closed tube: resonates at <em style="color:var(--text);">odd multiples of λ/4</em><br>
+        Open tube: resonates at <em style="color:var(--text);">multiples of λ/2</em>
+      </div>
+      <div class="resonance-list" id="resonanceList"></div>
+    </div>
+
+    <div style="font-size:0.6rem; color:var(--text-dim); line-height:1.7; padding-top:4px; border-top:1px solid var(--border);">
+      Speed of sound ≈ 343 m/s at 20°C.<br>
+      Closed tube: one end stopped, resonates at λ/4, 3λ/4, 5λ/4…<br>
+      Open tube: both ends open, resonates at λ/2, λ, 3λ/2…<br>
+      Listen for the loudness peak when your tube length matches!
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const SPEED_OF_SOUND = 343; // m/s
+const MIN_LOG = Math.log10(20);
+const MAX_LOG = Math.log10(20000);
+
+let audioCtx = null;
+let oscillator = null;
+let gainNode = null;
+let analyser = null;
+let mediaStreamDest = null;
+let audioEl = null;
+let isPlaying = false;
+let currentFreq = 440;
+let currentWave = 'sine';
+let currentVolume = 0.5;
+let currentDeviceId = 'default';
+
+// ─────────────────────────────────────────────
+// Safari detection
+// ─────────────────────────────────────────────
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+// ─────────────────────────────────────────────
+// Output device setup
+// ─────────────────────────────────────────────
+async function setupDevicePicker() {
+  const row = document.getElementById('deviceRow');
+
+  if (isSafari) {
+    const note = document.createElement('div');
+    note.className = 'safari-note';
+    note.style.marginTop = '6px';
+    note.textContent = 'Safari: using system audio output.';
+    row.appendChild(note);
+    return;
+  }
+
+  // Request mic permission to unlock device labels
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch(e) {
+    // silently ignore - labels may be empty
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const outputs = devices.filter(d => d.kind === 'audiooutput');
+
+  if (outputs.length === 0) {
+    const note = document.createElement('div');
+    note.className = 'safari-note';
+    note.style.marginTop = '6px';
+    note.textContent = 'No audio output devices found.';
+    row.appendChild(note);
+    return;
+  }
+
+  const sel = document.createElement('select');
+  sel.id = 'deviceSelect';
+  sel.style.marginTop = '8px';
+
+  outputs.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || `Output ${d.deviceId.slice(0,8)}…`;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', () => {
+    currentDeviceId = sel.value;
+    if (audioEl && audioEl.setSinkId) {
+      audioEl.setSinkId(currentDeviceId).catch(console.warn);
+    }
+  });
+
+  row.appendChild(sel);
+}
+
+// ─────────────────────────────────────────────
+// Audio
+// ─────────────────────────────────────────────
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.8;
+
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = currentVolume;
+
+  if (!isSafari && (HTMLAudioElement.prototype.setSinkId !== undefined || HTMLMediaElement.prototype.setSinkId !== undefined)) {
+    // Route through MediaStream + Audio element so we can setSinkId
+    mediaStreamDest = audioCtx.createMediaStreamDestination();
+    gainNode.connect(analyser);
+    gainNode.connect(mediaStreamDest);
+    analyser.connect(audioCtx.destination); // analyser still goes to default (for analysis only)
+
+    audioEl = new Audio();
+    audioEl.srcObject = mediaStreamDest.stream;
+    audioEl.autoplay = true;
+    if (currentDeviceId && currentDeviceId !== 'default') {
+      audioEl.setSinkId(currentDeviceId).catch(console.warn);
+    }
+    // Mute the direct output so we only hear via audioEl
+    gainNode.disconnect(audioCtx.destination);
+    // Reconnect correctly: gain → analyser → (nothing to speakers directly)
+    //                      gain → mediaStreamDest → audioEl → speakers
+    gainNode.disconnect();
+    gainNode.connect(analyser);
+    gainNode.connect(mediaStreamDest);
+    // Analyser doesn't go to speakers — we just read its data
+
+    audioEl.play().catch(()=>{});
+  } else {
+    // Safari or no setSinkId: direct to destination
+    gainNode.connect(analyser);
+    analyser.connect(audioCtx.destination);
+  }
+}
+
+function startOscillator() {
+  if (!audioCtx) initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  oscillator = audioCtx.createOscillator();
+  oscillator.type = currentWave;
+  oscillator.frequency.setValueAtTime(currentFreq, audioCtx.currentTime);
+  oscillator.connect(gainNode);
+  oscillator.start();
+}
+
+function stopOscillator() {
+  if (oscillator) {
+    oscillator.stop();
+    oscillator.disconnect();
+    oscillator = null;
+  }
+}
+
+function togglePower() {
+  if (isPlaying) {
+    stopOscillator();
+    isPlaying = false;
+    document.getElementById('powerBtn').textContent = '▶ PLAY';
+    document.getElementById('powerBtn').classList.remove('active');
+    document.getElementById('statusDot').classList.remove('on');
+  } else {
+    startOscillator();
+    isPlaying = true;
+    document.getElementById('powerBtn').textContent = '■ STOP';
+    document.getElementById('powerBtn').classList.add('active');
+    document.getElementById('statusDot').classList.add('on');
+  }
+}
+
+function setWave(btn) {
+  document.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentWave = btn.dataset.wave;
+  if (oscillator) oscillator.type = currentWave;
+}
+
+function setFrequency(f) {
+  f = Math.max(20, Math.min(20000, Math.round(f)));
+  currentFreq = f;
+  if (oscillator) oscillator.frequency.setValueAtTime(f, audioCtx.currentTime);
+
+  document.getElementById('freqReadout').innerHTML = f + '<span>Hz</span>';
+  document.getElementById('freqInput').value = f;
+
+  // Update slider (log scale)
+  const logVal = (Math.log10(f) - MIN_LOG) / (MAX_LOG - MIN_LOG) * 1000;
+  document.getElementById('freqSlider').value = logVal;
+
+  updatePhysics(f);
+  drawDial();
+}
+
+function nudge(delta) {
+  setFrequency(currentFreq + delta);
+}
+
+// Volume
+document.getElementById('volSlider').addEventListener('input', function() {
+  currentVolume = this.value / 100;
+  if (gainNode) gainNode.gain.setValueAtTime(currentVolume, audioCtx ? audioCtx.currentTime : 0);
+});
+
+// Slider (log scale)
+document.getElementById('freqSlider').addEventListener('input', function() {
+  const logF = MIN_LOG + (this.value / 1000) * (MAX_LOG - MIN_LOG);
+  setFrequency(Math.round(Math.pow(10, logF)));
+});
+
+// Text input
+document.getElementById('freqInput').addEventListener('change', function() {
+  setFrequency(parseFloat(this.value) || 440);
+});
+document.getElementById('freqInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') setFrequency(parseFloat(this.value) || 440);
+  if (e.key === 'ArrowUp') { e.preventDefault(); setFrequency(currentFreq + 1); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); setFrequency(currentFreq - 1); }
+});
+
+// ─────────────────────────────────────────────
+// Physics info
+// ─────────────────────────────────────────────
+function updatePhysics(f) {
+  const wl = SPEED_OF_SOUND / f; // metres
+  const cm = v => (v * 100).toFixed(1) + ' cm';
+
+  document.getElementById('pFreq').textContent = f + ' Hz';
+  document.getElementById('pWave').textContent = cm(wl);
+  document.getElementById('pHalf').textContent = cm(wl / 2);
+  document.getElementById('pQuarter').textContent = cm(wl / 4);
+
+  // Resonance lengths
+  const list = document.getElementById('resonanceList');
+  list.innerHTML = '';
+
+  const modes = [
+    { label: 'Closed n=1', len: wl / 4 },
+    { label: 'Closed n=3', len: 3 * wl / 4 },
+    { label: 'Closed n=5', len: 5 * wl / 4 },
+    { label: 'Open  n=1',  len: wl / 2 },
+    { label: 'Open  n=2',  len: wl },
+    { label: 'Open  n=3',  len: 3 * wl / 2 },
+  ];
+
+  modes.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'res-item';
+    div.innerHTML = `<span class="res-n">${m.label}</span><span class="res-len">${cm(m.len)}</span>`;
+    list.appendChild(div);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Rotary Dial
+// ─────────────────────────────────────────────
+const dialCanvas = document.getElementById('dialCanvas');
+const dCtx = dialCanvas.getContext('2d');
+const CX = 70, CY = 70, R = 58;
+const MIN_ANGLE = Math.PI * 0.75;
+const MAX_ANGLE = Math.PI * 2.25;
+
+function freqToAngle(f) {
+  const t = (Math.log10(f) - MIN_LOG) / (MAX_LOG - MIN_LOG);
+  return MIN_ANGLE + t * (MAX_ANGLE - MIN_ANGLE);
+}
+
+function angleToFreq(a) {
+  const t = (a - MIN_ANGLE) / (MAX_ANGLE - MIN_ANGLE);
+  return Math.pow(10, MIN_LOG + t * (MAX_LOG - MIN_LOG));
+}
+
+function drawDial() {
+  const W = dialCanvas.width, H = dialCanvas.height;
+  dCtx.clearRect(0, 0, W, H);
+
+  // Background circle
+  dCtx.beginPath();
+  dCtx.arc(CX, CY, R, 0, Math.PI * 2);
+  dCtx.fillStyle = '#070d07';
+  dCtx.fill();
+  dCtx.strokeStyle = '#1e2e1e';
+  dCtx.lineWidth = 1;
+  dCtx.stroke();
+
+  // Track arc
+  dCtx.beginPath();
+  dCtx.arc(CX, CY, R - 10, MIN_ANGLE, MAX_ANGLE);
+  dCtx.strokeStyle = '#1a2e1a';
+  dCtx.lineWidth = 6;
+  dCtx.lineCap = 'round';
+  dCtx.stroke();
+
+  // Value arc
+  const angle = freqToAngle(currentFreq);
+  dCtx.beginPath();
+  dCtx.arc(CX, CY, R - 10, MIN_ANGLE, angle);
+  dCtx.strokeStyle = '#39ff14';
+  dCtx.lineWidth = 6;
+  dCtx.lineCap = 'round';
+  dCtx.shadowBlur = 10;
+  dCtx.shadowColor = '#39ff14';
+  dCtx.stroke();
+  dCtx.shadowBlur = 0;
+
+  // Tick marks
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const a = MIN_ANGLE + t * (MAX_ANGLE - MIN_ANGLE);
+    const r1 = R - 4, r2 = i % 5 === 0 ? R - 14 : R - 10;
+    dCtx.beginPath();
+    dCtx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
+    dCtx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
+    dCtx.strokeStyle = i % 5 === 0 ? '#2a4a2a' : '#162416';
+    dCtx.lineWidth = i % 5 === 0 ? 2 : 1;
+    dCtx.stroke();
+  }
+
+  // Pointer dot
+  const px = CX + Math.cos(angle) * (R - 10);
+  const py = CY + Math.sin(angle) * (R - 10);
+  dCtx.beginPath();
+  dCtx.arc(px, py, 5, 0, Math.PI * 2);
+  dCtx.fillStyle = '#39ff14';
+  dCtx.shadowBlur = 14;
+  dCtx.shadowColor = '#39ff14';
+  dCtx.fill();
+  dCtx.shadowBlur = 0;
+
+  // Center label
+  dCtx.fillStyle = '#4a6644';
+  dCtx.font = '500 8px Share Tech Mono';
+  dCtx.textAlign = 'center';
+  dCtx.fillText('20', CX + Math.cos(MIN_ANGLE + 0.0) * (R - 24), CY + Math.sin(MIN_ANGLE + 0.0) * (R - 24));
+  dCtx.fillText('20k', CX + Math.cos(MAX_ANGLE - 0.0) * (R - 24), CY + Math.sin(MAX_ANGLE - 0.0) * (R - 24));
+}
+
+// Dial drag
+let dragging = false, lastAngle = 0;
+
+dialCanvas.addEventListener('mousedown', e => {
+  dragging = true;
+  const rect = dialCanvas.getBoundingClientRect();
+  const scaleX = dialCanvas.width / rect.width;
+  const scaleY = dialCanvas.height / rect.height;
+  lastAngle = Math.atan2((e.clientY - rect.top) * scaleY - CY, (e.clientX - rect.left) * scaleX - CX);
+});
+
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = dialCanvas.getBoundingClientRect();
+  const scaleX = dialCanvas.width / rect.width;
+  const scaleY = dialCanvas.height / rect.height;
+  const angle = Math.atan2((e.clientY - rect.top) * scaleY - CY, (e.clientX - rect.left) * scaleX - CX);
+  let delta = angle - lastAngle;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  lastAngle = angle;
+  const curAngle = freqToAngle(currentFreq);
+  const newAngle = Math.max(MIN_ANGLE, Math.min(MAX_ANGLE, curAngle + delta));
+  setFrequency(angleToFreq(newAngle));
+});
+
+window.addEventListener('mouseup', () => { dragging = false; });
+
+// Touch support for dial
+dialCanvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  dragging = true;
+  const rect = dialCanvas.getBoundingClientRect();
+  const scaleX = dialCanvas.width / rect.width;
+  const scaleY = dialCanvas.height / rect.height;
+  const t = e.touches[0];
+  lastAngle = Math.atan2((t.clientY - rect.top) * scaleY - CY, (t.clientX - rect.left) * scaleX - CX);
+}, { passive: false });
+
+window.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  const rect = dialCanvas.getBoundingClientRect();
+  const scaleX = dialCanvas.width / rect.width;
+  const scaleY = dialCanvas.height / rect.height;
+  const t = e.touches[0];
+  const angle = Math.atan2((t.clientY - rect.top) * scaleY - CY, (t.clientX - rect.left) * scaleX - CX);
+  let delta = angle - lastAngle;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  lastAngle = angle;
+  const curAngle = freqToAngle(currentFreq);
+  const newAngle = Math.max(MIN_ANGLE, Math.min(MAX_ANGLE, curAngle + delta));
+  setFrequency(angleToFreq(newAngle));
+}, { passive: true });
+
+window.addEventListener('touchend', () => { dragging = false; });
+
+// Mouse wheel on dial
+dialCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -5 : 5;
+  setFrequency(currentFreq + delta);
+}, { passive: false });
+
+// ─────────────────────────────────────────────
+// Oscilloscope
+// ─────────────────────────────────────────────
+const scopeCanvas = document.getElementById('scopeCanvas');
+const sCtx = scopeCanvas.getContext('2d');
+
+function resizeScope() {
+  const wrap = scopeCanvas.parentElement;
+  scopeCanvas.width = wrap.clientWidth - 32;
+  scopeCanvas.height = wrap.clientHeight - 32;
+}
+
+window.addEventListener('resize', resizeScope);
+resizeScope();
+
+function drawScope() {
+  requestAnimationFrame(drawScope);
+
+  const W = scopeCanvas.width, H = scopeCanvas.height;
+  sCtx.fillStyle = '#050805';
+  sCtx.fillRect(0, 0, W, H);
+
+  if (!analyser) {
+    // Draw flat idle line
+    sCtx.beginPath();
+    sCtx.moveTo(0, H / 2);
+    sCtx.lineTo(W, H / 2);
+    sCtx.strokeStyle = 'rgba(57,255,20,0.2)';
+    sCtx.lineWidth = 1.5;
+    sCtx.stroke();
+    return;
+  }
+
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+
+  // Find zero crossing for stable display
+  let start = 0;
+  for (let i = 1; i < buf.length - 1; i++) {
+    if (buf[i - 1] < 128 && buf[i] >= 128) { start = i; break; }
+  }
+
+  const sliceW = W / (analyser.fftSize / 4);
+
+  // Glow pass
+  sCtx.beginPath();
+  for (let i = 0; i < analyser.fftSize / 4; i++) {
+    const v = (buf[start + i] / 128) - 1;
+    const x = i * sliceW;
+    const y = (H / 2) + v * (H * 0.42);
+    i === 0 ? sCtx.moveTo(x, y) : sCtx.lineTo(x, y);
+  }
+  sCtx.strokeStyle = 'rgba(57,255,20,0.15)';
+  sCtx.lineWidth = 8;
+  sCtx.lineJoin = 'round';
+  sCtx.stroke();
+
+  // Main line
+  sCtx.beginPath();
+  for (let i = 0; i < analyser.fftSize / 4; i++) {
+    const v = (buf[start + i] / 128) - 1;
+    const x = i * sliceW;
+    const y = (H / 2) + v * (H * 0.42);
+    i === 0 ? sCtx.moveTo(x, y) : sCtx.lineTo(x, y);
+  }
+  sCtx.strokeStyle = '#39ff14';
+  sCtx.lineWidth = 2;
+  sCtx.shadowBlur = 6;
+  sCtx.shadowColor = '#39ff14';
+  sCtx.stroke();
+  sCtx.shadowBlur = 0;
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+setupDevicePicker();
+setFrequency(440);
+drawDial();
+drawScope();
+</script>
+</body>
+</html>

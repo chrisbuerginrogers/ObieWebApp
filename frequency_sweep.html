@@ -391,6 +391,162 @@
     letter-spacing: 0.08em;
   }
 
+
+  .mic-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 1.2rem;
+    position: relative;
+  }
+
+  .mic-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #ff336688, transparent);
+    opacity: 0.6;
+  }
+
+  .mic-section label { color: var(--text-dim); }
+
+  .rec-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 1.2rem;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .rec-left {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #333;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .rec-dot.active {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  .rec-status {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .rec-duration {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+  }
+
+
+  .analysis-section {
+    display: none;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .analysis-section.visible { display: flex; }
+
+  .analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .analysis-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--phosphor-dim);
+    letter-spacing: 0.25em;
+  }
+
+  #wavDownloadBtn {
+    background: transparent;
+    color: var(--phosphor);
+    border: 1px solid var(--phosphor-dim);
+    font-size: 0.7rem;
+    padding: 0.45rem 1rem;
+    letter-spacing: 0.1em;
+    flex: 0;
+  }
+
+  #wavDownloadBtn:hover {
+    background: var(--phosphor);
+    color: #001a0a;
+    box-shadow: 0 0 12px var(--phosphor-glow);
+  }
+
+  .plot-block {
+    background: #000;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 0 20px #00ff8815, inset 0 0 30px #001a0d;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .plot-block::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(0,255,136,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.025) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .plot-label-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0.2rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .plot-label-text {
+    font-size: 0.6rem;
+    color: var(--phosphor-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .plot-block canvas {
+    display: block;
+    width: 100%;
+    height: 160px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .spectrum-canvas { height: 200px !important; cursor: crosshair; }
+
   .error-msg {
     font-size: 0.7rem;
     color: var(--red);
@@ -426,7 +582,7 @@
     <div class="control-group">
       <label>End Frequency</label>
       <div class="input-row">
-        <input type="number" id="endFreq" value="2000" min="20" max="20000" step="1">
+        <input type="number" id="endFreq" value="5000" min="20" max="5000" step="1">
         <span class="unit">Hz</span>
       </div>
     </div>
@@ -440,14 +596,14 @@
     <div class="control-group">
       <label>Cycles per Frequency</label>
       <div class="input-row">
-        <input type="number" id="cyclesPerFreq" value="10" min="1" max="10000" step="1">
+        <input type="number" id="cyclesPerFreq" value="20" min="1" max="10000" step="1">
         <span class="unit">cycles</span>
       </div>
     </div>
     <div class="control-group">
       <label>Gap Between Samples</label>
       <div class="input-row">
-        <input type="number" id="gapMs" value="200" min="0" max="10000" step="10">
+        <input type="number" id="gapMs" value="2" min="0" max="10000" step="1">
         <span class="unit">ms</span>
       </div>
     </div>
@@ -462,6 +618,46 @@
       <button id="scanBtn">⟳ Scan</button>
     </div>
     <div class="device-hint" id="deviceHint">Click Scan to detect available audio output devices.</div>
+  </div>
+
+  <div class="mic-section">
+    <label>Microphone Input</label>
+    <div class="device-row">
+      <select id="micSelect">
+        <option value="">— No Recording —</option>
+      </select>
+      <button id="micScanBtn">⟳ Scan</button>
+    </div>
+    <div class="device-hint" id="micHint">Click Scan to detect microphone devices. Requires mic permission.</div>
+  </div>
+
+  <div class="rec-section">
+    <div class="rec-left">
+      <div class="rec-dot" id="recDot"></div>
+      <span class="rec-status" id="recStatus">Not recording</span>
+    </div>
+    <span class="rec-duration" id="recDuration"></span>
+  </div>
+
+  <div class="analysis-section" id="analysisSection">
+    <div class="analysis-header">
+      <span class="analysis-title">Recording Analysis</span>
+      <button id="wavDownloadBtn">&#11015; Download WAV</button>
+    </div>
+    <div class="plot-label-bar">
+      <span class="plot-label-text">Waveform</span>
+      <span class="plot-label-text" id="waveformInfo"></span>
+    </div>
+    <div class="plot-block">
+      <canvas id="waveformCanvas"></canvas>
+    </div>
+    <div class="plot-label-bar">
+      <span class="plot-label-text">Power Spectrum</span>
+      <span class="plot-label-text" id="spectrumInfo"></span>
+    </div>
+    <div class="plot-block">
+      <canvas id="spectrumCanvas" class="spectrum-canvas"></canvas>
+    </div>
   </div>
 
   <div class="progress-section">
@@ -490,56 +686,52 @@
 
 <script>
 const canvas = document.getElementById('scopeCanvas');
-const ctx = canvas.getContext('2d');
-let audioCtx = null;
-let oscillator = null;
-let audioEl  = null;   // <audio> element used for setSinkId routing
+const ctx    = canvas.getContext('2d');
+let audioCtx    = null;
+let oscillator  = null;
+let audioEl     = null;
 let animFrameId = null;
-let analyser = null;
+let analyser    = null;
 let sweepTimeout = null;
-let running = false;
+let running     = false;
 
-// ── Browser capability detection ────────────────────────────────
+let micStream     = null;
+let mediaRecorder = null;
+let recChunks     = [];
+let recTimer      = null;
+let recStartTime  = 0;
+let specData = null;          // { dB, binHz } stored for zoom/pan redraws
+let specZoom = { minFreq: 20, maxFreq: 5500 };
+let specPan  = null;          // { startX, startLogMin, startLogMax } while dragging
+
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 const canSelectOutput = !isSafari && !!(document.createElement('audio').setSinkId);
 
+// ── Output device UI ─────────────────────────────────────────────────────────
 function initDeviceUI() {
-  const hint    = document.getElementById('deviceHint');
+  const hint = document.getElementById('deviceHint');
   const scanBtn = document.getElementById('scanBtn');
-  const sel     = document.getElementById('deviceSelect');
+  const sel = document.getElementById('deviceSelect');
   if (isSafari) {
-    scanBtn.disabled = true;
-    scanBtn.style.opacity = '0.3';
-    sel.disabled = true;
-    sel.style.opacity = '0.3';
+    scanBtn.disabled = true; scanBtn.style.opacity = '0.3';
+    sel.disabled = true; sel.style.opacity = '0.3';
     hint.style.color = '#ffaa00';
-    hint.textContent = 'Safari does not support web output-device selection. '
-      + 'To use AirPods: System Settings → Sound → Output → select your AirPods.';
+    hint.textContent = 'Safari does not support web output-device selection. Use System Settings \u2192 Sound \u2192 Output.';
   } else if (!canSelectOutput) {
-    scanBtn.disabled = true;
-    sel.disabled = true;
+    scanBtn.disabled = true; sel.disabled = true;
     hint.style.color = '#ffaa00';
-    hint.textContent = 'This browser does not support output device selection. Try Chrome or Edge.';
+    hint.textContent = 'Output device selection requires Chrome or Edge.';
   } else {
     hint.textContent = 'Click Scan to detect available audio output devices.';
   }
 }
 initDeviceUI();
 
-// ── Device enumeration ──────────────────────────────────────────
-async function scanDevices() {
+async function scanOutputDevices() {
   if (!canSelectOutput) return;
   const hint = document.getElementById('deviceHint');
   const sel  = document.getElementById('deviceSelect');
-  hint.style.color = '';
-  hint.textContent = 'Scanning…';
-
-  // NOTE: We deliberately do NOT call getUserMedia here.
-  // Requesting mic access forces Bluetooth headphones (e.g. AirPods) to switch
-  // from the high-quality A2DP profile to the low-quality HFP/HSP hands-free
-  // profile, which can make audio inaudible or severely degraded.
-  // Device labels may be generic on the very first scan, but Chrome remembers
-  // permission after that and will show real names on subsequent scans.
+  hint.style.color = ''; hint.textContent = 'Scanning\u2026';
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const outputs = devices.filter(d => d.kind === 'audiooutput');
@@ -548,44 +740,61 @@ async function scanDevices() {
     const hasLabels = outputs.some(d => d.label);
     outputs.forEach((d, i) => {
       const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Output Device ${i + 1}`;
+      opt.value = d.deviceId; opt.textContent = d.label || `Output Device ${i+1}`;
       sel.appendChild(opt);
     });
     if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
-    if (!outputs.length) {
-      hint.textContent = 'No output devices detected — using system default.';
-    } else if (!hasLabels) {
-      hint.textContent = `${outputs.length} device(s) found (labels need browser permission — scan again after first use).`;
-    } else {
-      hint.textContent = `${outputs.length} output device(s) found. Select one before starting.`;
-    }
-  } catch(e) {
-    hint.textContent = 'Could not enumerate devices: ' + e.message;
-  }
+    hint.textContent = !outputs.length ? 'No output devices detected.'
+      : !hasLabels ? `${outputs.length} device(s) found (scan again after first use).`
+      : `${outputs.length} output device(s) found.`;
+  } catch(e) { hint.textContent = 'Error: ' + e.message; }
 }
+document.getElementById('scanBtn').addEventListener('click', scanOutputDevices);
 
-document.getElementById('scanBtn').addEventListener('click', scanDevices);
+// ── Mic scan ─────────────────────────────────────────────────────────────────
+async function scanMicDevices() {
+  const hint = document.getElementById('micHint');
+  const sel  = document.getElementById('micSelect');
+  hint.style.color = ''; hint.textContent = 'Requesting mic permission\u2026';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch(e) {
+    hint.style.color = '#ffaa00';
+    hint.textContent = 'Mic permission denied: ' + e.message; return;
+  }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devices.filter(d => d.kind === 'audioinput');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— No Recording —</option>';
+    inputs.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId; opt.textContent = d.label || `Microphone ${i+1}`;
+      sel.appendChild(opt);
+    });
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    hint.textContent = inputs.length ? `${inputs.length} microphone(s) found.` : 'No microphones detected.';
+  } catch(e) { hint.textContent = 'Enumeration error: ' + e.message; }
+}
+document.getElementById('micScanBtn').addEventListener('click', scanMicDevices);
 
+// ── Scope canvas ──────────────────────────────────────────────────────────────
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.width  = rect.width  * window.devicePixelRatio;
   canvas.height = rect.height * window.devicePixelRatio;
   ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 }
 resizeCanvas();
-window.addEventListener('resize', () => { resizeCanvas(); });
+window.addEventListener('resize', resizeCanvas);
 
 function drawIdle() {
   const W = canvas.width / window.devicePixelRatio;
   const H = canvas.height / window.devicePixelRatio;
   ctx.clearRect(0, 0, W, H);
-  ctx.strokeStyle = '#003a1a';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, H / 2);
-  ctx.lineTo(W, H / 2);
-  ctx.stroke();
+  ctx.strokeStyle = '#003a1a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
 }
 drawIdle();
 
@@ -594,42 +803,29 @@ function drawWaveform() {
   const W = canvas.width / window.devicePixelRatio;
   const H = canvas.height / window.devicePixelRatio;
   const bufLen = analyser.frequencyBinCount;
-  const dataArr = new Float32Array(bufLen);
-  analyser.getFloatTimeDomainData(dataArr);
-
+  const data = new Float32Array(bufLen);
+  analyser.getFloatTimeDomainData(data);
   ctx.clearRect(0, 0, W, H);
-
-  // Glow pass
-  ctx.shadowColor = '#00ff88';
-  ctx.shadowBlur = 8;
-  ctx.strokeStyle = '#00ff8888';
-  ctx.lineWidth = 1;
+  ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 8;
+  ctx.strokeStyle = '#00ff8888'; ctx.lineWidth = 1;
   ctx.beginPath();
   for (let i = 0; i < bufLen; i++) {
-    const x = (i / bufLen) * W;
-    const y = (0.5 - dataArr[i] * 0.45) * H;
+    const x = (i / bufLen) * W, y = (0.5 - data[i] * 0.45) * H;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
   ctx.stroke();
-
-  // Main pass
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#00ff88';
-  ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 1.5;
   ctx.beginPath();
   for (let i = 0; i < bufLen; i++) {
-    const x = (i / bufLen) * W;
-    const y = (0.5 - dataArr[i] * 0.45) * H;
+    const x = (i / bufLen) * W, y = (0.5 - data[i] * 0.45) * H;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
   ctx.stroke();
-
   animFrameId = requestAnimationFrame(drawWaveform);
 }
 
-function setError(msg) {
-  document.getElementById('errorMsg').textContent = msg;
-}
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setError(msg) { document.getElementById('errorMsg').textContent = msg; }
 
 function updateStatus(label) {
   document.getElementById('freqDisplay').textContent = label;
@@ -640,66 +836,548 @@ function updateProgress(current, total, currentFreq, step, remaining) {
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   document.getElementById('progressBar').style.width = pct + '%';
   document.getElementById('progressPct').textContent = pct + '%';
-  document.getElementById('freqDisplay').textContent = currentFreq.toFixed(0) + ' Hz';
+  document.getElementById('freqDisplay').textContent  = currentFreq.toFixed(0) + ' Hz';
   document.getElementById('statusCurrent').textContent = currentFreq.toFixed(0) + ' Hz';
-  document.getElementById('statusStep').textContent = step + ' Hz';
+  document.getElementById('statusStep').textContent   = step + ' Hz';
   document.getElementById('statusRemaining').textContent = remaining + ' steps';
 }
 
-function resetUI() {
-  document.getElementById('progressBar').style.width = '0%';
-  document.getElementById('progressPct').textContent = '0%';
-  document.getElementById('freqDisplay').textContent = '— Hz';
-  document.getElementById('statusCurrent').textContent = '—';
-  document.getElementById('statusStep').textContent = '—';
-  document.getElementById('statusRemaining').textContent = '—';
-  document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
+function setRecUI(active) {
+  const dot = document.getElementById('recDot');
+  const status = document.getElementById('recStatus');
+  dot.classList.toggle('active', active);
+  status.textContent = active ? 'Recording\u2026' : 'Not recording';
+  if (!active) { clearInterval(recTimer); document.getElementById('recDuration').textContent = ''; }
 }
 
+// ── WAV encoder ───────────────────────────────────────────────────────────────
+function encodeWAV(samples, sampleRate) {
+  const numChannels = 1, bitsPerSample = 16;
+  const blockAlign  = numChannels * bitsPerSample / 8;
+  const byteRate    = sampleRate * blockAlign;
+  const dataLen     = samples.length * blockAlign;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const view = new DataView(buf);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4,  36 + dataLen, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20,  1, true);               // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataLen, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// ── Iterative in-place FFT (Cooley-Tukey) ────────────────────────────────────
+function fftInPlace(re, im) {
+  const N = re.length;
+  // Bit-reversal permutation
+  for (let i = 1, j = 0; i < N; i++) {
+    let bit = N >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < N; i += len) {
+      let curRe = 1, curIm = 0;
+      for (let j = 0; j < len >> 1; j++) {
+        const uRe = re[i+j], uIm = im[i+j];
+        const vRe = re[i+j+(len>>1)] * curRe - im[i+j+(len>>1)] * curIm;
+        const vIm = re[i+j+(len>>1)] * curIm + im[i+j+(len>>1)] * curRe;
+        re[i+j] = uRe + vRe; im[i+j] = uIm + vIm;
+        re[i+j+(len>>1)] = uRe - vRe; im[i+j+(len>>1)] = uIm - vIm;
+        const nr = curRe * wRe - curIm * wIm;
+        curIm = curRe * wIm + curIm * wRe; curRe = nr;
+      }
+    }
+  }
+}
+
+// Welch's averaged power spectrum → returns { power (dB), binHz }
+function computePowerSpectrum(samples, sampleRate) {
+  const fftSize = 4096;
+  const hop = fftSize >> 1;
+  const hann = new Float32Array(fftSize);
+  for (let i = 0; i < fftSize; i++) hann[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (fftSize - 1)));
+  const power = new Float64Array(fftSize >> 1);
+  let count = 0;
+  for (let start = 0; start + fftSize <= samples.length; start += hop) {
+    const re = new Float32Array(fftSize), im = new Float32Array(fftSize);
+    for (let i = 0; i < fftSize; i++) re[i] = samples[start + i] * hann[i];
+    fftInPlace(re, im);
+    for (let i = 0; i < fftSize >> 1; i++) power[i] += re[i]*re[i] + im[i]*im[i];
+    count++;
+  }
+  if (count === 0) return null;
+  const dB = new Float32Array(fftSize >> 1);
+  for (let i = 0; i < fftSize >> 1; i++) dB[i] = 10 * Math.log10(power[i] / count / (fftSize * fftSize) + 1e-12);
+  return { dB, binHz: sampleRate / fftSize };
+}
+
+// ── Plot drawing ──────────────────────────────────────────────────────────────
+const PAD = { top: 14, right: 14, bottom: 30, left: 46 };
+
+function setupPlotCanvas(el) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = el.getBoundingClientRect();
+  el.width  = rect.width  * dpr;
+  el.height = rect.height * dpr;
+  const c = el.getContext('2d');
+  c.scale(dpr, dpr);
+  return { c, W: rect.width, H: rect.height };
+}
+
+function drawGrid(c, W, H, xTicks, yTicks, yMin, yMax, xMin, xMax) {
+  c.strokeStyle = '#003a1a'; c.lineWidth = 0.5;
+  xTicks.forEach(x => {
+    const px = PAD.left + (x - xMin) / (xMax - xMin) * (W - PAD.left - PAD.right);
+    c.beginPath(); c.moveTo(px, PAD.top); c.lineTo(px, H - PAD.bottom); c.stroke();
+  });
+  yTicks.forEach(y => {
+    const py = PAD.top + (1 - (y - yMin) / (yMax - yMin)) * (H - PAD.top - PAD.bottom);
+    c.beginPath(); c.moveTo(PAD.left, py); c.lineTo(W - PAD.right, py); c.stroke();
+  });
+}
+
+function drawAxes(c, W, H, xTicks, yTicks, yMin, yMax, xMin, xMax, xLabel, yLabel, xFmt, yFmt) {
+  c.fillStyle = '#558866'; c.font = '9px Share Tech Mono';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  xTicks.forEach(x => {
+    const px = PAD.left + (x - xMin) / (xMax - xMin) * (W - PAD.left - PAD.right);
+    c.fillText(xFmt(x), px, H - PAD.bottom + 4);
+  });
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  yTicks.forEach(y => {
+    const py = PAD.top + (1 - (y - yMin) / (yMax - yMin)) * (H - PAD.top - PAD.bottom);
+    c.fillText(yFmt(y), PAD.left - 4, py);
+  });
+  // Axis labels
+  c.fillStyle = '#00aa55'; c.font = '9px Share Tech Mono';
+  c.textAlign = 'center'; c.textBaseline = 'bottom';
+  c.fillText(xLabel, W / 2, H);
+  c.save(); c.translate(9, H / 2); c.rotate(-Math.PI / 2);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(yLabel, 0, 0); c.restore();
+}
+
+function plotWaveformData(samples, sampleRate) {
+  const el = document.getElementById('waveformCanvas');
+  const { c, W, H } = setupPlotCanvas(el);
+  const duration = samples.length / sampleRate;
+  document.getElementById('waveformInfo').textContent =
+    `${duration.toFixed(2)}s  ·  ${(sampleRate/1000).toFixed(1)}kHz`;
+
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  // Build envelope (min/max per pixel column) for dense signals
+  const cols = Math.floor(plotW);
+  const minV = new Float32Array(cols).fill( Infinity);
+  const maxV = new Float32Array(cols).fill(-Infinity);
+  for (let i = 0; i < samples.length; i++) {
+    const col = Math.min(cols - 1, Math.floor(i / samples.length * cols));
+    if (samples[i] < minV[col]) minV[col] = samples[i];
+    if (samples[i] > maxV[col]) maxV[col] = samples[i];
+  }
+
+  // Autoscale: find peak amplitude, round up to a nice value, keep symmetric
+  let peak = 0;
+  for (let i = 0; i < cols; i++) {
+    if (Math.abs(minV[i]) > peak) peak = Math.abs(minV[i]);
+    if (Math.abs(maxV[i]) > peak) peak = Math.abs(maxV[i]);
+  }
+  peak = peak < 1e-6 ? 1 : peak;
+  // Round up to 1, 2 or 5 × 10^n
+  const mag = Math.pow(10, Math.floor(Math.log10(peak)));
+  const norm = peak / mag;
+  const nice = norm <= 1 ? mag : norm <= 2 ? 2*mag : norm <= 5 ? 5*mag : 10*mag;
+  const yMax = nice, yMin = -nice;
+
+  // Nice y-ticks: 5 evenly spaced
+  const yStep = (yMax - yMin) / 4;
+  const yTicks = Array.from({length: 5}, (_, i) => parseFloat((yMin + i * yStep).toPrecision(3)));
+  const xTicks = Array.from({length: 6}, (_, i) => Math.round(i * duration / 5 * 100) / 100);
+  c.clearRect(0, 0, W, H);
+  drawGrid(c, W, H, xTicks, yTicks, yMin, yMax, 0, duration);
+
+  // Plot envelope bars
+  c.fillStyle = '#00ff8840';
+  for (let col = 0; col < cols; col++) {
+    const x   = PAD.left + col;
+    const yLo = PAD.top + (1 - (maxV[col] - yMin) / (yMax - yMin)) * plotH;
+    const yHi = PAD.top + (1 - (minV[col] - yMin) / (yMax - yMin)) * plotH;
+    c.fillRect(x, yLo, 1, Math.max(1, yHi - yLo));
+  }
+
+  // Centre line
+  c.strokeStyle = '#00ff88'; c.lineWidth = 1;
+  c.shadowColor = '#00ff88'; c.shadowBlur = 4;
+  for (let col = 0; col < cols; col++) {
+    const x   = PAD.left + col;
+    const mid = (minV[col] + maxV[col]) / 2;
+    const py  = PAD.top + (1 - (mid - yMin) / (yMax - yMin)) * plotH;
+    col === 0 ? (c.beginPath(), c.moveTo(x + 0.5, py)) : c.lineTo(x + 0.5, py);
+  }
+  c.stroke(); c.shadowBlur = 0;
+
+  drawAxes(c, W, H, xTicks, yTicks, yMin, yMax, 0, duration, 'Time (s)', 'Amplitude',
+    x => x.toFixed(2), y => y.toFixed(1));
+}
+
+function plotSpectrumData(dBArr, binHz) {
+  specData = { dB: dBArr, binHz };
+  specZoom = { minFreq: 20, maxFreq: 5500 };  // reset on new recording
+  document.getElementById('spectrumInfo').textContent =
+    `FFT 4096 \u00b7 ${binHz.toFixed(1)} Hz/bin \u00b7 log scale \u00b7 scroll=zoom \u00b7 drag=pan`;
+  redrawSpectrum();
+}
+
+function redrawSpectrum(crossX = null, crossY = null) {
+  if (!specData) return;
+  const { dB, binHz } = specData;
+  const el = document.getElementById('spectrumCanvas');
+  const { c, W, H } = setupPlotCanvas(el);
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top  - PAD.bottom;
+
+  const logMin = Math.log10(specZoom.minFreq);
+  const logMax = Math.log10(specZoom.maxFreq);
+  const freqToPx = f => PAD.left + (Math.log10(Math.max(f, specZoom.minFreq)) - logMin) / (logMax - logMin) * plotW;
+  const maxBin = Math.min(dB.length, Math.ceil(specZoom.maxFreq / binHz) + 1);
+
+  // dB autoscale within current zoom window
+  let dBMax = -Infinity, dBMin = Infinity;
+  for (let i = 1; i < maxBin; i++) {
+    const f = i * binHz;
+    if (f < specZoom.minFreq || f > specZoom.maxFreq) continue;
+    if (dB[i] > dBMax) dBMax = dB[i];
+    if (dB[i] < dBMin) dBMin = dB[i];
+  }
+  if (!isFinite(dBMax)) { dBMax = 0; dBMin = -80; }
+  dBMax = Math.ceil(dBMax / 10) * 10;
+  dBMin = Math.max(dBMax - 80, Math.floor(dBMin / 10) * 10);
+
+  // Dynamic log-spaced x-ticks for current zoom
+  const allXTicks = [20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000];
+  const xTickFreqs = allXTicks.filter(f => f >= specZoom.minFreq * 0.9 && f <= specZoom.maxFreq * 1.1);
+  const yStep = Math.ceil((dBMax - dBMin) / 5 / 5) * 5;
+  const yTicks = [];
+  for (let y = dBMin; y <= dBMax + 0.1; y += yStep) yTicks.push(Math.round(y));
+
+  c.clearRect(0, 0, W, H);
+
+  // Grid
+  c.strokeStyle = '#003a1a'; c.lineWidth = 0.5;
+  xTickFreqs.forEach(f => {
+    const px = freqToPx(f);
+    c.beginPath(); c.moveTo(px, PAD.top); c.lineTo(px, H - PAD.bottom); c.stroke();
+  });
+  yTicks.forEach(y => {
+    const py = PAD.top + (1 - (y - dBMin) / (dBMax - dBMin)) * plotH;
+    c.beginPath(); c.moveTo(PAD.left, py); c.lineTo(W - PAD.right, py); c.stroke();
+  });
+
+  // Spectrum fill
+  c.beginPath();
+  c.moveTo(freqToPx(specZoom.minFreq), H - PAD.bottom);
+  let started = false;
+  for (let i = 1; i < maxBin; i++) {
+    const freq = i * binHz;
+    if (freq < specZoom.minFreq) continue;
+    const px = freqToPx(freq), py = PAD.top + (1 - (dB[i] - dBMin) / (dBMax - dBMin)) * plotH;
+    if (!started) { c.lineTo(px, py); started = true; } else c.lineTo(px, py);
+  }
+  c.lineTo(freqToPx(specZoom.maxFreq), H - PAD.bottom);
+  c.closePath(); c.fillStyle = '#00ff8815'; c.fill();
+
+  // Spectrum line
+  c.beginPath(); c.shadowColor = '#00ff88'; c.shadowBlur = 5;
+  c.strokeStyle = '#00ff88'; c.lineWidth = 1.5;
+  started = false;
+  for (let i = 1; i < maxBin; i++) {
+    const freq = i * binHz;
+    if (freq < specZoom.minFreq) continue;
+    const px = freqToPx(freq), py = PAD.top + (1 - (dB[i] - dBMin) / (dBMax - dBMin)) * plotH;
+    if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py);
+  }
+  c.stroke(); c.shadowBlur = 0;
+
+  // Axis labels
+  c.fillStyle = '#558866'; c.font = '9px Share Tech Mono';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  xTickFreqs.forEach(f => {
+    c.fillText(f >= 1000 ? (f/1000)+'k' : String(f), freqToPx(f), H - PAD.bottom + 4);
+  });
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  yTicks.forEach(y => {
+    c.fillText(String(y), PAD.left - 4, PAD.top + (1 - (y - dBMin) / (dBMax - dBMin)) * plotH);
+  });
+  c.fillStyle = '#00aa55'; c.font = '9px Share Tech Mono';
+  c.textAlign = 'center'; c.textBaseline = 'bottom';
+  c.fillText('Frequency (Hz)', W / 2, H);
+  c.save(); c.translate(9, H / 2); c.rotate(-Math.PI / 2);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('Power (dB)', 0, 0); c.restore();
+
+  // Zoom hint
+  if (specZoom.minFreq > 21 || specZoom.maxFreq < 5400) {
+    c.save(); c.fillStyle = 'rgba(0,170,85,0.55)'; c.font = '8px Share Tech Mono';
+    c.textAlign = 'right'; c.textBaseline = 'top';
+    c.fillText('dbl-click: reset zoom', W - PAD.right - 2, PAD.top + 2);
+    c.restore();
+  }
+
+  // ── Crosshair ──────────────────────────────────────────────────────────
+  if (crossX !== null && crossX > PAD.left && crossX < W - PAD.right) {
+    const plotX  = crossX - PAD.left;
+    const freq   = Math.pow(10, logMin + (plotX / plotW) * (logMax - logMin));
+    const binIdx = Math.max(1, Math.min(maxBin - 1, Math.round(freq / binHz)));
+    const snapFreq = binIdx * binHz;
+    const snapDB   = dB[binIdx];
+    const snapX    = freqToPx(snapFreq);
+    const rawY     = PAD.top + (1 - (snapDB - dBMin) / (dBMax - dBMin)) * plotH;
+    const snapY    = Math.max(PAD.top, Math.min(H - PAD.bottom, rawY));
+
+    c.save();
+    // Dashed crosshair lines
+    c.strokeStyle = 'rgba(0,255,136,0.28)'; c.lineWidth = 1; c.setLineDash([4, 4]);
+    c.beginPath(); c.moveTo(snapX, PAD.top); c.lineTo(snapX, H - PAD.bottom); c.stroke();
+    c.beginPath(); c.moveTo(PAD.left, snapY); c.lineTo(W - PAD.right, snapY); c.stroke();
+    c.setLineDash([]);
+
+    // Intersection dot
+    c.fillStyle = '#00ff88'; c.shadowColor = '#00ff88'; c.shadowBlur = 10;
+    c.beginPath(); c.arc(snapX, snapY, 3.5, 0, 2 * Math.PI); c.fill();
+    c.shadowBlur = 0;
+
+    // Info box
+    const fLabel = snapFreq >= 1000 ? `${(snapFreq / 1000).toFixed(3)} kHz` : `${snapFreq.toFixed(1)} Hz`;
+    const dLabel = `${snapDB.toFixed(1)} dB`;
+    c.font = 'bold 10px Orbitron, monospace';
+    const fw  = Math.max(c.measureText(fLabel).width, c.measureText(dLabel).width);
+    const bw  = fw + 20, bh = 40;
+    let bx    = snapX + 12;
+    let by    = snapY - bh / 2;
+    if (bx + bw > W - PAD.right - 2) bx = snapX - bw - 12;
+    by = Math.max(PAD.top + 2, Math.min(H - PAD.bottom - bh - 2, by));
+
+    // Box background
+    c.fillStyle = 'rgba(2,13,8,0.92)'; c.strokeStyle = '#00aa55'; c.lineWidth = 1;
+    c.beginPath(); roundRect(c, bx, by, bw, bh, 3); c.fill(); c.stroke();
+
+    // Box text
+    c.fillStyle = '#00ff88'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.font = 'bold 10px Orbitron, monospace';
+    c.shadowColor = '#00ff88'; c.shadowBlur = 4;
+    c.fillText(fLabel, bx + 9, by + 7);
+    c.shadowBlur = 0;
+    c.fillStyle = '#558866'; c.font = '9px Share Tech Mono, monospace';
+    c.fillText(dLabel, bx + 9, by + 23);
+    c.restore();
+  }
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);  c.arcTo(x + w, y,     x + w, y + r,     r);
+  c.lineTo(x + w, y + h - r); c.arcTo(x + w, y + h, x + w - r, y + h, r);
+  c.lineTo(x + r, y + h);  c.arcTo(x,     y + h, x,     y + h - r, r);
+  c.lineTo(x, y + r);      c.arcTo(x,     y,     x + r, y,         r);
+  c.closePath();
+}
+
+function setupSpectrumInteraction() {
+  const el = document.getElementById('spectrumCanvas');
+
+  el.addEventListener('mousemove', e => {
+    if (!specData) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+
+    if (specPan && e.buttons === 1) {
+      const plotW = rect.width - PAD.left - PAD.right;
+      const logRange = specPan.startLogMax - specPan.startLogMin;
+      const dLog = -(e.clientX - specPan.startX) / plotW * logRange;
+      const absMin = Math.log10(20), absMax = Math.log10(5500);
+      let nMin = specPan.startLogMin + dLog, nMax = specPan.startLogMax + dLog;
+      if (nMin < absMin) { nMax += absMin - nMin; nMin = absMin; }
+      if (nMax > absMax) { nMin -= nMax - absMax; nMax = absMax; }
+      specZoom.minFreq = Math.pow(10, nMin);
+      specZoom.maxFreq = Math.pow(10, nMax);
+      redrawSpectrum();
+    } else {
+      redrawSpectrum(x, e.clientY - rect.top);
+    }
+  });
+
+  el.addEventListener('mousedown', e => {
+    if (!specData) return;
+    specPan = {
+      startX: e.clientX,
+      startLogMin: Math.log10(specZoom.minFreq),
+      startLogMax: Math.log10(specZoom.maxFreq)
+    };
+    el.style.cursor = 'grabbing';
+  });
+
+  el.addEventListener('mouseup',    () => { specPan = null; el.style.cursor = 'crosshair'; });
+  el.addEventListener('mouseleave', () => { specPan = null; redrawSpectrum(); });
+
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (!specData) return;
+    const rect  = el.getBoundingClientRect();
+    const x     = e.clientX - rect.left - PAD.left;
+    const plotW = rect.width - PAD.left - PAD.right;
+    const logMin = Math.log10(specZoom.minFreq);
+    const logMax = Math.log10(specZoom.maxFreq);
+    const logM  = logMin + Math.max(0, Math.min(1, x / plotW)) * (logMax - logMin);
+    const f     = e.deltaY > 0 ? 1.25 : 1 / 1.25;
+    let nMin = logM + (logMin - logM) * f;
+    let nMax = logM + (logMax - logM) * f;
+    // Clamp to full range
+    nMin = Math.max(Math.log10(20),   nMin);
+    nMax = Math.min(Math.log10(5500), nMax);
+    // Prevent over-zoom (minimum ~half octave)
+    if (nMax - nMin < 0.3) { nMin = logM - 0.15; nMax = logM + 0.15; }
+    specZoom.minFreq = Math.pow(10, nMin);
+    specZoom.maxFreq = Math.pow(10, nMax);
+    redrawSpectrum();
+  }, { passive: false });
+
+  el.addEventListener('dblclick', () => {
+    specZoom = { minFreq: 20, maxFreq: 5500 };
+    redrawSpectrum();
+  });
+}
+
+
+async function analyzeRecording(blob) {
+  const section = document.getElementById('analysisSection');
+  section.classList.add('visible');
+
+  // Let the section render before sizing canvases
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  let arrayBuf;
+  try { arrayBuf = await blob.arrayBuffer(); }
+  catch(e) { setError('Read error: ' + e.message); return; }
+
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  let audioBuffer;
+  try {
+    audioBuffer = await new Promise((res, rej) => tmpCtx.decodeAudioData(arrayBuf, res, rej));
+  } catch(e) {
+    setError('Decode error: ' + e.message); tmpCtx.close(); return;
+  }
+  tmpCtx.close();
+
+  const samples    = audioBuffer.getChannelData(0);
+  const sampleRate = audioBuffer.sampleRate;
+
+  // WAV download button
+  const wavBlob = encodeWAV(samples, sampleRate);
+  const wavUrl  = URL.createObjectURL(wavBlob);
+  const wavBtn  = document.getElementById('wavDownloadBtn');
+  wavBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href = wavUrl; a.download = `sweep-${Date.now()}.wav`; a.click();
+  };
+
+  plotWaveformData(samples, sampleRate);
+  const spec = computePowerSpectrum(samples, sampleRate);
+  if (spec) plotSpectrumData(spec.dB, spec.binHz);
+}
+
+async function startRecording(deviceId) {
+  recChunks = [];
+  const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+  try { micStream = await navigator.mediaDevices.getUserMedia(constraints); }
+  catch(e) { setError('WARNING: Could not open microphone — ' + e.message); return; }
+  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg']
+    .find(m => MediaRecorder.isTypeSupported(m)) || '';
+  mediaRecorder = new MediaRecorder(micStream, mimeType ? { mimeType } : {});
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
+  mediaRecorder.start(100);
+  setRecUI(true);
+  recStartTime = Date.now();
+  recTimer = setInterval(() => {
+    document.getElementById('recDuration').textContent =
+      ((Date.now() - recStartTime) / 1000).toFixed(1) + 's';
+  }, 100);
+}
+
+function stopRecording() {
+  if (!mediaRecorder) return Promise.resolve();
+  return new Promise(resolve => {
+    mediaRecorder.onstop = async () => {
+      setRecUI(false);
+      if (recChunks.length > 0) {
+        const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        await analyzeRecording(blob);
+      }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      mediaRecorder = null;
+      resolve();
+    };
+    mediaRecorder.stop();
+  });
+}
+
+// ── Main sweep ────────────────────────────────────────────────────────────────
 async function startSweep() {
   setError('');
+  document.getElementById('analysisSection').classList.remove('visible');
+
   const startFreq = parseFloat(document.getElementById('startFreq').value);
   const endFreq   = parseFloat(document.getElementById('endFreq').value);
   const freqStep  = parseFloat(document.getElementById('freqStep').value);
   const cycles    = parseFloat(document.getElementById('cyclesPerFreq').value);
   const gapMs     = parseFloat(document.getElementById('gapMs').value) || 0;
 
-  if (isNaN(startFreq) || isNaN(endFreq) || isNaN(freqStep) || isNaN(cycles)) {
-    setError('ERROR: All fields must be valid numbers.'); return;
-  }
-  if (startFreq < 20 || endFreq < 20) {
-    setError('ERROR: Frequencies must be ≥ 20 Hz.'); return;
-  }
-  if (startFreq > 20000 || endFreq > 20000) {
-    setError('ERROR: Frequencies must be ≤ 20000 Hz.'); return;
-  }
-  if (endFreq <= startFreq) {
-    setError('ERROR: End frequency must be greater than start frequency.'); return;
-  }
+  if (isNaN(startFreq)||isNaN(endFreq)||isNaN(freqStep)||isNaN(cycles)) {
+    setError('ERROR: All fields must be valid numbers.'); return; }
+  if (startFreq < 20 || endFreq < 20)      { setError('ERROR: Frequencies must be \u2265 20 Hz.'); return; }
+  if (startFreq > 5000 || endFreq > 5000)  { setError('ERROR: Frequencies must be \u2264 5000 Hz.'); return; }
+  if (endFreq <= startFreq) { setError('ERROR: End frequency must be greater than start.'); return; }
   if (freqStep <= 0) { setError('ERROR: Step must be > 0 Hz.'); return; }
-  if (cycles < 1)    { setError('ERROR: Cycles must be ≥ 1.');  return; }
-  if (isNaN(gapMs) || gapMs < 0) { setError('ERROR: Gap must be ≥ 0 ms.'); return; }
+  if (cycles < 1)    { setError('ERROR: Cycles must be \u2265 1.'); return; }
+  if (gapMs < 0)     { setError('ERROR: Gap must be \u2265 0 ms.'); return; }
 
   const freqs = [];
   for (let f = startFreq; f <= endFreq + 1e-9; f += freqStep)
     freqs.push(Math.round(f * 1000) / 1000);
-  if (freqs.length === 0) { setError('ERROR: No frequencies in range.'); return; }
+  if (!freqs.length) { setError('ERROR: No frequencies in range.'); return; }
 
-  // ── Audio graph ─────────────────────────────────────────────
+  const micId = document.getElementById('micSelect').value;
+  if (micId) await startRecording(micId);
+
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
-
   oscillator = audioCtx.createOscillator();
   oscillator.type = 'sine';
-
-  // GainNode lets us silence output during inter-sample gaps without stopping the oscillator
   const gainNode = audioCtx.createGain();
   gainNode.gain.value = 1;
-
-  // Route: oscillator → analyser → MediaStreamDestination (→ <audio> element)
-  // The <audio> element is what we call setSinkId() on — much broader support.
   const streamDest = audioCtx.createMediaStreamDestination();
   oscillator.connect(gainNode);
   gainNode.connect(analyser);
@@ -710,81 +1388,67 @@ async function startSweep() {
 
   const deviceId = document.getElementById('deviceSelect').value;
   if (deviceId && canSelectOutput) {
-    try {
-      await audioEl.setSinkId(deviceId);
-    } catch(e) {
-      setError('WARNING: Could not route to selected device — ' + e.message);
-    }
+    try { await audioEl.setSinkId(deviceId); }
+    catch(e) { setError('WARNING: Could not route to device \u2014 ' + e.message); }
   }
 
-  // Must call play() before start() to avoid autoplay policy blocks
-  try { await audioEl.play(); } catch(e) { /* handled below */ }
+  try { await audioEl.play(); } catch(e) {}
   oscillator.start();
 
   running = true;
   document.getElementById('startBtn').disabled = true;
   document.getElementById('stopBtn').disabled  = false;
-
   cancelAnimationFrame(animFrameId);
   drawWaveform();
 
   let idx = 0;
-
   function playTone() {
     if (!running || idx >= freqs.length) { stopSweep(idx >= freqs.length); return; }
-    const freq     = freqs[idx];
-    const duration = cycles / freq;
+    const freq = freqs[idx], duration = cycles / freq;
     gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
     oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
     updateProgress(idx, freqs.length, freq, freqStep, freqs.length - idx - 1);
     idx++;
-    // After tone duration, silence and schedule the gap
     sweepTimeout = setTimeout(() => {
       if (!running) return;
       if (gapMs > 0) {
         gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
         updateStatus('GAP');
         sweepTimeout = setTimeout(playTone, gapMs);
-      } else {
-        playTone();
-      }
+      } else { playTone(); }
     }, duration * 1000);
   }
   playTone();
 }
 
-function stopSweep(completed = false) {
+async function stopSweep(completed = false) {
   running = false;
   clearTimeout(sweepTimeout);
-  if (oscillator) {
-    try { oscillator.stop(); } catch(e) {}
-    oscillator.disconnect();
-    oscillator = null;
-  }
-  if (audioEl) {
-    audioEl.pause();
-    audioEl.srcObject = null;
-    audioEl = null;
-  }
-  if (audioCtx) {
-    audioCtx.close();
-    audioCtx = null;
-    analyser  = null;
-  }
+  if (oscillator) { try { oscillator.stop(); } catch(e) {} oscillator.disconnect(); oscillator = null; }
+  if (audioEl)    { audioEl.pause(); audioEl.srcObject = null; audioEl = null; }
+  if (audioCtx)   { audioCtx.close(); audioCtx = null; analyser = null; }
   cancelAnimationFrame(animFrameId);
   drawIdle();
+  await stopRecording();
   if (completed) {
     document.getElementById('progressBar').style.width = '100%';
-    document.getElementById('progressPct').textContent = '100%';
-    document.getElementById('freqDisplay').textContent = '✓ Done';
+    document.getElementById('progressPct').textContent  = '100%';
+    document.getElementById('freqDisplay').textContent   = '\u2713 Done';
     document.getElementById('statusRemaining').textContent = '0 steps';
   }
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled  = true;
 }
 
+setupSpectrumInteraction();
+
 document.getElementById('startBtn').addEventListener('click', startSweep);
 document.getElementById('stopBtn').addEventListener('click', () => stopSweep(false));
+
+// Re-draw plots on window resize
+window.addEventListener('resize', () => {
+  // no-op if section hidden, otherwise they'll redraw on next sweep
+});
 </script>
 </body>
 </html>
