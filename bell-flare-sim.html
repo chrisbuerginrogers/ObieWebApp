@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bell Flare — Acoustic Impedance Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f7f4ef;
+    --bg2:      #eeebe4;
+    --bg3:      #e5e1d8;
+    --ink:      #1a1714;
+    --ink2:     #5a5550;
+    --ink3:     #9a9590;
+    --accent:   #c94a1a;
+    --blue:     #2a72b8;
+    --green:    #1a8c5c;
+    --border:   rgba(0,0,0,0.1);
+    --radius:   6px;
+    --font-d:   'DM Serif Display', serif;
+    --font-s:   'DM Sans', sans-serif;
+    --font-m:   'DM Mono', monospace;
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-s);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* layout */
+  .page { max-width: 1020px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header { margin-bottom: 36px; border-bottom: 1px solid var(--border); padding-bottom: 22px; }
+  header h1 { font-family: var(--font-d); font-size: 2rem; font-weight: 400; letter-spacing: -0.01em; line-height: 1.2; }
+  header p  { margin-top: 6px; color: var(--ink2); font-size: 14px; max-width: 620px; }
+
+  /* metric cards */
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 22px; }
+  .mc {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 13px 16px;
+  }
+  .mc .lb { font-size: 11px; font-family: var(--font-m); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); margin-bottom: 4px; }
+  .mc .vl { font-family: var(--font-m); font-size: 17px; font-weight: 500; }
+
+  /* main sim canvas */
+  #sim {
+    width: 100%;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+  }
+
+  /* chart */
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    margin-top: 22px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px 10px;
+  }
+
+  .chart-legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    font-size: 12px; font-family: var(--font-m);
+    color: var(--ink2); margin-top: 8px;
+  }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+  /* sliders */
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0; }
+  .sl-group label {
+    display: block;
+    font-size: 12px; font-family: var(--font-m);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink3); margin-bottom: 8px;
+  }
+  .sl-row { display: flex; align-items: center; gap: 10px; }
+  .sl-row input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  .sl-val { font-family: var(--font-m); font-size: 13px; font-weight: 500; min-width: 58px; text-align: right; color: var(--ink); }
+
+  /* controls */
+  .controls { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    font-family: var(--font-m); font-size: 12px; letter-spacing: 0.04em;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 18px;
+    cursor: pointer; color: var(--ink); transition: background 0.15s;
+  }
+  button:hover { background: var(--bg3); }
+  button.active { background: var(--ink); color: var(--bg); }
+
+  .color-legend { display: flex; gap: 14px; font-size: 11px; font-family: var(--font-m); color: var(--ink2); margin-left: auto; align-items: center; }
+  .sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+
+  /* physics note */
+  .pnote {
+    font-size: 13px; font-family: var(--font-m);
+    color: var(--ink2);
+    border-left: 3px solid var(--accent);
+    padding: 9px 14px;
+    background: var(--bg2);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    margin-top: 16px;
+    min-height: 40px;
+    transition: color 0.2s;
+  }
+
+  /* theory section */
+  .theory {
+    margin-top: 44px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .theory h2 { font-family: var(--font-d); font-size: 1.2rem; font-weight: 400; margin-bottom: 10px; }
+  .theory p { font-size: 13px; color: var(--ink2); line-height: 1.75; }
+  .eq {
+    display: block;
+    font-family: var(--font-m); font-size: 13px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px;
+    margin: 10px 0; color: var(--ink);
+  }
+
+  @media (max-width: 640px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .sliders { grid-template-columns: 1fr; }
+    .theory  { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Bell Flare &amp; Acoustic Impedance Matching</h1>
+    <p>A pressure pulse travels down a tube and meets the bell. Vary the flare ratio and frequency to see how the bell acts as an impedance transformer — and how much energy escapes into open air.</p>
+  </header>
+
+  <!-- metric cards -->
+  <div class="metrics">
+    <div class="mc"><div class="lb">Z₁ — tube air</div><div class="vl">415 Pa·s/m</div></div>
+    <div class="mc"><div class="lb">Z₂ eff — bell</div><div class="vl" id="mz2">—</div></div>
+    <div class="mc"><div class="lb">R<sub>energy</sub></div><div class="vl" id="mre" style="color:var(--accent)">—</div></div>
+    <div class="mc"><div class="lb">T<sub>energy</sub></div><div class="vl" id="mte" style="color:var(--green)">—</div></div>
+  </div>
+
+  <!-- simulation canvas -->
+  <canvas id="sim"></canvas>
+
+  <!-- sliders -->
+  <div class="sliders">
+    <div class="sl-group">
+      <label>Bell ratio a₂ / a₁</label>
+      <div class="sl-row">
+        <input type="range" min="1" max="8" step="0.05" value="3" id="brs">
+        <span class="sl-val" id="brv">3.00</span>
+      </div>
+    </div>
+    <div class="sl-group">
+      <label>Frequency</label>
+      <div class="sl-row">
+        <input type="range" min="50" max="3000" step="10" value="500" id="fqs">
+        <span class="sl-val" id="fqv">500 Hz</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- controls -->
+  <div class="controls">
+    <button id="pb">Pause</button>
+    <button id="rb">Restart</button>
+    <div class="color-legend">
+      <span><span class="sq" style="background:#c94a1a"></span>compression</span>
+      <span><span class="sq" style="background:#2a72b8"></span>rarefaction</span>
+    </div>
+  </div>
+
+  <!-- physics note -->
+  <div class="pnote" id="pn">Adjust sliders to explore how bell size and frequency change the impedance match.</div>
+
+  <!-- T vs frequency chart -->
+  <div class="chart-wrap">
+    <canvas id="tfc" role="img" aria-label="T_energy percentage versus frequency for the current bell size.">T energy vs frequency chart</canvas>
+  </div>
+  <div class="chart-legend">
+    <span><span class="dot" style="background:var(--green)"></span>T_energy vs frequency (current bell)</span>
+    <span><span class="dot" style="background:var(--accent)"></span>current operating point</span>
+    <span><span class="dot" style="background:var(--blue)"></span>optimal f for this bell</span>
+    <span id="optlbl" style="margin-left:auto;color:var(--ink3)"></span>
+  </div>
+
+  <!-- theory panel -->
+  <div class="theory">
+    <div>
+      <h2>The physics</h2>
+      <p>The bell transforms the radiation impedance at its mouth back through the flare. At bell-mouth radius a₂, the resistive radiation term is:</p>
+      <span class="eq">Z_rad = ρc · R₁(2ka₂)</span>
+      <p>where R₁ involves Bessel functions. The area ratio (a₂/a₁)² scales this back to the tube throat, giving effective impedance ratio:</p>
+      <span class="eq">r = R₁(2ka₂) · (a₂/a₁)²</span>
+      <p>Perfect matching (r = 1) gives T_energy = 100%.</p>
+    </div>
+    <div>
+      <h2>Energy coefficients</h2>
+      <span class="eq">r_p = (Z₂ − Z₁) / (Z₁ + Z₂)</span>
+      <span class="eq">R_energy = r_p²</span>
+      <span class="eq">T_energy = 4r / (1 + r)²</span>
+      <p>At low frequency, ka₂ ≪ 1 and R₁ → 0, so r → 0 and almost all energy reflects. At high frequency, R₁ → 1 and the bell area ratio alone determines matching. This is why larger bells help most at low frequencies — the regime where brass instruments live.</p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ── physics ──────────────────────────────────────────────────────────────────
+function J1(x){
+  if(!x) return 0;
+  const a=Math.abs(x), sgn=x<0?-1:1;
+  let r;
+  if(a>=8){ r=Math.sqrt(2/(Math.PI*a))*Math.cos(a-3*Math.PI/4); }
+  else {
+    let s=0,h=a/2,h2=h*h,t=h,fm=1,fm1=1;
+    for(let m=0;m<40;m++){s+=(m%2?-1:1)*t/(fm*fm1);t*=h2;fm*=m+1;fm1*=m+2;}
+    r=s;
+  }
+  return sgn*r;
+}
+function R1(ka){ return ka<1e-6 ? ka*ka/2 : Math.max(0,Math.min(1,1-J1(2*ka)/ka)); }
+function phys(br,f){
+  const ab=0.02*br, ka=2*Math.PI*f*ab/343;
+  const rr=R1(ka)*br*br;
+  return { r:rr, Z2:415*rr, Te:4*rr/(1+rr)**2, Re:((rr-1)/(rr+1))**2, rp:(rr-1)/(rr+1), ka };
+}
+function optFreq(br){
+  let bf=100,bd=9e9;
+  for(let f=50;f<=3000;f+=5){
+    const ab=0.02*br,ka=2*Math.PI*f*ab/343,r=R1(ka)*br*br,d=Math.abs(r-1);
+    if(d<bd){bd=d;bf=f;}
+  } return bf;
+}
+
+// ── state ─────────────────────────────────────────────────────────────────────
+let BR=3.0, FQ=500, simT=0, playing=true;
+const SIG=0.055;
+function g(x,c){return Math.exp(-0.5*((x-c)/SIG)**2)}
+function pTube(x,t,rp){return g(x,0.1+t)+rp*g(x,1.9-t)}
+
+// ── sim canvas ────────────────────────────────────────────────────────────────
+const cv=document.getElementById('sim');
+const cx=cv.getContext('2d');
+const DPR=window.devicePixelRatio||1;
+const WL=1020, HL=300;
+cv.width=WL*DPR; cv.height=HL*DPR; cv.style.height=HL+'px';
+cx.scale(DPR,DPR);
+
+const C_TUBE_BG='#faf8f5';
+const C_WALL='#b0aba4';
+const C_LINE='rgba(26,23,20,0.72)';
+const C_DASH='rgba(0,0,0,0.12)';
+const C_ANN='#9a9590';
+const C_CLW='#7a7570';
+
+const ML=52,MR=14,MT=62,MB=56;
+const TW=340, BW=90;
+const TX=ML, BX=TX+TW, OX=BX+BW, OW=WL-OX-MR;
+const MY=MT+(HL-MT-MB)/2;
+const THH=28, WT=7, NP=300;
+
+function pColor(p){
+  const v=Math.max(-1,Math.min(1,p));
+  if(v>=0) return [Math.round(255-v*(255-201)),Math.round(255-v*(255-74)),Math.round(255-v*(255-26))];
+  const s=-v;
+  return [Math.round(255-s*(255-42)),Math.round(255-s*(255-114)),Math.round(255-s*(255-184))];
+}
+
+function bellHalf(xf,br){ const mh=Math.min(br,5)*THH; return THH*Math.pow(mh/THH,xf); }
+
+function drawFrame(){
+  const ph=phys(BR,FQ);
+  cx.clearRect(0,0,WL,HL);
+
+  // tube bg
+  cx.fillStyle=C_TUBE_BG;
+  cx.fillRect(TX,MY-THH,TW,THH*2);
+
+  // pressure colors
+  const cw=TW/NP;
+  for(let i=0;i<NP;i++){
+    const x=i/NP,p=pTube(x,simT,ph.rp);
+    const[r,g,b]=pColor(p);
+    cx.fillStyle=`rgb(${r},${g},${b})`;
+    cx.fillRect(TX+i*cw,MY-THH,cw+0.5,THH*2);
+  }
+
+  // midline
+  cx.save(); cx.setLineDash([4,5]); cx.strokeStyle=C_DASH; cx.lineWidth=1;
+  cx.beginPath(); cx.moveTo(TX,MY); cx.lineTo(TX+TW,MY); cx.stroke(); cx.restore();
+
+  // waveform
+  cx.beginPath();
+  for(let i=0;i<=NP;i++){
+    const x=i/NP,p=pTube(x,simT,ph.rp);
+    const px=TX+(i/NP)*TW,py=MY-p*THH*0.72;
+    i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+  }
+  cx.strokeStyle=C_LINE; cx.lineWidth=2; cx.stroke();
+
+  // tube walls
+  cx.fillStyle=C_WALL;
+  cx.fillRect(TX,MY-THH-WT,TW,WT);
+  cx.fillRect(TX,MY+THH,TW,WT);
+  cx.fillStyle=C_CLW;
+  cx.fillRect(TX-WT,MY-THH-WT,WT,THH*2+WT*2);
+
+  // bell
+  const BP=60;
+  const btx=[],bty=[],bbx=[],bby=[];
+  for(let i=0;i<=BP;i++){
+    const xf=i/BP,bh=bellHalf(xf,BR);
+    btx.push(BX+xf*BW); bty.push(MY-bh);
+    bbx.push(BX+xf*BW); bby.push(MY+bh);
+  }
+  cx.fillStyle=C_TUBE_BG;
+  cx.beginPath(); cx.moveTo(btx[0],bty[0]);
+  for(let i=1;i<=BP;i++) cx.lineTo(btx[i],bty[i]);
+  for(let i=BP;i>=0;i--) cx.lineTo(bbx[i],bby[i]);
+  cx.closePath(); cx.fill();
+
+  const pm=pTube(1,simT,ph.rp);
+  const[er,eg,eb]=pColor(pm*0.55);
+  cx.fillStyle=`rgba(${er},${eg},${eb},0.22)`;
+  cx.beginPath(); cx.moveTo(btx[0],bty[0]);
+  for(let i=1;i<=BP;i++) cx.lineTo(btx[i],bty[i]);
+  for(let i=BP;i>=0;i--) cx.lineTo(bbx[i],bby[i]);
+  cx.closePath(); cx.fill();
+
+  cx.strokeStyle=C_WALL; cx.lineWidth=WT; cx.lineCap='round';
+  cx.beginPath(); cx.moveTo(btx[0],bty[0]); for(let i=1;i<=BP;i++) cx.lineTo(btx[i],bty[i]); cx.stroke();
+  cx.beginPath(); cx.moveTo(bbx[0],bby[0]); for(let i=1;i<=BP;i++) cx.lineTo(bbx[i],bby[i]); cx.stroke();
+
+  // transmitted arcs
+  if(ph.Te>0.003 && simT>0.65){
+    const amp=Math.sqrt(ph.Te);
+    const cR=(simT-0.9)*TW;
+    const sR=SIG*TW;
+    const ang=Math.PI*0.52;
+    for(let i=0;i<44;i++){
+      const di=(i/43-0.5)*6, r=cR+di*sR;
+      if(r<1||r>OW+50) continue;
+      const fade=Math.max(0.12,1-Math.max(0,cR)/(OW*1.1));
+      const gf=amp*Math.exp(-0.5*di*di)*fade;
+      if(gf<0.01) continue;
+      const[cr,cg,cb]=pColor(gf);
+      cx.strokeStyle=`rgba(${cr},${cg},${cb},${gf*0.82})`;
+      cx.lineWidth=Math.max(0.8,sR/11);
+      cx.beginPath(); cx.arc(OX,MY,r,-ang,ang); cx.stroke();
+    }
+  }
+
+  // labels
+  cx.font='11px "DM Mono", monospace'; cx.textAlign='center'; cx.fillStyle=C_ANN;
+  cx.fillText('closed end',TX,MT-20);
+  const bellTop=MY-bellHalf(1,BR)-WT-10;
+  cx.fillText(`bell (${BR.toFixed(1)}×)`,BX+BW/2,Math.max(MT-20,bellTop));
+  cx.fillText('open air',OX+OW/2,MT-20);
+
+  cx.font='10px "DM Mono", monospace'; cx.fillStyle=C_ANN; cx.textAlign='center';
+  cx.fillText(`ka = ${ph.ka.toFixed(2)}`,BX+BW/2,MY+bellHalf(1,BR)+WT+18);
+  cx.fillText(`r = ${ph.r.toFixed(3)}`,BX+BW/2,MY+bellHalf(1,BR)+WT+32);
+
+  cx.textAlign='right'; cx.fillStyle=C_ANN;
+  cx.fillText('+p',TX-WT-4,MY-THH+4);
+  cx.fillText('−p',TX-WT-4,MY+THH+4);
+
+  cx.fillStyle='rgba(0,0,0,0.18)'; cx.textAlign='right'; cx.font='10px "DM Mono", monospace';
+  cx.fillText(`t = ${simT.toFixed(2)}`,WL-6,HL-6);
+}
+
+function updateMetrics(){
+  const ph=phys(BR,FQ);
+  document.getElementById('mz2').textContent=ph.Z2.toFixed(0)+' Pa·s/m';
+  document.getElementById('mre').textContent=(ph.Re*100).toFixed(1)+'%';
+  document.getElementById('mte').textContent=(ph.Te*100).toFixed(1)+'%';
+
+  const of=optFreq(BR);
+  document.getElementById('optlbl').textContent='optimal f ≈ '+of+' Hz';
+
+  const ic=0.1+simT;
+  let msg;
+  if(ic<0.82){
+    msg=`→ Compression pulse heading toward the bell.   r_p = ${ph.rp.toFixed(3)}   |   optimal f for this bell ≈ ${of} Hz`;
+  } else if(ic<1.18){
+    const dir=ph.r>1.02?'Z₂ > Z₁ (over-matched — phase preserved on reflection)':ph.r<0.98?'Z₂ < Z₁ (under-matched — phase inverted on reflection)':'Z₂ ≈ Z₁ — near-perfect impedance match!';
+    msg=`⟳ At bell mouth:  ${(ph.Te*100).toFixed(1)}% radiated,  ${(ph.Re*100).toFixed(1)}% reflected.   ${dir}`;
+  } else {
+    const phase=ph.rp>0.05?'same phase as incident (Z₂ > Z₁)':ph.rp<-0.05?'phase-inverted — pressure-release character (Z₂ < Z₁)':'almost no reflection — close to matched!';
+    msg=`← Reflected pulse:  ${phase}   |r_p| = ${Math.abs(ph.rp).toFixed(3)}`;
+  }
+  document.getElementById('pn').textContent=msg;
+}
+
+// ── frequency chart ───────────────────────────────────────────────────────────
+const FR=Array.from({length:150},(_,i)=>50+i*20);
+function tCurve(br){return FR.map(f=>phys(br,f).Te*100)}
+let chart=null;
+
+function updateChart(){
+  const data=tCurve(BR);
+  const curT=phys(BR,FQ).Te*100;
+  const curI=FR.findIndex(f=>f>=FQ);
+  const of=optFreq(BR);
+  const optI=FR.findIndex(f=>f>=of);
+
+  if(!chart){
+    chart=new Chart(document.getElementById('tfc'),{
+      type:'line',
+      data:{
+        labels:FR,
+        datasets:[
+          {label:'T_energy',data,borderColor:'#1a8c5c',backgroundColor:'rgba(26,140,92,.07)',borderWidth:2,pointRadius:0,fill:true,tension:0.3},
+          {label:'current',data:FR.map((_,i)=>i===curI?curT:null),pointRadius:FR.map((_,i)=>i===curI?7:0),pointBackgroundColor:'#c94a1a',pointBorderColor:'#fff',pointBorderWidth:2,showLine:false},
+          {label:'optimal',data:FR.map((_,i)=>i===optI?data[optI]:null),pointRadius:FR.map((_,i)=>i===optI?7:0),pointBackgroundColor:'#2a72b8',pointBorderColor:'#fff',pointBorderWidth:2,showLine:false}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y!=null?c.parsed.y.toFixed(1)+'%':''}}},
+        scales:{
+          x:{title:{display:true,text:'Frequency (Hz)',font:{family:'"DM Mono", monospace',size:11},color:'#9a9590'},ticks:{maxTicksLimit:10,font:{family:'"DM Mono", monospace',size:10},color:'#9a9590'},grid:{color:'rgba(0,0,0,0.06)'},border:{color:'rgba(0,0,0,0.12)'}},
+          y:{min:0,max:100,title:{display:true,text:'T_energy (%)',font:{family:'"DM Mono", monospace',size:11},color:'#9a9590'},ticks:{font:{family:'"DM Mono", monospace',size:10},color:'#9a9590'},grid:{color:'rgba(0,0,0,0.06)'},border:{color:'rgba(0,0,0,0.12)'}}
+        }
+      }
+    });
+  } else {
+    chart.data.datasets[0].data=data;
+    chart.data.datasets[1].data=FR.map((_,i)=>i===curI?curT:null);
+    chart.data.datasets[1].pointRadius=FR.map((_,i)=>i===curI?7:0);
+    chart.data.datasets[2].data=FR.map((_,i)=>i===optI?data[optI]:null);
+    chart.data.datasets[2].pointRadius=FR.map((_,i)=>i===optI?7:0);
+    chart.update('none');
+  }
+}
+
+// ── animation loop ────────────────────────────────────────────────────────────
+let last=null;
+function loop(ts){
+  if(last!==null) simT+=((ts-last)/1000)*0.55;
+  last=ts;
+  if(simT>2.3){simT=0;last=null;}
+  drawFrame(); updateMetrics();
+  if(playing) requestAnimationFrame(loop);
+}
+
+// ── controls ──────────────────────────────────────────────────────────────────
+document.getElementById('brs').oninput=function(){
+  BR=parseFloat(this.value);
+  document.getElementById('brv').textContent=BR.toFixed(2);
+  updateChart(); if(!playing){drawFrame();updateMetrics();}
+};
+document.getElementById('fqs').oninput=function(){
+  FQ=parseInt(this.value);
+  document.getElementById('fqv').textContent=FQ+' Hz';
+  updateChart(); if(!playing){drawFrame();updateMetrics();}
+};
+document.getElementById('pb').onclick=function(){
+  playing=!playing;
+  this.textContent=playing?'Pause':'Play';
+  this.classList.toggle('active',!playing);
+  if(playing){last=null;requestAnimationFrame(loop);}
+};
+document.getElementById('rb').onclick=function(){simT=0;last=null;if(!playing){drawFrame();updateMetrics();}};
+
+updateChart();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
