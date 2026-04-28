@@ -1,0 +1,160 @@
+/* ─────────────────────────────────────────────────────────────────────
+ * trv-reader.css — TRV reader tool page styles
+ * ───────────────────────────────────────────────────────────────────── */
+
+main.tool {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 820px) {
+  main.tool { grid-template-columns: 1fr; }
+}
+
+aside.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* ─── File-drop zone ──────────────────────────────────────────────── */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 22px 14px;
+  text-align: center;
+  background: var(--bg-deep);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dropzone:hover, .dropzone.dragging {
+  background: #fff8e8;
+  border-color: var(--accent);
+}
+.dropzone .big { font-size: 1.6rem; margin-bottom: 4px; }
+.dropzone .label { font-weight: 600; }
+.dropzone .hint { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+/* ─── File info box ───────────────────────────────────────────────── */
+.fileinfo {
+  font-size: 0.85rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+.fileinfo .name {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.fileinfo .meta {
+  font-family: monospace;
+  font-size: 0.78rem;
+}
+
+/* ─── Plot-control panel ──────────────────────────────────────────── */
+.plot-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ctrl-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ctrl-row label {
+  width: 60px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.ctrl-row input[type=number] {
+  width: 90px;
+}
+
+.toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.toggle-group button {
+  background: var(--surface);
+  border: none;
+  padding: 4px 12px;
+  font-size: 0.83rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: inherit;
+}
+.toggle-group button.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.toggle-group button:not(.active):hover { background: var(--bg-deep); }
+
+/* ─── Plot area ───────────────────────────────────────────────────── */
+section.plot-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 540px;
+}
+.plot-area h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.plot-area #plot {
+  flex: 1;
+  min-height: 480px;
+}
+
+/* ─── Status / error message ──────────────────────────────────────── */
+#status-msg {
+  font-size: 0.85rem;
+  min-height: 1.2em;
+  margin-top: 6px;
+  font-family: monospace;
+}
+#status-msg.ok    { color: var(--accent-3); }
+#status-msg.err   { color: #b03030; }
+#status-msg.info  { color: var(--muted); }
+
+/* ─── Header info table ───────────────────────────────────────────── */
+.hdr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.hdr-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.hdr-table td.k {
+  color: var(--muted);
+  font-family: monospace;
+  width: 40%;
+}
+.hdr-table td.v {
+  color: var(--text);
+  word-break: break-word;
+}

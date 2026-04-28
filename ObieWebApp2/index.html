@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ObieWebApp 2 — Violin Acoustics Toolkit</title>
+  <link rel="stylesheet" href="./css/theme.css">
+  <link rel="stylesheet" href="./css/index.css">
+</head>
+<body>
+
+<header class="obie-header">
+  <a class="brand" href="./index.html">
+    <div class="logo-icon">🎻</div>
+    <h1>ObieWebApp 2</h1>
+  </a>
+  <span class="crumb">· Oberlin Acoustics Workshop</span>
+  <div class="gap"></div>
+</header>
+
+<main class="landing">
+
+  <section class="intro">
+    <h2>Tools for analyzing the vibrational characteristics of violins</h2>
+    <p>
+      A modular browser-based toolkit. Drop in a measurement file, get an
+      interactive analysis. Everything runs locally in your browser — no
+      uploads, no server.
+    </p>
+  </section>
+
+  <hr class="divider">
+
+  <p class="section-label">📂 Data &amp; File Tools</p>
+  <div class="tool-grid">
+
+    <a class="tool-card" href="./html/trv-reader.html">
+      <div class="head">
+        <div class="icon">📈</div>
+        <span class="name">TRV File Reader</span>
+      </div>
+      <p class="desc">
+        Open a TRV measurement file and view its frequency response on
+        an interactive log/linear plot. The first of several file readers.
+      </p>
+      <span class="tag app">Tool · MicroPython</span>
+    </a>
+
+  </div>
+
+  <p class="section-label">🔮 Coming Soon</p>
+  <div class="tool-grid">
+
+    <div class="tool-card" style="cursor:default;opacity:0.7">
+      <div class="head">
+        <div class="icon">🌊</div>
+        <span class="name">FRF / Modal Analysis</span>
+      </div>
+      <p class="desc">
+        Compute frequency response functions and identify modal peaks
+        from time-series measurements.
+      </p>
+      <span class="tag future">Planned</span>
+    </div>
+
+    <div class="tool-card" style="cursor:default;opacity:0.7">
+      <div class="head">
+        <div class="icon">🎯</div>
+        <span class="name">Mode Comparison</span>
+      </div>
+      <p class="desc">
+        Overlay multiple TRV files to compare instruments, setups, or
+        measurement conditions side by side.
+      </p>
+      <span class="tag future">Planned</span>
+    </div>
+
+    <div class="tool-card" style="cursor:default;opacity:0.7">
+      <div class="head">
+        <div class="icon">📐</div>
+        <span class="name">Plate Mode Visualizer</span>
+      </div>
+      <p class="desc">
+        Visual exploration of free-plate modes (Chladni patterns) and
+        their relationships to assembled-instrument modes.
+      </p>
+      <span class="tag future">Planned</span>
+    </div>
+
+  </div>
+
+  <footer class="obie-footer">
+    Oberlin Acoustics Workshop &nbsp;·&nbsp; ObieWebApp 2 &nbsp;·&nbsp;
+    Built with <a href="https://pyscript.net/" target="_blank" rel="noopener">PyScript</a>
+    &nbsp;+&nbsp; <a href="https://plotly.com/javascript/" target="_blank" rel="noopener">Plotly</a>
+  </footer>
+
+</main>
+
+</body>
+</html>

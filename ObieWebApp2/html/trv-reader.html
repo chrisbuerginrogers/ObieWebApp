@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRV Reader — ObieWebApp 2</title>
+
+  <!-- Shared theme -->
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/trv-reader.css">
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <!-- PyScript -->
+  <link  rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+
+  <!-- App JS -->
+  <script src="../js/plotly-helpers.js"></script>
+  <script src="../js/plot-controls.js"></script>
+  <script src="../js/file-loader.js"></script>
+
+  <!-- Tell main.py which tool we are -->
+  <script>window.OBIE_PAGE = 'trv-reader';</script>
+</head>
+<body>
+
+<header class="obie-header">
+  <a class="brand" href="../index.html">
+    <div class="logo-icon">🎻</div>
+    <h1>ObieWebApp 2</h1>
+  </a>
+  <span class="crumb">· TRV File Reader</span>
+  <div class="gap"></div>
+  <a class="btn" href="../index.html">← All tools</a>
+</header>
+
+<main class="tool">
+
+  <!-- ── Side panel ────────────────────────────────────────────── -->
+  <aside class="controls">
+
+    <!-- File picker -->
+    <div class="card">
+      <div class="section-title">📂 Open File</div>
+      <div id="dropzone" class="dropzone">
+        <div class="big">📈</div>
+        <div class="label">Drop a TRV file</div>
+        <div class="hint">or click to choose…</div>
+      </div>
+      <input id="file-input" type="file" accept=".trv,.trf,.txt,.csv,.dat" hidden>
+      <button id="file-pick-btn" class="btn primary" style="width:100%;margin-top:10px">
+        Choose file…
+      </button>
+      <div id="file-info" class="fileinfo" style="margin-top:10px"></div>
+    </div>
+
+    <!-- Plot axis controls -->
+    <div class="card">
+      <div class="section-title">📊 Plot Axes</div>
+
+      <div class="plot-controls">
+
+        <div class="ctrl-row">
+          <label>X scale</label>
+          <div id="x-scale-toggle" class="toggle-group">
+            <button data-scale="log">Log</button>
+            <button data-scale="linear">Linear</button>
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label>X min</label>
+          <input id="x-min" type="number" step="any" placeholder="auto">
+          <label style="width:auto">max</label>
+          <input id="x-max" type="number" step="any" placeholder="auto">
+        </div>
+
+        <div class="ctrl-row">
+          <label>Y scale</label>
+          <div id="y-scale-toggle" class="toggle-group">
+            <button data-scale="log">Log</button>
+            <button data-scale="linear">Linear</button>
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label>Y min</label>
+          <input id="y-min" type="number" step="any" placeholder="auto">
+          <label style="width:auto">max</label>
+          <input id="y-max" type="number" step="any" placeholder="auto">
+        </div>
+
+        <button id="autoscale-btn" class="btn" style="margin-top:6px">↺ Reset / autoscale</button>
+      </div>
+    </div>
+
+    <!-- Header / metadata -->
+    <div class="card">
+      <div class="section-title">ℹ︎ File Header</div>
+      <div id="hdr-box"><span class="muted">no file loaded</span></div>
+    </div>
+
+  </aside>
+
+  <!-- ── Plot area ─────────────────────────────────────────────── -->
+  <section class="plot-area">
+    <h3>Frequency Response</h3>
+    <div id="plot"></div>
+    <div id="status-msg" class="info">Loading PyScript + MicroPython…</div>
+  </section>
+
+</main>
+
+<!-- ── PyScript: load main.py from the project root ──────────────── -->
+<!-- We list every Python file in the `files` config so MicroPython's
+     virtual filesystem can resolve `from py.foo import bar`. -->
+<script type="mpy" src="../main.py" config='{
+  "files": {
+    "../py/__init__.py":         "py/__init__.py",
+    "../py/trv_parser.py":       "py/trv_parser.py",
+    "../py/plot_bridge.py":      "py/plot_bridge.py",
+    "../py/trv_reader_app.py":   "py/trv_reader_app.py"
+  }
+}'></script>
+
+</body>
+</html>
