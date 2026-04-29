@@ -1,74 +1,179 @@
 /* ─────────────────────────────────────────────────────────────────────
  * plot-controls.js
- * Owns plot state. Wires log/lin toggles + range inputs.
- * Exposes:
+ * Owns all trace data and plot state.
+ *
+ * Public API (called from Python):
  *   obieInitPlotControls(divId, opts)
- *   obieShowData(x, y, xLabel, yLabel)        ← Python calls this
- *   obieClearPlot()                           ← Python calls this on reset
+ *   obieAddTrace(x, y, name)
+ *   obieClearPlot()
+ *
+ * File-list UI features (all in JS):
+ *   • Colour swatch — click to open native colour picker
+ *   • Right-click on trace name — also opens colour picker
+ *   • 🗑 button — removes that trace
+ *
+ * Y-axis auto-rescales to data visible in the current X window.
  * ───────────────────────────────────────────────────────────────────── */
 
 (function () {
   'use strict';
 
+  const PALETTE = [
+    '#ff6f00', '#2196f3', '#4caf50', '#e91e63', '#9c27b0',
+    '#00bcd4', '#ff5722', '#8bc34a', '#ffc107', '#607d8b',
+  ];
+
   const state = {
     plotDiv: 'plot',
     xLabel:  'Frequency [Hz]',
-    yLabel:  'Magnitude',
-    xLog:    true,         // default LOG per spec
+    yLabel:  'Magnitude [dB]',
+    xLog:    true,
     yLog:    true,
-    xMin: null, xMax: null,
-    yMin: null, yMax: null,
+    xMin:    200, xMax: 7000,
+    yMin:    null, yMax: null,
   };
 
-  let lastX = [], lastY = [];      // cached for relayout-with-data calls
+  // Each trace: { x:[], y:[], name:'', color:'' }
+  let traces = [];
 
   function $(id) { return document.getElementById(id); }
 
-  /* ── Render ─────────────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Auto y-range: 2nd–98th percentile of visible data ─────────── */
+  function _visibleYRange() {
+    if (!traces.length) return null;
+    const xLo = state.xMin != null ? state.xMin : -Infinity;
+    const xHi = state.xMax != null ? state.xMax :  Infinity;
+
+    const vals = [];
+    for (const t of traces) {
+      for (let i = 0; i < t.x.length; i++) {
+        if (t.x[i] >= xLo && t.x[i] <= xHi && isFinite(t.y[i])) {
+          vals.push(t.y[i]);
+        }
+      }
+    }
+    if (!vals.length) return null;
+
+    // Sort and take 2nd–98th percentile to exclude extreme notch values
+    vals.sort((a, b) => a - b);
+    const lo = vals[Math.max(0, Math.floor(vals.length * 0.02))];
+    const hi = vals[Math.min(vals.length - 1, Math.ceil(vals.length * 0.98) - 1)];
+    const pad = (hi - lo) * 0.08 || 1;
+    return [lo - pad, hi + pad];
+  }
+
+  /* ── Render plot ─────────────────────────────────────────────────── */
   function render() {
-    const layout = window.obieBuildPlotLayout(state);
-    const trace  = [{
-      x: lastX, y: lastY,
-      type: 'scatter', mode: 'lines',
-      line: { color: window.OBIE_PLOT_THEME.line, width: 1.6 },
-      name: 'data',
-    }];
-    Plotly.react(state.plotDiv, trace, layout, window.OBIE_PLOT_CONFIG);
+    // Auto y when user hasn't set manual limits
+    const autoY = (state.yMin == null && state.yMax == null)
+      ? _visibleYRange() : null;
+
+    const s = autoY
+      ? { ...state, yMin: autoY[0], yMax: autoY[1] }
+      : state;
+
+    const layout = window.obieBuildPlotLayout(s);
+    layout.showlegend = traces.length > 1;
+    layout.legend = { font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' };
+
+    const data = traces.length
+      ? traces.map(t => ({
+          x: t.x, y: t.y,
+          type: 'scatter', mode: 'lines',
+          name: t.name,
+          line: { color: t.color, width: 1.8 },
+        }))
+      : [{ x: [], y: [], type: 'scatter', mode: 'lines',
+           line: { color: PALETTE[0], width: 1.8 } }];
+
+    Plotly.react(state.plotDiv, data, layout, window.OBIE_PLOT_CONFIG);
+  }
+
+  /* ── File list rendering ─────────────────────────────────────────── */
+  function renderFileList() {
+    const box = $('file-list');
+    if (!box) return;
+    if (!traces.length) {
+      box.innerHTML = '<span class="muted">none</span>';
+      return;
+    }
+    box.innerHTML = traces.map((t, i) =>
+      '<div class="file-item" data-idx="' + i + '">' +
+        '<span class="color-swatch" data-idx="' + i + '" ' +
+          'style="background:' + t.color + '" title="Click to change colour"></span>' +
+        '<span class="trace-name" data-idx="' + i + '" title="Right-click to change colour">'
+          + _esc(t.name) + '</span>' +
+        '<button class="trash-btn" data-idx="' + i + '" title="Remove trace">🗑</button>' +
+      '</div>'
+    ).join('');
+
+    // Colour swatches — left click
+    box.querySelectorAll('.color-swatch').forEach(el =>
+      el.addEventListener('click', () => _pickColor(+el.dataset.idx)));
+
+    // Right-click on name also opens picker
+    box.querySelectorAll('.trace-name').forEach(el =>
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        _pickColor(+el.dataset.idx);
+      }));
+
+    // Trash buttons
+    box.querySelectorAll('.trash-btn').forEach(el =>
+      el.addEventListener('click', () => {
+        traces.splice(+el.dataset.idx, 1);
+        renderFileList();
+        render();
+      }));
+  }
+
+  function _pickColor(idx) {
+    const inp = document.createElement('input');
+    inp.type  = 'color';
+    inp.value = traces[idx].color;
+    inp.addEventListener('input', e => {
+      traces[idx].color = e.target.value;
+      renderFileList();
+      render();
+    });
+    inp.click();
   }
 
   /* ── Toggle wiring ──────────────────────────────────────────────── */
   function setToggle(groupId, axis, val) {
     const grp = $(groupId);
-    if (grp) {
-      grp.querySelectorAll('button').forEach(b => {
-        b.classList.toggle('active', b.dataset.scale === val);
-      });
-    }
+    if (grp) grp.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.scale === val));
     if (axis === 'x') state.xLog = (val === 'log');
     else              state.yLog = (val === 'log');
     render();
   }
   function wireToggle(groupId, axis) {
-    const grp = $(groupId);
-    if (!grp) return;
-    grp.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => setToggle(groupId, axis, btn.dataset.scale));
-    });
+    const grp = $(groupId); if (!grp) return;
+    grp.querySelectorAll('button').forEach(btn =>
+      btn.addEventListener('click', () => setToggle(groupId, axis, btn.dataset.scale)));
   }
 
   /* ── Range inputs ───────────────────────────────────────────────── */
   function readNum(id) {
     const el = $(id); if (!el) return null;
-    const s = el.value.trim();
-    if (s === '') return null;
-    const v = parseFloat(s);
+    const v = parseFloat(el.value.trim());
     return isFinite(v) ? v : null;
+  }
+  function syncInputs() {
+    const set = (id, v) => { const e=$(id); if (e && v != null) e.value = v; };
+    set('x-min', state.xMin); set('x-max', state.xMax);
   }
   function wireRange(inputId, key) {
     const el = $(inputId); if (!el) return;
     el.addEventListener('change', () => { state[key] = readNum(inputId); render(); });
   }
-
   function wireAutoscale(btnId) {
     const b = $(btnId); if (!b) return;
     b.addEventListener('click', () => {
@@ -89,22 +194,20 @@
     wireRange('x-min', 'xMin'); wireRange('x-max', 'xMax');
     wireRange('y-min', 'yMin'); wireRange('y-max', 'yMax');
     wireAutoscale('autoscale-btn');
-    // Initial empty plot
-    Plotly.newPlot(state.plotDiv, [{ x: [], y: [], type: 'scatter', mode: 'lines',
-      line:{ color: window.OBIE_PLOT_THEME.line, width: 1.6 } }],
-      window.obieBuildPlotLayout(state), window.OBIE_PLOT_CONFIG);
+    syncInputs();
+    render();
   };
 
-  // Called from Python after parsing: hand over arrays + axis labels.
-  window.obieShowData = function (x, y, xLabel, yLabel) {
-    lastX = Array.from(x || []);
-    lastY = Array.from(y || []);
-    if (xLabel) state.xLabel = xLabel;
-    if (yLabel) state.yLabel = yLabel;
+  window.obieAddTrace = function (x, y, name) {
+    const color = PALETTE[traces.length % PALETTE.length];
+    traces.push({ x: Array.from(x || []), y: Array.from(y || []), name: name || 'trace', color });
+    renderFileList();
     render();
   };
 
   window.obieClearPlot = function () {
-    lastX = []; lastY = []; render();
+    traces = [];
+    renderFileList();
+    render();
   };
 })();

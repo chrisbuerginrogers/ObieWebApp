@@ -16,9 +16,13 @@ window.obieBuildPlotLayout = function (s) {
   const T = window.OBIE_PLOT_THEME;
   function rangeFor(min, max, log) {
     if (min == null || max == null) return undefined;
-    return log
-      ? [Math.log10(Math.max(1e-12, min)), Math.log10(Math.max(1e-12, max))]
-      : [min, max];
+    if (log) {
+      // Plotly log range is in exponents; clamp to avoid log(0)
+      const safeMin = Math.max(1e-12, min);
+      const safeMax = Math.max(safeMin * 10, max);
+      return [Math.log10(safeMin), Math.log10(safeMax)];
+    }
+    return [min, max];
   }
   return {
     paper_bgcolor: T.paper,
