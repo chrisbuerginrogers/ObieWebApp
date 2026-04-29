@@ -119,10 +119,12 @@
 <!-- ── PyScript: load main.py from the project root ──────────────── -->
 <!-- We list every Python file in the `files` config so MicroPython's
      virtual filesystem can resolve `from py.foo import bar`. -->
-<script type="py" src="../main.py" config='{"files": {
-  "../py/__init__.py":   "py/__init__.py",
-  "../py/trf_parser.py": "py/trf_parser.py"
-}}'></script>
+<script type="py" src="../main.py" config='{
+  "files": {
+    "../py/__init__.py":   "py/__init__.py",
+    "../py/trf_parser.py": "py/trf_parser.py"
+  }
+}'></script>
 
 </body>
 </html>
