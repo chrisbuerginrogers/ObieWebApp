@@ -49,7 +49,7 @@
         <div class="label">Drop TRF files here</div>
         <div class="hint">multiple files supported</div>
       </div>
-      <input id="file-input" type="file" accept=".trf" multiple hidden>
+      <input id="file-input" type="file" accept=".trf,.tsv" multiple hidden>
       <div style="display:flex;gap:6px;margin-top:10px">
         <button id="file-pick-btn" class="btn primary" style="flex:1">Add files…</button>
         <button id="clear-btn" class="btn" style="flex:0 0 auto">✕ Clear</button>
@@ -121,7 +121,10 @@
      virtual filesystem can resolve `from py.foo import bar`. -->
 <script type="py" src="../main.py" config='{
   "files": {
-    "../py/trf_parser.py": "py/trf_parser.py"
+    "../py/dom.py":        "py/dom.py",
+    "../py/files.py":      "py/files.py",
+    "../py/trf_parser.py": "py/trf_parser.py",
+    "../py/tsv_parser.py": "py/tsv_parser.py"
   }
 }'></script>
 

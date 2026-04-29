@@ -17,9 +17,8 @@ window.obieBuildPlotLayout = function (s) {
   function rangeFor(min, max, log) {
     if (min == null || max == null) return undefined;
     if (log) {
-      // Plotly log range is in exponents; clamp to avoid log(0)
       const safeMin = Math.max(1e-12, min);
-      const safeMax = Math.max(safeMin * 10, max);
+      const safeMax = Math.max(safeMin * 1.001, max);
       return [Math.log10(safeMin), Math.log10(safeMax)];
     }
     return [min, max];
