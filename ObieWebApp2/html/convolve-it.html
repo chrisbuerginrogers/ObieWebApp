@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convolve It — ObieWebApp 2</title>
+
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/convolve-it.css">
+
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <link  rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+
+  <script src="../js/convolve-it.js" defer></script>
+
+  <py-config type="json">
+  {
+    "packages": ["numpy"],
+    "files": {
+      "../py/dsp.py": "./dsp.py"
+    }
+  }
+  </py-config>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay">
+  <div class="spin"></div>
+  <div class="load-title">Loading PyScript + NumPy…</div>
+  <div class="load-sub">First load may take 15–30 s</div>
+</div>
+
+<header class="obie-header">
+  <a class="brand" href="../index.html">
+    <div class="logo-icon">🎻</div>
+    <h1>ObieWebApp 2</h1>
+  </a>
+  <span class="crumb">· Convolve It</span>
+  <div class="gap"></div>
+  <a class="btn" href="../index.html">← All tools</a>
+</header>
+
+<main class="ci-layout">
+
+  <!-- ── Control sidebar ── -->
+  <aside class="ci-sidebar">
+
+    <div class="card">
+      <div class="section-title">📂 FRF File</div>
+      <label class="file-btn">
+        Load FRF (CSV or TRF)
+        <input type="file" id="frf-input" accept=".csv,.trf,text/csv" onchange="loadFRF(this)">
+      </label>
+      <div class="file-status" id="frf-status">no file loaded</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🎵 Signal (WAV)</div>
+      <label class="file-btn">
+        Load WAV
+        <input type="file" id="wav-input" accept=".wav,audio/wav,audio/*" onchange="loadWAV(this)">
+      </label>
+      <div class="file-status" id="wav-status">no file loaded</div>
+      <button id="play-wav-btn" class="btn full" onclick="togglePlayWAV()"
+        style="display:none;margin-top:8px">▶ Play WAV</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">⚙️ Settings</div>
+
+      <div class="ctrl-row">
+        <label>Phase mode</label>
+        <div class="toggle-group" id="phase-toggle">
+          <button class="active" onclick="setPhaseMode('minphase',this)">Min-phase</button>
+          <button onclick="setPhaseMode('zerophase',this)">Zero-phase</button>
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <label>Output gain</label>
+        <div class="range-row">
+          <input type="range" id="gain-sl" min="-24" max="24" value="0"
+            step="1" oninput="updGain()">
+          <span class="range-val" id="gain-disp">0 dB</span>
+        </div>
+      </div>
+    </div>
+
+    <button id="conv-btn" class="btn primary full" onclick="runConvolution()" disabled>
+      ⚡ Convolve
+    </button>
+    <div class="prog-msg" id="prog-msg"></div>
+
+    <div class="card" id="result-card" style="display:none">
+      <div class="section-title">▶ Result</div>
+      <div class="fileinfo" id="out-info"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button id="play-btn" class="btn primary" onclick="togglePlay()" style="flex:1">
+          ▶ Play
+        </button>
+        <button id="save-btn" class="btn" onclick="saveWAV()">💾 Save</button>
+      </div>
+    </div>
+
+    <div class="card info-card">
+      <div class="section-title">ℹ Info</div>
+      <p>Y(f) = H(f) · X(f)</p>
+      <p>FRF: |CH1| / |CH2|</p>
+      <p>Hann-windowed FFT</p>
+    </div>
+
+  </aside>
+
+  <!-- ── Plot area ── -->
+  <div class="ci-plots">
+    <div class="plot-wrap">
+      <div class="plot-label">FRF · Magnitude (dB)</div>
+      <div id="frf-plot" class="plot-div"></div>
+    </div>
+    <div class="plot-wrap">
+      <div class="plot-label">Input · Time Domain</div>
+      <div id="wav-plot" class="plot-div"></div>
+    </div>
+    <div class="plot-wrap">
+      <div class="plot-label">Output · Convolved Waveform</div>
+      <div id="out-plot" class="plot-div"></div>
+    </div>
+    <div class="plot-wrap">
+      <div class="plot-label">Output · Magnitude Spectrum</div>
+      <div id="spec-plot" class="plot-div"></div>
+    </div>
+  </div>
+
+</main>
+
+<script type="py" src="../py/convolve_app.py" async></script>
+
+</body>
+</html>
