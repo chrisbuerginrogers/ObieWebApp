@@ -1,3 +1,20 @@
+/* ── Phase toggle — make active button clearly visible ───────────────── */
+#phase-toggle button {
+  flex: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#phase-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+#phase-toggle button:not(.active):hover {
+  background: var(--hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ── Loading overlay ─────────────────────────────────────────────────── */
 .loading-overlay {
   position: fixed; inset: 0;

@@ -73,8 +73,14 @@
       <div class="ctrl-row">
         <label>Phase mode</label>
         <div class="toggle-group" id="phase-toggle">
-          <button class="active" onclick="setPhaseMode('minphase',this)">Min-phase</button>
-          <button onclick="setPhaseMode('zerophase',this)">Zero-phase</button>
+          <button class="active" onclick="setPhaseMode('minphase',this)"
+            title="Min-phase: reconstructs a causal phase response from the FRF magnitude using the real cepstrum method. Most physically realistic — matches how an acoustic system actually behaves in time.">
+            Min-phase
+          </button>
+          <button onclick="setPhaseMode('zerophase',this)"
+            title="Zero-phase: applies the FRF magnitude only, with no phase shift. The impulse response is symmetric in time, which is non-causal but gives the clearest view of pure tonal colouration.">
+            Zero-phase
+          </button>
         </div>
       </div>
 
