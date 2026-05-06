@@ -5,24 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Convolve It — ObieWebApp 2</title>
 
-  <link rel="stylesheet" href="../css/theme.css">
-  <link rel="stylesheet" href="../css/convolve-it.css">
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/convolve-it.css">
 
   <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 
-  <link  rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
-  <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+  <!-- PyScript 2026.3.1 -->
+  <link  rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css">
+  <script type="module"   src="https://pyscript.net/releases/2026.3.1/core.js"></script>
 
-  <script src="../js/convolve-it.js" defer></script>
-
-  <py-config type="json">
-  {
-    "packages": ["numpy"],
-    "files": {
-      "../py/dsp.py": "./dsp.py"
-    }
-  }
-  </py-config>
+  <!-- Shared JS — order matters -->
+  <script src="../../js/plotly-theme.js"></script>
+  <script src="../../js/audio.js"></script>
+  <script src="../../js/convolve-it.js" defer></script>
 </head>
 <body>
 
@@ -33,25 +28,25 @@
 </div>
 
 <header class="obie-header">
-  <a class="brand" href="../index.html">
+  <a class="brand" href="../../index.html">
     <div class="logo-icon">🎻</div>
     <h1>ObieWebApp 2</h1>
   </a>
   <span class="crumb">· Convolve It</span>
   <div class="gap"></div>
-  <a class="btn" href="../index.html">← All tools</a>
+  <a class="btn" href="../../index.html">← All tools</a>
 </header>
 
 <main class="ci-layout">
 
-  <!-- ── Control sidebar ── -->
   <aside class="ci-sidebar">
 
     <div class="card">
       <div class="section-title">📂 FRF File</div>
       <label class="file-btn">
         Load FRF (CSV or TRF)
-        <input type="file" id="frf-input" accept=".csv,.trf,text/csv" onchange="loadFRF(this)">
+        <input type="file" id="frf-input" accept=".csv,.trf,.trv"
+               onchange="loadFRF(this)">
       </label>
       <div class="file-status" id="frf-status">no file loaded</div>
     </div>
@@ -60,11 +55,14 @@
       <div class="section-title">🎵 Signal (WAV)</div>
       <label class="file-btn">
         Load WAV
-        <input type="file" id="wav-input" accept=".wav,audio/wav,audio/*" onchange="loadWAV(this)">
+        <input type="file" id="wav-input" accept=".wav,audio/wav,audio/*"
+               onchange="loadWAV(this)">
       </label>
       <div class="file-status" id="wav-status">no file loaded</div>
-      <button id="play-wav-btn" class="btn full" onclick="togglePlayWAV()"
-        style="display:none;margin-top:8px">▶ Play WAV</button>
+      <button id="play-wav-btn" class="btn full" data-label="WAV"
+              onclick="togglePlayWAV()" style="display:none;margin-top:8px">
+        ▶ Play WAV
+      </button>
     </div>
 
     <div class="card">
@@ -74,38 +72,32 @@
         <label>Phase mode</label>
         <div class="toggle-group" id="phase-toggle">
           <button class="active" onclick="setPhaseMode('minphase',this)"
-            title="Min-phase: reconstructs a causal phase response from the FRF magnitude using the real cepstrum method. Most physically realistic — matches how an acoustic system actually behaves in time.">
-            Min-phase
-          </button>
+            title="Causal min-phase response via real cepstrum.">Min-phase</button>
           <button onclick="setPhaseMode('zerophase',this)"
-            title="Zero-phase: applies the FRF magnitude only, with no phase shift. The impulse response is symmetric in time, which is non-causal but gives the clearest view of pure tonal colouration.">
-            Zero-phase
-          </button>
+            title="Magnitude-only, no phase shift.">Zero-phase</button>
         </div>
       </div>
 
       <div class="ctrl-row">
         <label>Output gain</label>
         <div class="range-row">
-          <input type="range" id="gain-sl" min="-24" max="24" value="0"
-            step="1" oninput="updGain()">
+          <!-- readout wired via @when('input','#gain-sl') in main.py -->
+          <input type="range" id="gain-sl" min="-24" max="24" value="0" step="1">
           <span class="range-val" id="gain-disp">0 dB</span>
         </div>
       </div>
     </div>
 
-    <button id="conv-btn" class="btn primary full" onclick="runConvolution()" disabled>
-      ⚡ Convolve
-    </button>
+    <button id="conv-btn" class="btn primary full"
+            onclick="runConvolution()" disabled>⚡ Convolve</button>
     <div class="prog-msg" id="prog-msg"></div>
 
     <div class="card" id="result-card" style="display:none">
       <div class="section-title">▶ Result</div>
       <div class="fileinfo" id="out-info"></div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        <button id="play-btn" class="btn primary" onclick="togglePlay()" style="flex:1">
-          ▶ Play
-        </button>
+        <button id="play-btn" class="btn primary" data-label="Result"
+                onclick="togglePlay()" style="flex:1">▶ Play Result</button>
         <button id="save-btn" class="btn" onclick="saveWAV()">💾 Save</button>
       </div>
     </div>
@@ -113,13 +105,12 @@
     <div class="card info-card">
       <div class="section-title">ℹ Info</div>
       <p>Y(f) = H(f) · X(f)</p>
-      <p>FRF: |CH1| / |CH2|</p>
+      <p>Log-space FRF interpolation</p>
       <p>Hann-windowed FFT</p>
     </div>
 
   </aside>
 
-  <!-- ── Plot area ── -->
   <div class="ci-plots">
     <div class="plot-wrap">
       <div class="plot-label">FRF · Magnitude (dB)</div>
@@ -141,7 +132,17 @@
 
 </main>
 
-<script type="py" src="../py/convolve_app.py" async></script>
+<!--
+  trf_parser.py mapped here because dsp.py imports it for FRF loading.
+  All FRF parsing (TRF binary + CSV text) runs in Python.
+-->
+<script type="py" src="./main.py" config='{
+  "packages": ["numpy"],
+  "files": {
+    "../../py/dsp.py":        "./dsp.py",
+    "../../py/trf_parser.py": "./trf_parser.py"
+  }
+}' async></script>
 
 </body>
 </html>

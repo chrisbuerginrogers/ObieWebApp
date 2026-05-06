@@ -1,90 +1,104 @@
 """
-dsp.py — DSP core for Convolve It.
-Exposes: parse_frf_csv(), convolve(), compute_spectrum(), compute_wav_spectrum()
+dsp.py — DSP core for ObieWebApp2 (Convolve It tool).
+
+Public functions
+----------------
+  load_frf(filename_js, data_js)   — parse .trf/.csv FRF  → onFRFResult
+  convolve(frf_f, frf_db, wav, …)  — Y(f)=H(f)X(f)        → onConvolveResult
+  compute_spectrum(samples, sr)    — Hann-windowed dB       → onSpectrumResult
+  compute_wav_spectrum(samples, sr)                         → onWavSpectrumResult
 """
 
+import js
 import numpy as np
 from math import isfinite
+from pyscript.ffi import to_js
+from trf_parser import parse_trf
 
 
-def parse_frf_csv(text_js):
+# ── FRF CSV parser ────────────────────────────────────────────────────────
+
+def _parse_csv(text: str):
+    """Parse two-column FRF CSV. Returns (freqs, dbs, info) or raises."""
+    freqs, dbs = [], []
+    for ln in text.strip().split('\n'):
+        ln = ln.strip()
+        if not ln or (ln[0].isalpha() and ln[0] not in 'eE'):
+            continue
+        parts = ln.split(',')
+        if len(parts) >= 2:
+            try:
+                f, d = float(parts[0]), float(parts[1])
+                if f > 0 and isfinite(f) and isfinite(d):
+                    freqs.append(f)
+                    dbs.append(d)
+            except ValueError:
+                pass
+    if len(freqs) < 4:
+        raise ValueError('Too few valid rows — check CSV format (Frequency,dB)')
+    info = f'✓ {len(freqs)} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
+    return freqs, dbs, info
+
+
+# ── FRF loader — dispatches by extension ──────────────────────────────────
+
+def load_frf(filename_js, data_js):
     """
-    Parse a FRF CSV file (two columns: Frequency_Hz, FRF_dB).
-    Fires onFRFResult(freqs, dbs, info_str) or onFRFError(msg).
+    Parse an FRF file from raw bytes.
+      .trf  → binary parser  (trf_parser.parse_trf)
+      .csv  → CSV text parser (_parse_csv)
+    Fires window.onFRFResult(freqs, dbs, info) or window.onFRFError(msg).
     """
-    import js
     try:
-        lines = str(text_js).strip().split('\n')
-        freqs, dbs = [], []
-        for ln in lines:
-            ln = ln.strip()
-            if not ln or (ln[0].isalpha() and ln[0] not in 'eE'):
-                continue   # skip header rows
-            parts = ln.split(',')
-            if len(parts) >= 2:
-                try:
-                    f, d = float(parts[0]), float(parts[1])
-                    if f > 0 and isfinite(f) and isfinite(d):
-                        freqs.append(f)
-                        dbs.append(d)
-                except ValueError:
-                    pass
-        if len(freqs) < 4:
-            js.window.onFRFError('Too few valid rows — check file format')
+        filename = str(filename_js)
+        ext      = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        raw      = bytes(data_js.to_py())
+
+        if ext == 'trf':
+            result = parse_trf(raw)
+            if result['n_rows'] == 0:
+                warns = result.get('warnings') or []
+                js.window.onFRFError(warns[0] if warns else 'No data in TRF file')
+                return
+            freqs = result['freq']
+            dbs   = result['mag']
+            n     = result['n_rows']
+            end   = freqs[0] + (n - 1) * (freqs[-1] - freqs[0]) / max(n - 1, 1)
+            info  = f'✓ {n} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
+        elif ext == 'csv':
+            freqs, dbs, info = _parse_csv(raw.decode('utf-8', errors='replace'))
+        else:
+            js.window.onFRFError(f'Unsupported: .{ext} — use .trf or .csv')
             return
-        info = f'✓ {len(freqs)} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
-        from pyodide.ffi import to_js
+
         js.window.onFRFResult(to_js(freqs), to_js(dbs), info)
+
     except Exception as exc:
-        js.window.onFRFError(str(exc)[:80])
+        js.window.onFRFError(str(exc)[:120])
 
 
+# ── Min-phase reconstruction ──────────────────────────────────────────────
 
 def _build_min_phase(H_mag: np.ndarray, N: int) -> np.ndarray:
-    """
-    Complex rfft-format filter (length N//2+1) with magnitude == H_mag
-    and minimum-phase response reconstructed via the real cepstrum method.
-    """
-    eps = 1e-12
+    eps   = 1e-12
     log_m = np.log(np.maximum(H_mag, eps))
-
-    # Hermitian-symmetric log-magnitude of length N
-    if N % 2 == 0:
-        full_log = np.concatenate([log_m, log_m[-2:0:-1]])
-    else:
-        full_log = np.concatenate([log_m, log_m[:0:-1]])
-
-    cepstrum = np.fft.ifft(full_log).real
-
-    # Causal window: fold negative quefrencies onto positive side
-    win = np.zeros(N)
-    win[0] = 1.0
-    win[1 : N // 2] = 2.0
-    if N % 2 == 0:
-        win[N // 2] = 1.0
-
-    return np.exp(np.fft.rfft(win * cepstrum))   # |result| ≈ H_mag
+    full  = (np.concatenate([log_m, log_m[-2:0:-1]]) if N % 2 == 0
+             else np.concatenate([log_m, log_m[:0:-1]]))
+    cep   = np.fft.ifft(full).real
+    win   = np.zeros(N)
+    win[0] = 1.0; win[1:N//2] = 2.0
+    if N % 2 == 0: win[N//2] = 1.0
+    return np.exp(np.fft.rfft(win * cep))
 
 
-def convolve(frf_freqs_js, frf_db_js, wav_js,
-             sr_val, phase_mode_js, gain_db_js):
-    """
-    Frequency-domain convolution: Y(f) = H(f) · X(f)
+# ── Convolution ────────────────────────────────────────────────────────────
 
-    Parameters (all passed from JavaScript)
-    ---------------------------------------
-    frf_freqs_js : iterable – FRF frequency points in Hz
-    frf_db_js    : iterable – FRF magnitude in dB
-    wav_js       : iterable – audio samples (float ±1)
-    sr_val       : int      – sample rate
-    phase_mode_js: str      – 'minphase' | 'zerophase'
-    gain_db_js   : float    – output trim gain in dB
-    """
-    import js
+def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js):
+    """Y(f) = H(f) · X(f). All heavy lifting in Python/numpy."""
     try:
-        frf_f  = np.array(list(frf_freqs_js), dtype=np.float64)
-        frf_db = np.array(list(frf_db_js),    dtype=np.float64)
-        wav    = np.array(list(wav_js),        dtype=np.float64)
+        frf_f  = np.asarray(frf_freqs_js.to_py(), dtype=np.float64)
+        frf_db = np.asarray(frf_db_js.to_py(),    dtype=np.float64)
+        wav    = np.asarray(wav_js.to_py(),        dtype=np.float64)
         sr     = int(sr_val)
         mode   = str(phase_mode_js)
         gain   = 10.0 ** (float(gain_db_js) / 20.0)
@@ -94,62 +108,50 @@ def convolve(frf_freqs_js, frf_db_js, wav_js,
         X     = np.fft.rfft(wav)
         freqs = np.fft.rfftfreq(N, 1.0 / sr)
 
-        js.window.setProgMsg('Interpolating FRF…')
+        js.window.setProgMsg('Interpolating FRF onto FFT bins…')
         frf_mag = np.power(10.0, frf_db / 20.0)
-
-        # Log-space interpolation — better for acoustic frequency data
-        log_f = np.log10(np.maximum(frf_f,   1e-3))
-        log_q = np.log10(np.maximum(freqs,   1e-3))
-        H_mag = np.interp(log_q, log_f, frf_mag,
-                          left=frf_mag[0], right=frf_mag[-1])
-        H_mag *= gain
+        log_f   = np.log10(np.maximum(frf_f,  1e-3))
+        log_q   = np.log10(np.maximum(freqs,  1e-3))
+        H_mag   = np.interp(log_q, log_f, frf_mag,
+                            left=frf_mag[0], right=frf_mag[-1]) * gain
 
         js.window.setProgMsg(f'Building {mode} filter…')
-        H = _build_min_phase(H_mag, N) if mode == 'minphase' \
-            else H_mag.astype(np.complex128)
-
-        js.window.setProgMsg('Multiplying spectra…')
-        Y = X * H
+        H = (_build_min_phase(H_mag, N) if mode == 'minphase'
+             else H_mag.astype(np.complex128))
 
         js.window.setProgMsg('IFFT…')
-        y = np.fft.irfft(Y, N)
+        y = np.fft.irfft(X * H, N)
 
-        # Normalise to 0.95, then apply gain trim and clip to ±1
         peak = np.max(np.abs(y))
         if peak > 1e-12:
             y = y / peak * 0.95
-        y = np.clip(y * gain, -1.0, 1.0)
+        y = np.clip(y, -1.0, 1.0)
 
-        from pyodide.ffi import to_js
-        js.window.onConvolveResult(to_js(y.tolist()), sr)
+        js.window.onConvolveResult(to_js(y), sr)
 
     except Exception as exc:
         js.window.onConvolveError(str(exc)[:120])
         raise
 
 
-def compute_spectrum(samples_js, sr_val):
-    """Hann-windowed magnitude spectrum in dB — fires onSpectrumResult."""
-    _spectrum_inner(samples_js, sr_val, 'onSpectrumResult')
+# ── Spectrum ───────────────────────────────────────────────────────────────
 
+def compute_spectrum(samples_js, sr_val):
+    _spectrum(samples_js, sr_val, 'onSpectrumResult')
 
 def compute_wav_spectrum(samples_js, sr_val):
-    """Same as compute_spectrum but fires onWavSpectrumResult."""
-    _spectrum_inner(samples_js, sr_val, 'onWavSpectrumResult')
+    _spectrum(samples_js, sr_val, 'onWavSpectrumResult')
 
-
-def _spectrum_inner(samples_js, sr_val, callback_name):
-    import js
+def _spectrum(samples_js, sr_val, cb):
     try:
-        samples = np.array(list(samples_js), dtype=np.float64)
-        sr      = int(sr_val)
-        if len(samples) < 64:
+        sig   = np.asarray(samples_js.to_py(), dtype=np.float64)
+        sr    = int(sr_val)
+        if len(sig) < 64:
             return
-        win   = np.hanning(len(samples))
-        mag   = np.abs(np.fft.rfft(samples * win)) * 2.0 / win.sum()
-        freqs = np.fft.rfftfreq(len(samples), 1.0 / sr)
+        win   = np.hanning(len(sig))
+        mag   = np.abs(np.fft.rfft(sig * win)) * 2.0 / win.sum()
+        freqs = np.fft.rfftfreq(len(sig), 1.0 / sr)
         db    = 20.0 * np.log10(mag + 1e-12)
-        from pyodide.ffi import to_js
-        getattr(js.window, callback_name)(to_js(freqs.tolist()), to_js(db.tolist()))
+        getattr(js.window, cb)(to_js(freqs), to_js(db))
     except Exception as exc:
-        print(f'[dsp.{callback_name}]', exc)
+        print(f'[dsp._spectrum → {cb}]', exc)

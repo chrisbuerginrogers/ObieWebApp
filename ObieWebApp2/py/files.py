@@ -6,23 +6,27 @@ File reading, parsing dispatch, and reader callbacks for ObieWebApp2.
 Supported formats:
   .trf  — binary Rational Acoustics / MtxVec transfer function
   .tsv  — tab-separated (2-col real or 3-col complex)
+
+Imports are flat (no 'py.' prefix) because the py-config maps all shared
+modules to the VFS root: "../../py/foo.py" → "./foo.py".
 """
 
 import js
-from pyodide.ffi import to_js
-from py.trf_parser import parse_trf
-from py.tsv_parser import parse_tsv
-from py.dom import set_status, render_header, render_fileinfo
+from pyscript.ffi import to_js
+from trf_parser import parse_trf
+from tsv_parser import parse_tsv
+from dom import set_status, render_header, render_fileinfo
 
 
 def load(filename, js_uint8array):
     """Parse a file from a JS Uint8Array. Returns standard result dict."""
     ext = filename.rsplit('.', 1)[-1].lower()
+    raw = bytes(js_uint8array.to_py())
     if ext == 'tsv':
-        text = bytes(js_uint8array.to_py()).decode('utf-8', errors='replace')
-        return parse_tsv(text)
-    else:
-        return parse_trf(bytes(js_uint8array.to_py()))
+        return parse_tsv(raw.decode('utf-8', errors='replace'))
+    if ext in ('trf', 'trv'):
+        return parse_trf(raw)
+    return parse_tsv(raw.decode('utf-8', errors='replace'))  # unknown: try text
 
 
 def trace_label(filename):
