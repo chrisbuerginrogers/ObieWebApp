@@ -3,22 +3,29 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 main.tool {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 18px 22px 40px;
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 18px;
+  height: calc(100vh - 52px);   /* fill below the fixed header */
+  overflow: hidden;
+  padding: 18px 22px;
 }
 
 @media (max-width: 820px) {
-  main.tool { grid-template-columns: 1fr; }
+  main.tool {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: auto;
+    padding-bottom: 40px;
+  }
 }
 
 aside.controls {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;             /* sidebar scrolls independently */
+  padding-bottom: 18px;
 }
 
 .section-title {
@@ -115,16 +122,18 @@ section.plot-area {
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  min-height: 540px;
+  min-height: 0;                /* allow grid cell to shrink */
+  overflow: hidden;
 }
 .plot-area h3 {
   font-size: 1rem;
   margin-bottom: 8px;
   color: var(--text);
+  flex-shrink: 0;
 }
 .plot-area #plot {
   flex: 1;
-  min-height: 480px;
+  min-height: 0;                /* let flexbox control height, not content */
 }
 
 /* ─── Status / error message ──────────────────────────────────────── */

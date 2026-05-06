@@ -24,13 +24,14 @@
   ];
 
   const state = {
-    plotDiv: 'plot',
-    xLabel:  'Frequency [Hz]',
-    yLabel:  'Magnitude [dB]',
-    xLog:    true,
-    yLog:    true,
-    xMin:    200, xMax: 7000,
-    yMin:    null, yMax: null,
+    plotDiv:   'plot',
+    xLabel:    'Frequency [Hz]',
+    yLabel:    'Magnitude [dB]',
+    xLog:      true,
+    yLog:      true,
+    xMin:      200, xMax: 7000,
+    yMin:      null, yMax: null,
+    lineWidth: 1.8,
   };
 
   // Each trace: { x:[], y:[], name:'', color:'' }
@@ -79,18 +80,16 @@
       : state;
 
     const layout = window.obieBuildPlotLayout(s);
-    layout.showlegend = traces.length > 1;
-    layout.legend = { font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' };
 
     const data = traces.length
       ? traces.map(t => ({
           x: t.x, y: t.y,
           type: 'scatter', mode: 'lines',
           name: t.name,
-          line: { color: t.color, width: 1.8 },
+          line: { color: t.color, width: state.lineWidth },
         }))
       : [{ x: [], y: [], type: 'scatter', mode: 'lines',
-           line: { color: PALETTE[0], width: 1.8 } }];
+           line: { color: PALETTE[0], width: state.lineWidth } }];
 
     Plotly.react(state.plotDiv, data, layout, window.OBIE_PLOT_CONFIG);
   }
@@ -195,6 +194,23 @@
     wireRange('y-min', 'yMin'); wireRange('y-max', 'yMax');
     wireAutoscale('autoscale-btn');
     syncInputs();
+
+    // Line width slider — live update on drag
+    const lwSlider = $('line-width');
+    const lwDisp   = $('line-width-disp');
+    if (lwSlider) {
+      lwSlider.value = state.lineWidth;
+      if (lwDisp) lwDisp.textContent = state.lineWidth + 'px';
+      lwSlider.addEventListener('input', () => {
+        state.lineWidth = parseFloat(lwSlider.value);
+        if (lwDisp) lwDisp.textContent = state.lineWidth + 'px';
+        render();
+      });
+    }
+
+    // Responsive resize
+    window.addEventListener('resize', () => Plotly.Plots.resize(state.plotDiv));
+
     render();
   };
 
