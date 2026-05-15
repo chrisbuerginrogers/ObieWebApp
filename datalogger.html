@@ -284,10 +284,8 @@ input.mledit {
   font-size: 10px;
 }
 
-/* Vertical range input cross-browser */
+/* Vertical range input — use standardized writing-mode (Chrome 88+, FF 120+, Safari 17.4+) */
 input[type=range].vert {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
   writing-mode: vertical-lr;
   direction: rtl;
   width: 100%;
@@ -541,7 +539,7 @@ input[type=range] {
 # =====================================================================
 import io
 import base64
-import asyncio
+import traceback
 
 import numpy as np
 import matplotlib
@@ -550,8 +548,30 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from scipy.io import loadmat, wavfile
 
-from pyscript import document, when
-from js import Uint8Array, FileReader  # noqa: F401
+from pyscript import document
+from js import Uint8Array
+from pyodide.ffi import create_proxy
+
+
+# Hide the loading splash IMMEDIATELY so that any later error is visible
+# to the user rather than hidden behind a spinner.
+try:
+    document.getElementById("loading").classList.add("hidden")
+except Exception:
+    pass
+
+
+def _report_init_error(where, exc):
+    """Surface a startup error visibly to the user."""
+    tb = traceback.format_exc()
+    try:
+        st = document.getElementById("status")
+        st.innerText = f"INIT ERROR in {where}: {exc}"
+        st.style.color = "#ffb"
+    except Exception:
+        pass
+    # Also dump to console for debugging
+    print(f"[datalogger] init error in {where}: {exc}\n{tb}")
 
 
 # ---------------------------------------------------------------------
@@ -700,7 +720,7 @@ def rebuild_chanboxes(panel, nchan, selected):
         cb.type = "checkbox"
         cb.id = f"chan-{panel}-{i}"
         cb.checked = (i in selected)
-        cb.addEventListener("change", channel_toggler(panel))
+        cb.addEventListener("change", create_proxy(channel_toggler(panel)))
 
         lab = document.createElement("label")
         lab.htmlFor = cb.id
@@ -1537,92 +1557,112 @@ def tab_click(event):
 # ---------------------------------------------------------------------
 # Wire up DOM events
 # ---------------------------------------------------------------------
-document.getElementById("fileinput").addEventListener("change", handle_file)
-document.getElementById("loaddemo").addEventListener("click",
-                                                    lambda e: gen_demo())
-document.getElementById("freqinput").addEventListener("change",
-    lambda e: (setattr(S, "freq", float(e.target.value)), plot_time()))
-
-for t in document.getElementsByClassName("tab"):
-    t.addEventListener("click", tab_click)
-
-# --- Time panel wiring ---
-for sid in ("hscroll-time", "hzoom-time", "vscroll-time", "vzoom-time"):
-    document.getElementById(sid).addEventListener("input", lambda e: plot_time())
-document.getElementById("xstart-time").addEventListener("change", lambda e: apply_xrange_time())
-document.getElementById("xend-time").addEventListener("change", lambda e: apply_xrange_time())
-document.getElementById("auto-time").addEventListener("click", lambda e: autorange_time())
-document.getElementById("xmouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "X"))
-document.getElementById("ymouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "Y"))
-document.getElementById("xymouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "XY"))
-
-plot_click_time = plot_click_handler("time")
-plot_click_spec = plot_click_handler("spec")
-plot_click_son = plot_click_handler("son")
-document.getElementById("plot-time").addEventListener("click", plot_click_time)
-document.getElementById("plot-spec").addEventListener("click", plot_click_spec)
-document.getElementById("plot-son").addEventListener("click", plot_click_son)
-
-# Read-vals buttons just enter "read" mode; the click handler does the work.
-document.getElementById("readvals-time").addEventListener("click",
-    lambda e: set_mouse_mode("time", "read"))
-document.getElementById("readvals-spec").addEventListener("click",
-    lambda e: set_mouse_mode("spec", "read"))
-document.getElementById("readvals-son").addEventListener("click",
-    lambda e: set_mouse_mode("son", "read"))
-
-document.getElementById("calcfft-time").addEventListener("click", lambda e: calc_fft())
-document.getElementById("calcson-time").addEventListener("click", lambda e: calc_son())
-document.getElementById("grid-time").addEventListener("click",
-    lambda e: (S.gridflag.__setitem__("time", not S.gridflag["time"]), plot_time()))
-
-for rb in document.getElementsByName("timeaxis"):
-    def _h(e):
-        S.timeflag = 1 if e.target.value == "s" else 0
-        plot_time()
-    rb.addEventListener("change", _h)
-
-# --- Spectrum panel wiring ---
-for sid in ("hscroll-spec", "hzoom-spec", "vscroll-spec", "vzoom-spec"):
-    document.getElementById(sid).addEventListener("input", lambda e: plot_spec())
-document.getElementById("xstart-spec").addEventListener("change", lambda e: apply_xrange_spec())
-document.getElementById("xend-spec").addEventListener("change", lambda e: apply_xrange_spec())
-document.getElementById("auto-spec").addEventListener("click", lambda e: autorange_spec())
-document.getElementById("xmouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "X"))
-document.getElementById("ymouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "Y"))
-document.getElementById("xymouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "XY"))
-document.getElementById("grid-spec").addEventListener("click",
-    lambda e: (S.gridflag.__setitem__("spec", not S.gridflag["spec"]), plot_spec()))
-document.getElementById("logx-spec").addEventListener("click",
-    lambda e: (setattr(S, "logx_spec", not S.logx_spec), plot_spec()))
-
-for rb in document.getElementsByName("spectype"):
-    def _hs(e):
-        S.spectype = e.target.value
-        plot_spec()
-    rb.addEventListener("change", _hs)
-
-# --- Sonogram panel wiring ---
-for sid in ("hscroll-son", "hzoom-son", "vscroll-son", "vzoom-son"):
-    document.getElementById(sid).addEventListener("input", lambda e: plot_son())
-document.getElementById("auto-son").addEventListener("click", lambda e: autorange_son())
-document.getElementById("recalc-son").addEventListener("click", lambda e: calc_son())
-document.getElementById("ncont-son").addEventListener("change", lambda e: plot_son())
-document.getElementById("contspc-son").addEventListener("change", lambda e: plot_son())
-
-for rb in document.getElementsByName("sonmode"):
-    def _hm(e):
-        S.sonmode = e.target.value
-        plot_son()
-    rb.addEventListener("change", _hm)
+def _on(target, event_name, handler):
+    """Add an event listener. `target` may be an element ID (str) or an
+    element (JsProxy). Wraps the Python handler in create_proxy so that
+    Pyodide keeps it alive for the lifetime of the listener."""
+    if isinstance(target, str):
+        el = document.getElementById(target)
+        if el is None:
+            print(f"[datalogger] WARN: element '{target}' not found in DOM")
+            return
+    else:
+        el = target
+    el.addEventListener(event_name, create_proxy(handler))
 
 
-# Hide loading screen, set initial message
-document.getElementById("loading").classList.add("hidden")
-set_msg("time", "Load a .mat / .wav / .csv file, or click 'Load test signal'.")
-set_msg("spec", "No spectrum data yet — calculate from Time tab.")
-set_msg("son", "No sonogram data yet — calculate from Time tab.")
-set_status("Ready. Load a file or click 'Load test signal'.")
+def _wire():
+    _on("fileinput", "change", handle_file)
+    _on("loaddemo", "click", lambda e: gen_demo())
+    _on("freqinput", "change",
+        lambda e: (setattr(S, "freq", float(e.target.value)), plot_time()))
+
+    for t in document.getElementsByClassName("tab"):
+        _on(t, "click", tab_click)
+
+    # --- Time panel ---
+    for sid in ("hscroll-time", "hzoom-time", "vscroll-time", "vzoom-time"):
+        _on(sid, "input", lambda e: plot_time())
+    _on("xstart-time", "change", lambda e: apply_xrange_time())
+    _on("xend-time", "change", lambda e: apply_xrange_time())
+    _on("auto-time", "click", lambda e: autorange_time())
+    _on("xmouse-time", "click", lambda e: set_mouse_mode("time", "X"))
+    _on("ymouse-time", "click", lambda e: set_mouse_mode("time", "Y"))
+    _on("xymouse-time", "click", lambda e: set_mouse_mode("time", "XY"))
+
+    global plot_click_time, plot_click_spec, plot_click_son
+    plot_click_time = plot_click_handler("time")
+    plot_click_spec = plot_click_handler("spec")
+    plot_click_son = plot_click_handler("son")
+    _on("plot-time", "click", plot_click_time)
+    _on("plot-spec", "click", plot_click_spec)
+    _on("plot-son", "click", plot_click_son)
+
+    _on("readvals-time", "click", lambda e: set_mouse_mode("time", "read"))
+    _on("readvals-spec", "click", lambda e: set_mouse_mode("spec", "read"))
+    _on("readvals-son", "click", lambda e: set_mouse_mode("son", "read"))
+
+    _on("calcfft-time", "click", lambda e: calc_fft())
+    _on("calcson-time", "click", lambda e: calc_son())
+    _on("grid-time", "click",
+        lambda e: (S.gridflag.__setitem__("time", not S.gridflag["time"]),
+                   plot_time()))
+
+    for rb in document.getElementsByName("timeaxis"):
+        def _ht(e):
+            S.timeflag = 1 if e.target.value == "s" else 0
+            plot_time()
+        _on(rb, "change", _ht)
+
+    # --- Spectrum panel ---
+    for sid in ("hscroll-spec", "hzoom-spec", "vscroll-spec", "vzoom-spec"):
+        _on(sid, "input", lambda e: plot_spec())
+    _on("xstart-spec", "change", lambda e: apply_xrange_spec())
+    _on("xend-spec", "change", lambda e: apply_xrange_spec())
+    _on("auto-spec", "click", lambda e: autorange_spec())
+    _on("xmouse-spec", "click", lambda e: set_mouse_mode("spec", "X"))
+    _on("ymouse-spec", "click", lambda e: set_mouse_mode("spec", "Y"))
+    _on("xymouse-spec", "click", lambda e: set_mouse_mode("spec", "XY"))
+    _on("grid-spec", "click",
+        lambda e: (S.gridflag.__setitem__("spec", not S.gridflag["spec"]),
+                   plot_spec()))
+    _on("logx-spec", "click",
+        lambda e: (setattr(S, "logx_spec", not S.logx_spec), plot_spec()))
+
+    for rb in document.getElementsByName("spectype"):
+        def _hs(e):
+            S.spectype = e.target.value
+            plot_spec()
+        _on(rb, "change", _hs)
+
+    # --- Sonogram panel ---
+    for sid in ("hscroll-son", "hzoom-son", "vscroll-son", "vzoom-son"):
+        _on(sid, "input", lambda e: plot_son())
+    _on("auto-son", "click", lambda e: autorange_son())
+    _on("recalc-son", "click", lambda e: calc_son())
+    _on("ncont-son", "change", lambda e: plot_son())
+    _on("contspc-son", "change", lambda e: plot_son())
+
+    for rb in document.getElementsByName("sonmode"):
+        def _hm(e):
+            S.sonmode = e.target.value
+            plot_son()
+        _on(rb, "change", _hm)
+
+
+# Predeclare the click handlers so they exist even if _wire fails partway
+plot_click_time = None
+plot_click_spec = None
+plot_click_son = None
+
+try:
+    _wire()
+    set_msg("time", "Load a .mat / .wav / .csv file, or click 'Load test signal'.")
+    set_msg("spec", "No spectrum data yet — calculate from Time tab.")
+    set_msg("son", "No sonogram data yet — calculate from Time tab.")
+    set_status("Ready. Load a file or click 'Load test signal'.")
+except Exception as e:
+    _report_init_error("event wiring", e)
 
 </script>
 
