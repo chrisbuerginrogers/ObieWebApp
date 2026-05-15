@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Data logger — Time / Spectrum / Sonogram</title>
+<link rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
+<script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+<style>
+:root {
+  --matlab-bg: #d4d0c8;
+  --matlab-panel: #ececec;
+  --matlab-border-light: #ffffff;
+  --matlab-border-dark: #808080;
+  --matlab-text: #000;
+  --matlab-blue: #0a246a;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--matlab-bg);
+  color: var(--matlab-text);
+  font-family: "Helvetica", "Arial", sans-serif;
+  font-size: 11px;
+}
+#header {
+  background: var(--matlab-blue);
+  color: white;
+  padding: 4px 10px;
+  font-weight: bold;
+  border-bottom: 1px solid black;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+#header h1 { font-size: 12px; margin: 0; flex: 0 0 auto; }
+#header .controls { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+#header label { color: #fff; }
+#header input[type="number"], #header input[type="file"] {
+  font-size: 11px; padding: 1px 3px;
+  border: 1px inset var(--matlab-bg);
+  background: white;
+}
+#header input[type="number"] { width: 80px; }
+#status {
+  color: #ffd; font-style: italic; margin-left: auto;
+  font-size: 10px;
+}
+
+/* MATLAB-style tab bar */
+#tabbar {
+  display: flex;
+  background: var(--matlab-bg);
+  padding: 4px 4px 0 4px;
+  border-bottom: 1px solid var(--matlab-border-dark);
+}
+.tab {
+  padding: 4px 16px;
+  background: var(--matlab-bg);
+  border: 1px solid var(--matlab-border-dark);
+  border-bottom: none;
+  margin-right: 2px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.tab.active {
+  background: var(--matlab-panel);
+  font-weight: bold;
+  position: relative;
+  z-index: 2;
+  margin-bottom: -1px;
+  padding-bottom: 5px;
+}
+
+/* Each panel reproduces MATLAB's figure layout using absolute positioning
+   in percent units, matching the normalized coords from tsinit.m */
+.panel {
+  position: relative;
+  background: var(--matlab-panel);
+  border: 1px solid var(--matlab-border-dark);
+  width: 100%;
+  height: calc(100vh - 96px);
+  min-height: 600px;
+  display: none;
+}
+.panel.active { display: block; }
+
+/* Plot area */
+.plot-area {
+  position: absolute;
+  left: 30%;
+  top: 2%;
+  width: 68%;
+  height: 68%;
+  background: white;
+  border: 1px solid var(--matlab-border-dark);
+  cursor: crosshair;
+  user-select: none;
+}
+.plot-area img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.mouse-overlay {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed #f00;
+  background: rgba(255, 100, 100, 0.15);
+  display: none;
+}
+.mouse-marker {
+  position: absolute;
+  width: 9px; height: 9px;
+  background: #f00;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  margin-left: -5px; margin-top: -5px;
+  pointer-events: none;
+  display: none;
+}
+
+/* Channel checkboxes column on far left */
+.chans {
+  position: absolute;
+  left: 0.5%;
+  top: 2%;
+  width: 13%;
+  height: 70%;
+  overflow-y: auto;
+  border: 1px inset var(--matlab-bg);
+  background: white;
+  padding: 2px;
+}
+.chans-label {
+  position: absolute;
+  left: 0.5%;
+  top: 73%;
+  width: 13%;
+  text-align: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+.chan-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+  padding: 1px 2px;
+  font-family: monospace;
+  font-size: 10px;
+}
+.chan-row label {
+  flex: 1;
+  padding: 1px 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.chan-row input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Vertical sliders area (between checkboxes and plot) */
+.vscroll {
+  position: absolute;
+  left: 17%;
+  top: 2%;
+  width: 4%;
+  height: 68%;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+.vzoom {
+  position: absolute;
+  left: 22%;
+  top: 2%;
+  width: 4%;
+  height: 68%;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+.vscroll-label, .vzoom-label {
+  position: absolute;
+  width: 4%;
+  top: 73%;
+  text-align: center;
+  font-size: 10px;
+  writing-mode: horizontal-tb;
+}
+.vscroll-label { left: 17%; }
+.vzoom-label { left: 22%; }
+
+/* Horizontal sliders (below the plot) */
+.hzoom {
+  position: absolute;
+  left: 30%;
+  top: 71.5%;
+  width: 68%;
+  height: 3%;
+}
+.hscroll {
+  position: absolute;
+  left: 30%;
+  top: 75.5%;
+  width: 68%;
+  height: 3%;
+}
+.hzoom-label, .hscroll-label {
+  position: absolute;
+  font-size: 10px;
+  left: 24%;
+  width: 6%;
+  text-align: right;
+}
+.hzoom-label { top: 72%; }
+.hscroll-label { top: 76%; }
+
+/* Bottom controls — buttons, edit boxes, radio buttons */
+.bottom-controls {
+  position: absolute;
+  left: 0;
+  top: 80%;
+  width: 100%;
+  height: 20%;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 18% 22% 26% 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px 8px;
+  border-top: 1px solid var(--matlab-border-dark);
+  background: var(--matlab-panel);
+}
+
+button.mlbtn {
+  background: var(--matlab-bg);
+  border: 1px outset var(--matlab-bg);
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  min-height: 22px;
+}
+button.mlbtn:active { border: 1px inset var(--matlab-bg); }
+button.mlbtn.active-mode { background: #ffc; border: 1px inset #888; }
+button.mlbtn:disabled { color: #888; cursor: default; }
+
+input.mledit {
+  background: white;
+  border: 1px inset var(--matlab-bg);
+  padding: 2px 4px;
+  font-size: 11px;
+  font-family: monospace;
+  width: 100px;
+}
+.field-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-group label { min-width: 40px; }
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+.radio-group label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+
+#message {
+  font-family: monospace;
+  background: #fff;
+  border: 1px inset var(--matlab-bg);
+  padding: 2px 4px;
+  min-height: 22px;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 10px;
+}
+
+/* Vertical range input cross-browser */
+input[type=range].vert {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 100%;
+  height: 100%;
+}
+input[type=range] {
+  background: var(--matlab-bg);
+}
+
+/* Loading splash */
+#loading {
+  position: fixed; inset: 0;
+  background: rgba(212, 208, 200, 0.95);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  font-family: monospace;
+  color: var(--matlab-blue);
+}
+#loading .spinner {
+  width: 24px; height: 24px;
+  border: 3px solid var(--matlab-border-dark);
+  border-top-color: var(--matlab-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div>Loading PyScript runtime (numpy, matplotlib, scipy)…</div>
+  <div style="font-size: 10px; margin-top: 4px;">First load downloads ~15 MB; subsequent loads are cached.</div>
+</div>
+
+<div id="header">
+  <h1>Data logger</h1>
+  <div class="controls">
+    <label>File:</label>
+    <input type="file" id="fileinput" accept=".mat,.csv,.wav">
+    <label>Sampling freq (Hz):</label>
+    <input type="number" id="freqinput" value="44100" min="1" step="1">
+    <button class="mlbtn" id="loaddemo">Load test signal</button>
+  </div>
+  <div id="status">No data loaded.</div>
+</div>
+
+<div id="tabbar">
+  <div class="tab active" data-panel="time">Time domain display</div>
+  <div class="tab" data-panel="spec">Frequency domain display</div>
+  <div class="tab" data-panel="son">Sonogram display</div>
+</div>
+
+<!-- =================== TIME DOMAIN PANEL =================== -->
+<div class="panel active" id="panel-time">
+  <div class="chans" id="chans-time"></div>
+  <div class="chans-label">Channel<br>selection</div>
+
+  <div class="vscroll">
+    <input type="range" class="vert" id="vscroll-time" min="-1" max="1" step="0.001" value="0">
+  </div>
+  <div class="vscroll-label">Pos</div>
+
+  <div class="vzoom">
+    <input type="range" class="vert" id="vzoom-time" min="-3" max="1" step="0.01" value="0">
+  </div>
+  <div class="vzoom-label">Zoom</div>
+
+  <div class="plot-area" id="plot-time">
+    <img id="plotimg-time" alt="">
+    <div class="mouse-overlay" id="mouse-overlay-time"></div>
+    <div class="mouse-marker" id="mouse-marker-time"></div>
+  </div>
+
+  <div class="hzoom-label">Zoom</div>
+  <input type="range" class="hzoom" id="hzoom-time" min="-4" max="0" step="0.01" value="0">
+  <div class="hscroll-label">Start</div>
+  <input type="range" class="hscroll" id="hscroll-time" min="0" max="1" step="0.0001" value="0">
+
+  <div class="bottom-controls">
+    <div class="button-row">
+      <button class="mlbtn" id="ymouse-time">Y mouse</button>
+      <button class="mlbtn" id="xymouse-time">XY mouse</button>
+      <button class="mlbtn" id="xmouse-time">X mouse</button>
+      <button class="mlbtn" id="auto-time">Autorange</button>
+      <button class="mlbtn" id="readvals-time">Read vals</button>
+    </div>
+    <div class="field-group">
+      <label>Start:</label>
+      <input type="text" class="mledit" id="xstart-time">
+    </div>
+    <div class="field-group">
+      <label>End:</label>
+      <input type="text" class="mledit" id="xend-time">
+    </div>
+    <div class="radio-group">
+      <div style="font-weight: bold;">Time axis</div>
+      <label><input type="radio" name="timeaxis" value="s" checked> Seconds</label>
+      <label><input type="radio" name="timeaxis" value="samples"> Samples</label>
+    </div>
+    <div class="button-row" style="grid-column: 1 / span 2;">
+      <button class="mlbtn" id="calcfft-time">Calculate spectrum (FFT)</button>
+      <button class="mlbtn" id="calcson-time">Calculate sonogram</button>
+      <button class="mlbtn" id="grid-time">Toggle grid</button>
+    </div>
+    <div style="grid-column: 3 / span 2;" id="message-time-wrap">
+      <div id="message-time" style="font-family: monospace; background: white; border: 1px inset var(--matlab-bg); padding: 2px 4px; min-height: 22px; font-size: 10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== SPECTRUM PANEL =================== -->
+<div class="panel" id="panel-spec">
+  <div class="chans" id="chans-spec"></div>
+  <div class="chans-label">Channel<br>selection</div>
+
+  <div class="vscroll">
+    <input type="range" class="vert" id="vscroll-spec" min="-1" max="1" step="0.001" value="0">
+  </div>
+  <div class="vscroll-label">Pos</div>
+
+  <div class="vzoom">
+    <input type="range" class="vert" id="vzoom-spec" min="-3" max="1" step="0.01" value="0">
+  </div>
+  <div class="vzoom-label">Zoom</div>
+
+  <div class="plot-area" id="plot-spec">
+    <img id="plotimg-spec" alt="">
+    <div class="mouse-overlay" id="mouse-overlay-spec"></div>
+    <div class="mouse-marker" id="mouse-marker-spec"></div>
+  </div>
+
+  <div class="hzoom-label">Zoom</div>
+  <input type="range" class="hzoom" id="hzoom-spec" min="-4" max="0" step="0.01" value="0">
+  <div class="hscroll-label">Start</div>
+  <input type="range" class="hscroll" id="hscroll-spec" min="0" max="1" step="0.0001" value="0">
+
+  <div class="bottom-controls">
+    <div class="button-row">
+      <button class="mlbtn" id="ymouse-spec">Y mouse</button>
+      <button class="mlbtn" id="xymouse-spec">XY mouse</button>
+      <button class="mlbtn" id="xmouse-spec">X mouse</button>
+      <button class="mlbtn" id="auto-spec">Autorange</button>
+      <button class="mlbtn" id="readvals-spec">Read vals</button>
+    </div>
+    <div class="field-group">
+      <label>Start:</label>
+      <input type="text" class="mledit" id="xstart-spec">
+    </div>
+    <div class="field-group">
+      <label>End:</label>
+      <input type="text" class="mledit" id="xend-spec">
+    </div>
+    <div class="radio-group">
+      <div style="font-weight: bold;">Plot type</div>
+      <label><input type="radio" name="spectype" value="mag" checked> Magnitude (dB)</label>
+      <label><input type="radio" name="spectype" value="phase"> Phase</label>
+      <label><input type="radio" name="spectype" value="real"> Real</label>
+      <label><input type="radio" name="spectype" value="imag"> Imag</label>
+      <label><input type="radio" name="spectype" value="nyq"> Nyquist</label>
+    </div>
+    <div class="button-row" style="grid-column: 1 / span 2;">
+      <button class="mlbtn" id="logx-spec">Toggle log X</button>
+      <button class="mlbtn" id="grid-spec">Toggle grid</button>
+    </div>
+    <div style="grid-column: 3 / span 2;">
+      <div id="message-spec" style="font-family: monospace; background: white; border: 1px inset var(--matlab-bg); padding: 2px 4px; min-height: 22px; font-size: 10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== SONOGRAM PANEL =================== -->
+<div class="panel" id="panel-son">
+  <div class="chans-label" style="top: 2%; height: auto;">Sonogram settings</div>
+  <div style="position: absolute; left: 0.5%; top: 7%; width: 13%; padding: 4px; border: 1px inset var(--matlab-bg); background: white; font-size: 10px;">
+    <div style="margin-bottom: 4px;">
+      <label>FFT size:</label><br>
+      <input type="text" class="mledit" id="fftsize-son" value="512" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 4px;">
+      <label># spectra:</label><br>
+      <input type="text" class="mledit" id="nspec-son" value="200" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 4px;">
+      <label>Step (samples):</label><br>
+      <input type="text" class="mledit" id="step-son" value="128" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 4px;">
+      <label>Source channel:</label><br>
+      <input type="text" class="mledit" id="src-son" value="1" style="width: 100%;">
+    </div>
+    <button class="mlbtn" id="recalc-son" style="width: 100%;">Recalculate</button>
+  </div>
+
+  <div class="vscroll">
+    <input type="range" class="vert" id="vscroll-son" min="0" max="1" step="0.001" value="0">
+  </div>
+  <div class="vscroll-label">Time pos</div>
+
+  <div class="vzoom">
+    <input type="range" class="vert" id="vzoom-son" min="-3" max="0" step="0.01" value="0">
+  </div>
+  <div class="vzoom-label">Time zoom</div>
+
+  <div class="plot-area" id="plot-son">
+    <img id="plotimg-son" alt="">
+    <div class="mouse-overlay" id="mouse-overlay-son"></div>
+    <div class="mouse-marker" id="mouse-marker-son"></div>
+  </div>
+
+  <div class="hzoom-label">Freq zoom</div>
+  <input type="range" class="hzoom" id="hzoom-son" min="-4" max="0" step="0.01" value="0">
+  <div class="hscroll-label">Freq start</div>
+  <input type="range" class="hscroll" id="hscroll-son" min="0" max="1" step="0.0001" value="0">
+
+  <div class="bottom-controls">
+    <div class="button-row">
+      <button class="mlbtn" id="auto-son">Autorange</button>
+      <button class="mlbtn" id="readvals-son">Read vals</button>
+      <button class="mlbtn" id="decay-son">Decay rate</button>
+    </div>
+    <div class="field-group">
+      <label># contours:</label>
+      <input type="text" class="mledit" id="ncont-son" value="10">
+    </div>
+    <div class="field-group">
+      <label>Spacing (dB):</label>
+      <input type="text" class="mledit" id="contspc-son" value="6">
+    </div>
+    <div class="radio-group">
+      <div style="font-weight: bold;">Display</div>
+      <label><input type="radio" name="sonmode" value="contour" checked> Contour</label>
+      <label><input type="radio" name="sonmode" value="surface"> Surface</label>
+      <label><input type="radio" name="sonmode" value="image"> Colourmap</label>
+    </div>
+    <div style="grid-column: 1 / span 4;">
+      <div id="message-son" style="font-family: monospace; background: white; border: 1px inset var(--matlab-bg); padding: 2px 4px; min-height: 22px; font-size: 10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PYTHON CODE ================= -->
+<script type="py" config='{"packages": ["numpy", "matplotlib", "scipy"]}'>
+# =====================================================================
+# Data logger — PyScript port of Jim Woodhouse's MATLAB data logger
+# Faithful reproduction of time / spectrum / sonogram display windows.
+# =====================================================================
+import io
+import base64
+import asyncio
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from scipy.io import loadmat, wavfile
+
+from pyscript import document, when
+from js import Uint8Array, FileReader  # noqa: F401
+
+
+# ---------------------------------------------------------------------
+# Global state. Mirrors the MATLAB globals from globlset.
+# ---------------------------------------------------------------------
+class State:
+    # Time series
+    indata = None         # (buflen, nchan) float array
+    freq = 44100.0
+    buflen = 0
+    nchan = 0
+    timeflag = 1          # 1 = seconds, 0 = samples
+    gridflag = {"time": False, "spec": False, "son": False}
+    chan_time = []        # list of selected channel indices (0-based)
+    xstart_time = 0.0
+    xend_time = 1.0
+    ymax_time = 1.0
+    ymin_time = -1.0
+
+    # Spectrum
+    yspec = None          # (npts/2+1, nchan) complex array
+    faxis = None
+    npts = 0
+    nfreq = 0
+    chan_spec = []
+    xstart_spec = 0.0
+    xend_spec = 1.0
+    ymax_spec = 0.0
+    ymin_spec = -80.0
+    spectype = "mag"
+    logx_spec = False
+
+    # Sonogram
+    yson = None           # (nspec, nfreq_son) magnitude in dB
+    sonfaxis = None
+    sontaxis = None
+    fftsize_son = 512
+    nspec_son = 200
+    step_son = 128
+    src_son = 0           # 0-based source channel
+    sonmode = "contour"
+    ncont = 10
+    contspc = 6.0         # dB
+    son_xstart = 0.0      # frequency start
+    son_xend = 0.0
+    son_ystart = 0.0      # time start
+    son_yend = 0.0
+
+    # Mouse mode per panel: None / "X" / "Y" / "XY" / "read"
+    mouse_mode = {"time": None, "spec": None, "son": None}
+    mouse_click1 = {"time": None, "spec": None, "son": None}
+
+    # Axis-extent cache so we can convert click pixels → data coords.
+    # Stored as (xmin, xmax, ymin, ymax, axleft, axright, axtop, axbot)
+    # where ax* are the axes' fractional position in the figure (0..1).
+    axinfo = {"time": None, "spec": None, "son": None}
+
+
+S = State()
+
+
+# ---------------------------------------------------------------------
+# docolset.m — channel colour gradient
+# ---------------------------------------------------------------------
+def docolset(n):
+    if n <= 0:
+        return []
+    if n == 1:
+        return [(1.0, 0.0, 0.0)]
+    cols = []
+    if n < 10:
+        for i in range(n):
+            frac = i / (n - 1)
+            cols.append((1 - frac, 0.0, frac))
+    else:
+        for i in range(9):
+            frac = i / 8
+            cols.append((1 - frac, 0.0, frac))
+        # MATLAB icol = 10..number, frac = (icol-9)/(number-9)
+        # i.e. frac takes values 1/(n-9), 2/(n-9), ..., 1
+        for i in range(n - 9):
+            frac = (i + 1) / (n - 9)
+            cols.append((0.0, frac, 1 - frac))
+    return cols
+
+
+def rgb_to_css(rgb):
+    r, g, b = [int(round(c * 255)) for c in rgb]
+    return f"rgb({r},{g},{b})"
+
+
+# ---------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------
+# Fixed axes-position inside figure so we can map pixel clicks → data
+AX_LEFT = 0.10
+AX_RIGHT = 0.97
+AX_BOTTOM = 0.12
+AX_TOP = 0.94
+
+
+def _fig_to_img(fig, img_id, panel_key, xlim, ylim, axfrac=(AX_LEFT, AX_RIGHT, AX_BOTTOM, AX_TOP)):
+    """Render figure to base64 PNG, set on <img>, cache axis info."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100, facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    encoded = base64.b64encode(buf.read()).decode()
+    img = document.getElementById(img_id)
+    img.src = "data:image/png;base64," + encoded
+    S.axinfo[panel_key] = {
+        "xmin": xlim[0], "xmax": xlim[1],
+        "ymin": ylim[0], "ymax": ylim[1],
+        "axleft": axfrac[0], "axright": axfrac[1],
+        "axbottom": axfrac[2], "axtop": axfrac[3],
+    }
+
+
+def _new_fig():
+    fig, ax = plt.subplots(figsize=(10, 6.8))
+    fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT,
+                        bottom=AX_BOTTOM, top=AX_TOP)
+    return fig, ax
+
+
+def set_status(msg):
+    document.getElementById("status").innerText = msg
+
+
+def set_msg(panel, msg):
+    document.getElementById(f"message-{panel}").innerText = msg
+
+
+# ---------------------------------------------------------------------
+# Channel checkboxes
+# ---------------------------------------------------------------------
+def rebuild_chanboxes(panel, nchan, selected):
+    container = document.getElementById(f"chans-{panel}")
+    container.innerHTML = ""
+    cols = docolset(nchan)
+    for i in range(nchan):
+        row = document.createElement("div")
+        row.className = "chan-row"
+
+        cb = document.createElement("input")
+        cb.type = "checkbox"
+        cb.id = f"chan-{panel}-{i}"
+        cb.checked = (i in selected)
+        cb.addEventListener("change", channel_toggler(panel))
+
+        lab = document.createElement("label")
+        lab.htmlFor = cb.id
+        lab.innerText = str(i + 1)
+        lab.style.background = rgb_to_css(cols[i])
+        # White text on dark colours; black on light
+        r, g, b = cols[i]
+        luma = 0.299 * r + 0.587 * g + 0.114 * b
+        lab.style.color = "#000" if luma > 0.55 else "#fff"
+
+        row.appendChild(cb)
+        row.appendChild(lab)
+        container.appendChild(row)
+
+
+def channel_toggler(panel):
+    def handler(event):
+        # Recompute selected list
+        if panel == "time":
+            nchan = S.nchan
+        elif panel == "spec":
+            nchan = S.yspec.shape[1] if S.yspec is not None else 0
+        else:
+            nchan = 0
+        sel = []
+        for i in range(nchan):
+            el = document.getElementById(f"chan-{panel}-{i}")
+            if el is not None and el.checked:
+                sel.append(i)
+        if not sel:
+            sel = [0]   # always show at least one
+            cb = document.getElementById(f"chan-{panel}-0")
+            if cb:
+                cb.checked = True
+        if panel == "time":
+            S.chan_time = sel
+            plot_time()
+        elif panel == "spec":
+            S.chan_spec = sel
+            plot_spec()
+    return handler
+
+
+# ---------------------------------------------------------------------
+# Time-domain plot (mirrors tsplot indirectly via tsinit.m)
+# ---------------------------------------------------------------------
+def read_scroll_time():
+    """Mirror tsreadscroll: compute first/last indices from sliders."""
+    hs = float(document.getElementById("hscroll-time").value)
+    hz = float(document.getElementById("hzoom-time").value)
+    buflen = S.buflen
+    first = int(round(buflen * hs))
+    if first < 0:
+        first = 0
+    win = max(2, int(round(buflen * 10 ** hz)))
+    if first + win - 1 >= buflen:
+        first = buflen - win
+        if first < 0:
+            first = 0
+    last = min(buflen - 1, first + win - 1)
+
+    vs = float(document.getElementById("vscroll-time").value)
+    vz = float(document.getElementById("vzoom-time").value)
+    span = (S.ymax_time - S.ymin_time)
+    centre0 = (S.ymax_time + S.ymin_time) / 2
+    factor = 10 ** vz
+    half = span / 2 * factor
+    centre = centre0 + vs * half
+    return first, last, centre - half, centre + half
+
+
+def plot_time():
+    if S.indata is None:
+        return
+    first, last, ymin, ymax = read_scroll_time()
+    if S.timeflag == 1:
+        dt = 1.0 / S.freq
+        taxis = np.arange(S.buflen) * dt
+        xlabel = "Time (s)"
+    else:
+        taxis = np.arange(1, S.buflen + 1)
+        xlabel = "Samples"
+
+    fig, ax = _new_fig()
+    cols = docolset(S.nchan)
+    for ch in S.chan_time:
+        ax.plot(taxis[first:last + 1], S.indata[first:last + 1, ch],
+                color=cols[ch], linewidth=0.8)
+    ax.set_xlim(taxis[first], taxis[last])
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Amplitude")
+    if S.gridflag["time"]:
+        ax.grid(True, color="#888", linewidth=0.4)
+    _fig_to_img(fig, "plotimg-time", "time",
+                (taxis[first], taxis[last]), (ymin, ymax))
+
+    # Update edit boxes
+    document.getElementById("xstart-time").value = f"{taxis[first]:.6g}"
+    document.getElementById("xend-time").value = f"{taxis[last]:.6g}"
+    set_msg("time",
+            f"Showing samples {first + 1}–{last + 1} of {S.buflen}, "
+            f"channels {[c + 1 for c in S.chan_time]}, "
+            f"y-range [{ymin:.4g}, {ymax:.4g}]")
+
+
+# ---------------------------------------------------------------------
+# Spectrum plot
+# ---------------------------------------------------------------------
+def read_scroll_spec():
+    if S.yspec is None:
+        return 0, 0, 0, 0
+    hs = float(document.getElementById("hscroll-spec").value)
+    hz = float(document.getElementById("hzoom-spec").value)
+    n = S.nfreq
+    first = int(round(n * hs))
+    if first < 0:
+        first = 0
+    win = max(2, int(round(n * 10 ** hz)))
+    if first + win - 1 >= n:
+        first = n - win
+        if first < 0:
+            first = 0
+    last = min(n - 1, first + win - 1)
+
+    vs = float(document.getElementById("vscroll-spec").value)
+    vz = float(document.getElementById("vzoom-spec").value)
+    span = S.ymax_spec - S.ymin_spec
+    centre0 = (S.ymax_spec + S.ymin_spec) / 2
+    factor = 10 ** vz
+    half = span / 2 * factor
+    centre = centre0 + vs * half
+    return first, last, centre - half, centre + half
+
+
+def plot_spec():
+    if S.yspec is None:
+        set_msg("spec", "No spectrum data — load time series and click "
+                "'Calculate spectrum (FFT)' in the time tab.")
+        return
+    first, last, ymin, ymax = read_scroll_spec()
+    f = S.faxis
+    fig, ax = _new_fig()
+    nch_spec = S.yspec.shape[1]
+    cols = docolset(nch_spec)
+
+    spectype = S.spectype
+    nyq = (spectype == "nyq")
+
+    if nyq:
+        for ch in S.chan_spec:
+            ax.plot(np.real(S.yspec[first:last + 1, ch]),
+                    np.imag(S.yspec[first:last + 1, ch]),
+                    color=cols[ch], linewidth=0.8)
+        ax.set_xlabel("Real")
+        ax.set_ylabel("Imag")
+        ax.set_aspect("equal", adjustable="datalim")
+        xl = ax.get_xlim(); yl = ax.get_ylim()
+        if S.gridflag["spec"]:
+            ax.grid(True, color="#888", linewidth=0.4)
+        _fig_to_img(fig, "plotimg-spec", "spec", xl, yl)
+        document.getElementById("xstart-spec").value = f"{f[first]:.6g}"
+        document.getElementById("xend-spec").value = f"{f[last]:.6g}"
+        set_msg("spec", f"Nyquist plot, freq {f[first]:.4g}–{f[last]:.4g} Hz")
+        return
+
+    for ch in S.chan_spec:
+        y = S.yspec[first:last + 1, ch]
+        if spectype == "mag":
+            yval = 20 * np.log10(np.maximum(np.abs(y), 1e-30))
+        elif spectype == "phase":
+            yval = np.angle(y, deg=True)
+        elif spectype == "real":
+            yval = np.real(y)
+        elif spectype == "imag":
+            yval = np.imag(y)
+        ax.plot(f[first:last + 1], yval, color=cols[ch], linewidth=0.8)
+
+    ax.set_xlim(f[first], f[last])
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlabel("Frequency (Hz)")
+    if spectype == "mag":
+        ax.set_ylabel("Amplitude (dB)")
+    elif spectype == "phase":
+        ax.set_ylabel("Phase (deg)")
+    else:
+        ax.set_ylabel(spectype.title())
+    if S.logx_spec:
+        ax.set_xscale("log")
+        if f[first] <= 0:
+            ax.set_xlim(max(f[1], 1.0), f[last])
+    if S.gridflag["spec"]:
+        ax.grid(True, which="both", color="#888", linewidth=0.4)
+    _fig_to_img(fig, "plotimg-spec", "spec",
+                (f[first], f[last]), (ymin, ymax))
+    document.getElementById("xstart-spec").value = f"{f[first]:.6g}"
+    document.getElementById("xend-spec").value = f"{f[last]:.6g}"
+    set_msg("spec",
+            f"Spectrum, freq {f[first]:.4g}–{f[last]:.4g} Hz, "
+            f"channels {[c + 1 for c in S.chan_spec]}, "
+            f"y-range [{ymin:.4g}, {ymax:.4g}]")
+
+
+# ---------------------------------------------------------------------
+# Sonogram plot — mirrors sonplot.m
+# ---------------------------------------------------------------------
+def read_scroll_son():
+    if S.yson is None:
+        return 0, 0, 0, 0
+    nspec, nfreq = S.yson.shape
+    # horizontal = frequency, vertical = time
+    hs = float(document.getElementById("hscroll-son").value)
+    hz = float(document.getElementById("hzoom-son").value)
+    first = int(round(nfreq * hs))
+    if first < 0:
+        first = 0
+    win = max(2, int(round(nfreq * 10 ** hz)))
+    if first + win - 1 >= nfreq:
+        first = nfreq - win
+        if first < 0:
+            first = 0
+    last = min(nfreq - 1, first + win - 1)
+
+    vs = float(document.getElementById("vscroll-son").value)
+    vz = float(document.getElementById("vzoom-son").value)
+    ymin = int(round(nspec * vs))
+    if ymin < 0:
+        ymin = 0
+    ywin = max(2, int(round(nspec * 10 ** vz)))
+    if ymin + ywin - 1 >= nspec:
+        ymin = nspec - ywin
+        if ymin < 0:
+            ymin = 0
+    ymax = min(nspec - 1, ymin + ywin - 1)
+    return first, last, ymin, ymax
+
+
+def plot_son():
+    if S.yson is None:
+        set_msg("son", "No sonogram data — calculate from time tab.")
+        return
+    first, last, ymin, ymax = read_scroll_son()
+    f = S.sonfaxis
+    t = S.sontaxis
+    Z = S.yson[ymin:ymax + 1, first:last + 1]   # dB
+    F = f[first:last + 1]
+    T = t[ymin:ymax + 1]
+
+    ncont = max(2, int(float(document.getElementById("ncont-son").value)))
+    contspc = float(document.getElementById("contspc-son").value)
+    biggest = Z.max()
+    lowest = biggest - ncont * contspc
+    levels = np.linspace(lowest, biggest, ncont + 1)
+
+    if S.sonmode == "surface":
+        fig = plt.figure(figsize=(10, 6.8))
+        ax = fig.add_subplot(111, projection="3d")
+        fig.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.97)
+        FF, TT = np.meshgrid(F, T)
+        Zcl = np.maximum(Z, lowest)
+        ax.plot_wireframe(FF, TT, Zcl, linewidth=0.4, color="#0a246a")
+        ax.set_zlim(lowest, biggest)
+        ax.view_init(elev=30, azim=-105)   # MATLAB view(30,75) approx
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Time (s)")
+        ax.set_zlabel("Amplitude (dB)")
+        _fig_to_img(fig, "plotimg-son", "son", (F[0], F[-1]), (T[0], T[-1]))
+    elif S.sonmode == "image":
+        fig, ax = _new_fig()
+        Zcl = np.maximum(Z, lowest)
+        ax.imshow(Zcl, aspect="auto", origin="lower",
+                  extent=[F[0], F[-1], T[0], T[-1]],
+                  cmap="viridis", vmin=lowest, vmax=biggest)
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Time (s)")
+        if S.gridflag["son"]:
+            ax.grid(True, color="white", linewidth=0.3, alpha=0.5)
+        _fig_to_img(fig, "plotimg-son", "son", (F[0], F[-1]), (T[0], T[-1]))
+    else:
+        # contour
+        fig, ax = _new_fig()
+        ax.contour(F, T, Z, levels=levels, linewidths=0.6)
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Time (s)")
+        if S.gridflag["son"]:
+            ax.grid(True, color="#888", linewidth=0.4)
+        _fig_to_img(fig, "plotimg-son", "son", (F[0], F[-1]), (T[0], T[-1]))
+
+    set_msg("son",
+            f"Sonogram, freq {F[0]:.4g}–{F[-1]:.4g} Hz, "
+            f"time {T[0]:.4g}–{T[-1]:.4g} s, "
+            f"levels {lowest:.1f}→{biggest:.1f} dB ({ncont} contours)")
+
+
+# ---------------------------------------------------------------------
+# File loading
+# ---------------------------------------------------------------------
+def load_indata(arr, freq=None):
+    arr = np.asarray(arr, dtype=float)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
+    # Choose the longer dimension as buflen (mirrors tsmenu_new.m)
+    if arr.shape[1] > arr.shape[0]:
+        arr = arr.T
+    S.indata = arr
+    S.buflen, S.nchan = arr.shape
+    if freq is not None:
+        S.freq = float(freq)
+        document.getElementById("freqinput").value = str(S.freq)
+    # Reset state
+    S.chan_time = list(range(min(S.nchan, 16)))  # show first 16 by default
+    S.ymax_time = float(np.max(np.abs(arr))) * 1.05
+    if S.ymax_time == 0:
+        S.ymax_time = 1.0
+    S.ymin_time = -S.ymax_time
+    S.xstart_time = 0.0
+    S.xend_time = (S.buflen - 1) / S.freq
+    # Reset sliders
+    for sid, val in (("hscroll-time", 0), ("hzoom-time", 0),
+                     ("vscroll-time", 0), ("vzoom-time", 0)):
+        document.getElementById(sid).value = str(val)
+    rebuild_chanboxes("time", S.nchan, set(S.chan_time))
+    plot_time()
+    set_status(f"Loaded: {S.nchan} channels × {S.buflen} samples @ {S.freq:g} Hz")
+    # Wipe spectrum/sonogram derived data
+    S.yspec = None
+    S.yson = None
+    document.getElementById("plotimg-spec").src = ""
+    document.getElementById("plotimg-son").src = ""
+    set_msg("spec", "No spectrum data — calculate from Time tab.")
+    set_msg("son", "No sonogram data — calculate from Time tab.")
+
+
+def load_mat_bytes(b):
+    try:
+        d = loadmat(io.BytesIO(b))
+    except Exception as e:
+        set_status(f"Could not read .mat (v7.3 files unsupported): {e}")
+        return
+
+    # Find arrays that look like data
+    indata = None
+    freq = None
+    if "indata" in d:
+        indata = np.asarray(d["indata"])
+    if "freq" in d:
+        freq = float(np.asarray(d["freq"]).flatten()[0])
+    if indata is None:
+        # Pick the largest 2D numeric array
+        best = None
+        for k, v in d.items():
+            if k.startswith("__"):
+                continue
+            a = np.asarray(v)
+            if a.dtype.kind in "fi" and a.ndim >= 1:
+                size = a.size
+                if best is None or size > best[1]:
+                    best = (k, size, a)
+        if best is not None:
+            indata = best[2]
+            set_status(f"Using array '{best[0]}' from .mat")
+    if indata is None:
+        set_status("No numeric arrays found in .mat file.")
+        return
+    # Also pick up sonogram data if present
+    yson_dB = None
+    if "yson" in d:
+        yson_arr = np.asarray(d["yson"])
+        # MATLAB stores log(magnitude) in nats; convert to dB
+        yson_dB = yson_arr * 20 / np.log(10)
+    load_indata(indata, freq=freq)
+    if yson_dB is not None and "xscaleson" in d and "yscaleson" in d:
+        f = np.asarray(d["xscaleson"]).flatten()
+        t = np.asarray(d["yscaleson"]).flatten()
+        if yson_dB.shape == (len(f), len(t)):
+            yson_dB = yson_dB.T
+        S.yson = yson_dB
+        S.sonfaxis = f
+        S.sontaxis = t
+        for sid, val in (("hscroll-son", 0), ("hzoom-son", 0),
+                         ("vscroll-son", 0), ("vzoom-son", 0)):
+            document.getElementById(sid).value = str(val)
+        plot_son()
+
+
+def load_wav_bytes(b):
+    fs, data = wavfile.read(io.BytesIO(b))
+    # Normalise to ±1 if integer
+    if np.issubdtype(data.dtype, np.integer):
+        info_max = np.iinfo(data.dtype).max
+        data = data.astype(float) / info_max
+    load_indata(data, freq=fs)
+
+
+def load_csv_bytes(b):
+    # Try comma, then tab, then whitespace
+    text = b.decode("utf-8", errors="replace")
+    for delim in (",", "\t", None):
+        try:
+            arr = np.loadtxt(io.StringIO(text), delimiter=delim)
+            break
+        except Exception:
+            continue
+    else:
+        set_status("Could not parse CSV.")
+        return
+    freq = None
+    try:
+        freq = float(document.getElementById("freqinput").value)
+    except Exception:
+        pass
+    load_indata(arr, freq=freq)
+
+
+async def handle_file(event):
+    files = event.target.files
+    if files.length == 0:
+        return
+    file = files.item(0)
+    name = file.name.lower()
+    set_status(f"Reading {file.name}…")
+    ab = await file.arrayBuffer()
+    b = bytes(Uint8Array.new(ab))
+    if name.endswith(".mat"):
+        load_mat_bytes(b)
+    elif name.endswith(".wav"):
+        load_wav_bytes(b)
+    elif name.endswith(".csv") or name.endswith(".txt") or name.endswith(".tsv"):
+        load_csv_bytes(b)
+    else:
+        # Try to sniff: .mat files start with specific magic
+        if b[:6] == b"MATLAB" or b[:6] == b"\x00\x01IM\x00\x00":
+            load_mat_bytes(b)
+        else:
+            set_status(f"Unknown file type: {file.name}")
+
+
+# ---------------------------------------------------------------------
+# Demo / test signal — replicates decsine.m
+# ---------------------------------------------------------------------
+def gen_demo():
+    freq = 44100
+    fn = 500
+    q = 100
+    omegan = fn * 2 * np.pi
+    dt = 1 / freq
+    mass = 1e-3
+    delta = omegan / (2 * q)
+    t = np.arange(0, 1.0, dt)
+    n = len(t)
+    ch1 = (1 / (mass * n)) * np.cos(omegan * t) * np.exp(-delta * t)
+    omegan2 = 1500 * 2 * np.pi
+    delta2 = omegan2 / (2 * 50)
+    ch2 = (1 / (mass * n)) * (np.cos(omegan * t) * np.exp(-delta * t)
+                              + 0.5 * np.cos(omegan2 * t) * np.exp(-delta2 * t))
+    ch3 = ch1 + 0.05 * np.max(np.abs(ch1)) * np.random.randn(n)
+    # Chirp 200 → 1700 Hz
+    ch4 = 0.3 * np.sin(2 * np.pi * (200 + 1500 * t) * t)
+    data = np.column_stack([ch1, ch2, ch3, ch4])
+    load_indata(data, freq=freq)
+
+
+# ---------------------------------------------------------------------
+# FFT — Calculate spectrum from displayed time-series window
+# ---------------------------------------------------------------------
+def calc_fft():
+    if S.indata is None:
+        set_status("No time series to FFT.")
+        return
+    first, last, _, _ = read_scroll_time()
+    seg = S.indata[first:last + 1, :]
+    n = seg.shape[0]
+    # Hanning window
+    w = np.hanning(n).reshape(-1, 1)
+    seg_w = seg * w
+    Y = np.fft.rfft(seg_w, axis=0) / n * 2
+    f = np.fft.rfftfreq(n, d=1.0 / S.freq)
+    S.yspec = Y
+    S.faxis = f
+    S.npts = n
+    S.nfreq = len(f)
+    S.chan_spec = list(S.chan_time)
+    mag = 20 * np.log10(np.maximum(np.abs(Y), 1e-30))
+    S.ymax_spec = float(np.max(mag))
+    S.ymin_spec = float(np.max(mag) - 100)   # 100 dB range default
+    for sid in ("hscroll-spec", "vscroll-spec"):
+        document.getElementById(sid).value = "0"
+    document.getElementById("hzoom-spec").value = "0"
+    document.getElementById("vzoom-spec").value = "0"
+    rebuild_chanboxes("spec", Y.shape[1], set(S.chan_spec))
+    plot_spec()
+    set_status(f"FFT done: {S.nfreq} freq points, ch {[c+1 for c in S.chan_spec]}")
+    # Switch tab to spectrum
+    select_tab("spec")
+
+
+# ---------------------------------------------------------------------
+# Sonogram calculation — single channel
+# ---------------------------------------------------------------------
+def calc_son():
+    if S.indata is None:
+        set_status("No time series for sonogram.")
+        return
+    try:
+        S.fftsize_son = int(float(document.getElementById("fftsize-son").value))
+        S.nspec_son = int(float(document.getElementById("nspec-son").value))
+        S.step_son = int(float(document.getElementById("step-son").value))
+        S.src_son = int(float(document.getElementById("src-son").value)) - 1
+    except Exception as e:
+        set_status(f"Bad sonogram parameters: {e}")
+        return
+    if S.src_son < 0 or S.src_son >= S.nchan:
+        set_status(f"Source channel out of range (1..{S.nchan})")
+        return
+    # Start at first sample of displayed window (matches manual:
+    # 'set the LH edge of the displayed window to the moment which is to be
+    # defined as t=0 for the sonogram analysis')
+    first, _, _, _ = read_scroll_time()
+    fft = S.fftsize_son
+    step = S.step_son
+    nspec = S.nspec_son
+    if first + fft + (nspec - 1) * step > S.buflen:
+        # Reduce nspec to fit
+        nspec = max(2, (S.buflen - first - fft) // step + 1)
+        document.getElementById("nspec-son").value = str(nspec)
+        S.nspec_son = nspec
+    sig = S.indata[:, S.src_son]
+    w = np.hanning(fft)
+    nfreq = fft // 2 + 1
+    Z = np.zeros((nspec, nfreq))
+    for i in range(nspec):
+        s = first + i * step
+        seg = sig[s:s + fft] * w
+        if len(seg) < fft:
+            seg = np.pad(seg, (0, fft - len(seg)))
+        Y = np.fft.rfft(seg)
+        Z[i, :] = 20 * np.log10(np.maximum(np.abs(Y) / fft * 2, 1e-30))
+    f = np.fft.rfftfreq(fft, d=1.0 / S.freq)
+    t = (first + np.arange(nspec) * step + fft / 2) / S.freq
+    S.yson = Z
+    S.sonfaxis = f
+    S.sontaxis = t
+    for sid in ("hscroll-son", "vscroll-son"):
+        document.getElementById(sid).value = "0"
+    document.getElementById("hzoom-son").value = "0"
+    document.getElementById("vzoom-son").value = "0"
+    plot_son()
+    set_status(f"Sonogram: {nspec} spectra × {nfreq} freq, "
+               f"channel {S.src_son + 1}")
+    select_tab("son")
+
+
+# ---------------------------------------------------------------------
+# Edit-box updates
+# ---------------------------------------------------------------------
+def apply_xrange_time():
+    if S.indata is None:
+        return
+    try:
+        s = float(document.getElementById("xstart-time").value)
+        e = float(document.getElementById("xend-time").value)
+    except ValueError:
+        return
+    if S.timeflag == 1:
+        first = int(round(s * S.freq))
+        last = int(round(e * S.freq))
+    else:
+        first = int(round(s)) - 1
+        last = int(round(e)) - 1
+    first = max(0, min(S.buflen - 2, first))
+    last = max(first + 1, min(S.buflen - 1, last))
+    # Convert back to slider values
+    win = last - first + 1
+    document.getElementById("hscroll-time").value = str(first / S.buflen)
+    document.getElementById("hzoom-time").value = str(np.log10(win / S.buflen))
+    plot_time()
+
+
+def apply_xrange_spec():
+    if S.yspec is None:
+        return
+    try:
+        s = float(document.getElementById("xstart-spec").value)
+        e = float(document.getElementById("xend-spec").value)
+    except ValueError:
+        return
+    f = S.faxis
+    first = int(np.argmin(np.abs(f - s)))
+    last = int(np.argmin(np.abs(f - e)))
+    first, last = sorted([first, last])
+    last = max(first + 1, last)
+    win = last - first + 1
+    document.getElementById("hscroll-spec").value = str(first / S.nfreq)
+    document.getElementById("hzoom-spec").value = str(np.log10(win / S.nfreq))
+    plot_spec()
+
+
+# ---------------------------------------------------------------------
+# Autorange
+# ---------------------------------------------------------------------
+def autorange_time():
+    if S.indata is None:
+        return
+    first, last, _, _ = read_scroll_time()
+    seg = S.indata[first:last + 1, :][:, S.chan_time]
+    m = float(np.max(np.abs(seg))) * 1.05
+    if m <= 0:
+        m = 1.0
+    S.ymax_time = m
+    S.ymin_time = -m
+    document.getElementById("vscroll-time").value = "0"
+    document.getElementById("vzoom-time").value = "0"
+    plot_time()
+
+
+def autorange_spec():
+    if S.yspec is None:
+        return
+    first, last, _, _ = read_scroll_spec()
+    seg = S.yspec[first:last + 1, :][:, S.chan_spec]
+    if S.spectype == "mag":
+        v = 20 * np.log10(np.maximum(np.abs(seg), 1e-30))
+    elif S.spectype == "phase":
+        v = np.angle(seg, deg=True)
+    elif S.spectype == "real":
+        v = np.real(seg)
+    elif S.spectype == "imag":
+        v = np.imag(seg)
+    else:
+        return
+    S.ymax_spec = float(np.max(v))
+    S.ymin_spec = float(np.min(v))
+    if S.ymax_spec == S.ymin_spec:
+        S.ymax_spec += 1
+        S.ymin_spec -= 1
+    document.getElementById("vscroll-spec").value = "0"
+    document.getElementById("vzoom-spec").value = "0"
+    plot_spec()
+
+
+def autorange_son():
+    if S.yson is None:
+        return
+    for sid in ("hscroll-son", "vscroll-son"):
+        document.getElementById(sid).value = "0"
+    document.getElementById("hzoom-son").value = "0"
+    document.getElementById("vzoom-son").value = "0"
+    plot_son()
+
+
+# ---------------------------------------------------------------------
+# Mouse zoom mode
+# ---------------------------------------------------------------------
+def set_mouse_mode(panel, mode):
+    # Toggle off if same
+    if S.mouse_mode[panel] == mode:
+        mode = None
+    S.mouse_mode[panel] = mode
+    S.mouse_click1[panel] = None
+    # Visual feedback: clear all mode buttons for this panel
+    mode_btn_ids = {
+        "X": f"xmouse-{panel}",
+        "Y": f"ymouse-{panel}",
+        "XY": f"xymouse-{panel}",
+        "read": f"readvals-{panel}",
+    }
+    for bid in mode_btn_ids.values():
+        btn = document.getElementById(bid)
+        if btn:
+            btn.classList.remove("active-mode")
+    if mode is not None and mode in mode_btn_ids:
+        btn = document.getElementById(mode_btn_ids[mode])
+        if btn:
+            btn.classList.add("active-mode")
+    # Hide overlay markers
+    ov = document.getElementById(f"mouse-overlay-{panel}")
+    mk = document.getElementById(f"mouse-marker-{panel}")
+    if ov:
+        ov.style.display = "none"
+    if mk:
+        mk.style.display = "none"
+    # Helpful prompt
+    if mode == "read":
+        set_msg(panel, "Click on the plot to read the data value at that point.")
+    elif mode in ("X", "Y", "XY"):
+        set_msg(panel, f"{mode}-zoom: click two points on the plot to define the range.")
+
+
+def pixel_to_data(panel, event):
+    plot = document.getElementById(f"plot-{panel}")
+    rect = plot.getBoundingClientRect()
+    px = event.clientX - rect.left
+    py = event.clientY - rect.top
+    W = rect.width
+    H = rect.height
+    info = S.axinfo[panel]
+    if info is None:
+        return None
+    # Axes fraction → pixels
+    ax_x0 = info["axleft"] * W
+    ax_x1 = info["axright"] * W
+    ax_y0 = (1 - info["axtop"]) * H   # axes top in pixels (y-flipped)
+    ax_y1 = (1 - info["axbottom"]) * H
+    if px < ax_x0 or px > ax_x1 or py < ax_y0 or py > ax_y1:
+        return None
+    fx = (px - ax_x0) / (ax_x1 - ax_x0)
+    fy = 1 - (py - ax_y0) / (ax_y1 - ax_y0)
+    dx = info["xmin"] + fx * (info["xmax"] - info["xmin"])
+    dy = info["ymin"] + fy * (info["ymax"] - info["ymin"])
+    return px, py, dx, dy
+
+
+def plot_click_handler(panel):
+    def handler(event):
+        mode = S.mouse_mode[panel]
+        if mode is None:
+            return
+        coords = pixel_to_data(panel, event)
+        if coords is None:
+            return
+        px, py, dx, dy = coords
+        # Read-vals mode is single-shot
+        if mode == "read":
+            _do_read(panel, dx, dy)
+            set_mouse_mode(panel, None)
+            return
+        # X / Y / XY mouse zoom: two clicks
+        if S.mouse_click1[panel] is None:
+            S.mouse_click1[panel] = (px, py, dx, dy)
+            mk = document.getElementById(f"mouse-marker-{panel}")
+            mk.style.left = f"{px}px"
+            mk.style.top = f"{py}px"
+            mk.style.display = "block"
+            set_msg(panel, f"First point: x={dx:.4g}, y={dy:.4g} — click again "
+                    f"to set the {mode} range")
+            return
+        px1, py1, dx1, dy1 = S.mouse_click1[panel]
+        S.mouse_click1[panel] = None
+        document.getElementById(f"mouse-marker-{panel}").style.display = "none"
+        apply_mouse_zoom(panel, mode, dx1, dx, dy1, dy)
+        set_mouse_mode(panel, None)
+    return handler
+
+
+def apply_mouse_zoom(panel, mode, x1, x2, y1, y2):
+    xlo, xhi = sorted([x1, x2])
+    ylo, yhi = sorted([y1, y2])
+    if panel == "time":
+        if "X" in mode:
+            if S.timeflag == 1:
+                first = int(round(xlo * S.freq))
+                last = int(round(xhi * S.freq))
+            else:
+                first = int(round(xlo)) - 1
+                last = int(round(xhi)) - 1
+            first = max(0, first); last = min(S.buflen - 1, last)
+            win = max(2, last - first + 1)
+            document.getElementById("hscroll-time").value = str(first / S.buflen)
+            document.getElementById("hzoom-time").value = str(np.log10(win / S.buflen))
+        if "Y" in mode:
+            S.ymin_time = ylo
+            S.ymax_time = yhi
+            document.getElementById("vscroll-time").value = "0"
+            document.getElementById("vzoom-time").value = "0"
+        plot_time()
+    elif panel == "spec":
+        if "X" in mode:
+            f = S.faxis
+            first = int(np.argmin(np.abs(f - xlo)))
+            last = int(np.argmin(np.abs(f - xhi)))
+            first, last = sorted([first, last])
+            last = max(first + 1, last)
+            win = last - first + 1
+            document.getElementById("hscroll-spec").value = str(first / S.nfreq)
+            document.getElementById("hzoom-spec").value = str(np.log10(win / S.nfreq))
+        if "Y" in mode:
+            S.ymin_spec = ylo
+            S.ymax_spec = yhi
+            document.getElementById("vscroll-spec").value = "0"
+            document.getElementById("vzoom-spec").value = "0"
+        plot_spec()
+
+
+# ---------------------------------------------------------------------
+# Read vals — single click to read nearest data point
+# ---------------------------------------------------------------------
+def _do_read(panel, dx, dy):
+    """Show the data value at the given data coordinates."""
+    msg = ""
+    if panel == "time" and S.indata is not None:
+        if S.timeflag == 1:
+            idx = int(round(dx * S.freq))
+        else:
+            idx = int(round(dx)) - 1
+        idx = max(0, min(S.buflen - 1, idx))
+        vals = S.indata[idx, S.chan_time]
+        tstr = f"t={idx / S.freq:.6g} s (sample {idx + 1})"
+        cstr = ", ".join(f"ch{c + 1}={v:.5g}"
+                         for c, v in zip(S.chan_time, vals))
+        msg = f"{tstr}: {cstr}"
+    elif panel == "spec" and S.yspec is not None:
+        idx = int(np.argmin(np.abs(S.faxis - dx)))
+        vals = S.yspec[idx, S.chan_spec]
+        cstr = ", ".join(f"ch{c + 1}=|{abs(v):.4g}| ∠{np.angle(v, deg=True):.1f}°"
+                         for c, v in zip(S.chan_spec, vals))
+        msg = f"f={S.faxis[idx]:.4g} Hz: {cstr}"
+    elif panel == "son" and S.yson is not None:
+        fi = int(np.argmin(np.abs(S.sonfaxis - dx)))
+        ti = int(np.argmin(np.abs(S.sontaxis - dy)))
+        v = S.yson[ti, fi]
+        msg = f"f={S.sonfaxis[fi]:.4g} Hz, t={S.sontaxis[ti]:.4g} s: {v:.2f} dB"
+    if msg:
+        set_msg(panel, msg)
+
+
+# ---------------------------------------------------------------------
+# Tab switching
+# ---------------------------------------------------------------------
+def select_tab(name):
+    for t in document.getElementsByClassName("tab"):
+        t.classList.remove("active")
+    for p in document.getElementsByClassName("panel"):
+        p.classList.remove("active")
+    for t in document.getElementsByClassName("tab"):
+        if t.dataset.panel == name:
+            t.classList.add("active")
+    document.getElementById(f"panel-{name}").classList.add("active")
+
+
+def tab_click(event):
+    select_tab(event.target.dataset.panel)
+
+
+# ---------------------------------------------------------------------
+# Wire up DOM events
+# ---------------------------------------------------------------------
+document.getElementById("fileinput").addEventListener("change", handle_file)
+document.getElementById("loaddemo").addEventListener("click",
+                                                    lambda e: gen_demo())
+document.getElementById("freqinput").addEventListener("change",
+    lambda e: (setattr(S, "freq", float(e.target.value)), plot_time()))
+
+for t in document.getElementsByClassName("tab"):
+    t.addEventListener("click", tab_click)
+
+# --- Time panel wiring ---
+for sid in ("hscroll-time", "hzoom-time", "vscroll-time", "vzoom-time"):
+    document.getElementById(sid).addEventListener("input", lambda e: plot_time())
+document.getElementById("xstart-time").addEventListener("change", lambda e: apply_xrange_time())
+document.getElementById("xend-time").addEventListener("change", lambda e: apply_xrange_time())
+document.getElementById("auto-time").addEventListener("click", lambda e: autorange_time())
+document.getElementById("xmouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "X"))
+document.getElementById("ymouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "Y"))
+document.getElementById("xymouse-time").addEventListener("click", lambda e: set_mouse_mode("time", "XY"))
+
+plot_click_time = plot_click_handler("time")
+plot_click_spec = plot_click_handler("spec")
+plot_click_son = plot_click_handler("son")
+document.getElementById("plot-time").addEventListener("click", plot_click_time)
+document.getElementById("plot-spec").addEventListener("click", plot_click_spec)
+document.getElementById("plot-son").addEventListener("click", plot_click_son)
+
+# Read-vals buttons just enter "read" mode; the click handler does the work.
+document.getElementById("readvals-time").addEventListener("click",
+    lambda e: set_mouse_mode("time", "read"))
+document.getElementById("readvals-spec").addEventListener("click",
+    lambda e: set_mouse_mode("spec", "read"))
+document.getElementById("readvals-son").addEventListener("click",
+    lambda e: set_mouse_mode("son", "read"))
+
+document.getElementById("calcfft-time").addEventListener("click", lambda e: calc_fft())
+document.getElementById("calcson-time").addEventListener("click", lambda e: calc_son())
+document.getElementById("grid-time").addEventListener("click",
+    lambda e: (S.gridflag.__setitem__("time", not S.gridflag["time"]), plot_time()))
+
+for rb in document.getElementsByName("timeaxis"):
+    def _h(e):
+        S.timeflag = 1 if e.target.value == "s" else 0
+        plot_time()
+    rb.addEventListener("change", _h)
+
+# --- Spectrum panel wiring ---
+for sid in ("hscroll-spec", "hzoom-spec", "vscroll-spec", "vzoom-spec"):
+    document.getElementById(sid).addEventListener("input", lambda e: plot_spec())
+document.getElementById("xstart-spec").addEventListener("change", lambda e: apply_xrange_spec())
+document.getElementById("xend-spec").addEventListener("change", lambda e: apply_xrange_spec())
+document.getElementById("auto-spec").addEventListener("click", lambda e: autorange_spec())
+document.getElementById("xmouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "X"))
+document.getElementById("ymouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "Y"))
+document.getElementById("xymouse-spec").addEventListener("click", lambda e: set_mouse_mode("spec", "XY"))
+document.getElementById("grid-spec").addEventListener("click",
+    lambda e: (S.gridflag.__setitem__("spec", not S.gridflag["spec"]), plot_spec()))
+document.getElementById("logx-spec").addEventListener("click",
+    lambda e: (setattr(S, "logx_spec", not S.logx_spec), plot_spec()))
+
+for rb in document.getElementsByName("spectype"):
+    def _hs(e):
+        S.spectype = e.target.value
+        plot_spec()
+    rb.addEventListener("change", _hs)
+
+# --- Sonogram panel wiring ---
+for sid in ("hscroll-son", "hzoom-son", "vscroll-son", "vzoom-son"):
+    document.getElementById(sid).addEventListener("input", lambda e: plot_son())
+document.getElementById("auto-son").addEventListener("click", lambda e: autorange_son())
+document.getElementById("recalc-son").addEventListener("click", lambda e: calc_son())
+document.getElementById("ncont-son").addEventListener("change", lambda e: plot_son())
+document.getElementById("contspc-son").addEventListener("change", lambda e: plot_son())
+
+for rb in document.getElementsByName("sonmode"):
+    def _hm(e):
+        S.sonmode = e.target.value
+        plot_son()
+    rb.addEventListener("change", _hm)
+
+
+# Hide loading screen, set initial message
+document.getElementById("loading").classList.add("hidden")
+set_msg("time", "Load a .mat / .wav / .csv file, or click 'Load test signal'.")
+set_msg("spec", "No spectrum data yet — calculate from Time tab.")
+set_msg("son", "No sonogram data yet — calculate from Time tab.")
+set_status("Ready. Load a file or click 'Load test signal'.")
+
+</script>
+
+</body>
+</html>

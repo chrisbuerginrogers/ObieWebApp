@@ -24,7 +24,7 @@ _window_secs  = 0.30
 _pre_trig_s   = 0.02
 _n_taps       = 5
 _n_positions  = 12
-_prefix       = "P"
+_prefix       = "H"
 
 # ── Ring buffer ───────────────────────────────────────────────────────────────
 _RING_SECS = 6
@@ -161,6 +161,12 @@ def accept_hit():
     _wav_L.append(_cap_mic.copy())
     _wav_R.append(_cap_hammer.copy())
     _pos_hits[_cur_pos] += 1
+
+    # Encode this single hit and push to JS immediately for folder save.
+    # (Left = mic, Right = hammer — stereo 16-bit PCM.)
+    b64 = _encode_wav_b64(_cap_mic, _cap_hammer, _sr)
+    js.window.onSaveHit(b64, _cur_pos, _pos_hits[_cur_pos])
+
     _add_to_frf(_cur_pos, _cap_hammer, _cap_mic)
     _emit_banner()
     if _pos_hits[_cur_pos] >= _n_taps:
@@ -215,6 +221,7 @@ def jump_to_position(idx_js):
 
 
 def export_wav():
+    """Manual fallback: download all accepted hits as one concatenated WAV."""
     if not _wav_L:
         js.window.onDownload(None, None)
         return
@@ -229,29 +236,11 @@ def export_wav():
 
 
 def export_trf():
-    st = _frf.get(_cur_pos, {})
-    if not st.get("hits_Gxx"):
+    """Manual fallback: download current position's averaged TRF."""
+    b64 = _build_trf_b64(_frf.get(_cur_pos, {}))
+    if not b64:
         js.window.onDownload(None, None)
         return
-    N      = st["n_fft"]
-    H1     = sum(st["hits_Gxy"]) / (sum(st["hits_Gxx"]) + 1e-30)
-    freq   = rfftfreq(N, d=1.0 / st["sr"])
-    n_pts  = len(freq)
-    hz_res = float(freq[1] - freq[0]) if n_pts > 1 else 1.0
-
-    hdr = bytearray(110)
-    struct.pack_into("<I", hdr,  0, 1)
-    struct.pack_into("<d", hdr, 38, hz_res)
-    struct.pack_into("<d", hdr, 46, float(freq[0]))
-    struct.pack_into("<d", hdr, 54, float(freq[-1]))
-    struct.pack_into("<f", hdr, 62, 1.0)
-    struct.pack_into("<f", hdr, 66, float(n_pts))
-    data = bytearray(n_pts * 16)
-    for i in range(n_pts):
-        struct.pack_into("<d", data, i*16,    float(H1.real[i]))
-        struct.pack_into("<d", data, i*16+8,  float(H1.imag[i]))
-
-    b64   = base64.b64encode(bytes(hdr) + bytes(data)).decode("ascii")
     label = f"{_prefix}{_cur_pos + 1:02d}"
     js.window.onDownload(b64, f"frf_{label}.trf")
 
@@ -380,6 +369,10 @@ def _complete_position():
         H1db = 20.0 * np.log10(np.abs(H1) + 1e-12)
         label = f"{_prefix}{_cur_pos+1:02d} ({_n_taps} hits)"
         js.window.onHistoryAdd(to_js(freq.tolist()), to_js(H1db.tolist()), label)
+        # Auto-save TRF to the run folder (JS handles the actual write)
+        trf_b64 = _build_trf_b64(st)
+        if trf_b64:
+            js.window.onSaveTRF(trf_b64, _cur_pos)
     _cur_pos += 1
     if _cur_pos >= _n_positions:
         global _state
@@ -411,6 +404,29 @@ def _emit_banner():
          "label": f"{_prefix}{i+1:02d}", "current": i == _cur_pos}
         for i in range(_n_positions)
     ]))
+
+
+def _build_trf_b64(st):
+    """Encode one position's averaged FRF as TRF binary, return base64 or None."""
+    if not st.get("hits_Gxx"):
+        return None
+    N      = st["n_fft"]
+    H1     = sum(st["hits_Gxy"]) / (sum(st["hits_Gxx"]) + 1e-30)
+    freq   = rfftfreq(N, d=1.0 / st["sr"])
+    n_pts  = len(freq)
+    hz_res = float(freq[1] - freq[0]) if n_pts > 1 else 1.0
+    hdr = bytearray(110)
+    struct.pack_into("<I", hdr,  0, 1)
+    struct.pack_into("<d", hdr, 38, hz_res)
+    struct.pack_into("<d", hdr, 46, float(freq[0]))
+    struct.pack_into("<d", hdr, 54, float(freq[-1]))
+    struct.pack_into("<f", hdr, 62, 1.0)
+    struct.pack_into("<f", hdr, 66, float(n_pts))
+    data = bytearray(n_pts * 16)
+    for i in range(n_pts):
+        struct.pack_into("<d", data, i*16,    float(H1.real[i]))
+        struct.pack_into("<d", data, i*16+8,  float(H1.imag[i]))
+    return base64.b64encode(bytes(hdr) + bytes(data)).decode("ascii")
 
 
 def _encode_wav_b64(L, R, sr):

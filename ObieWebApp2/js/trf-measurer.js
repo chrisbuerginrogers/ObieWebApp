@@ -51,6 +51,54 @@ let historyFRFs = [];    // [{ freq[], H1db[], label }]
 let showHistory = false;
 let yAutoscale  = true;
 
+// ── Folder management (File System Access API — Chrome only) ─────────────────
+const HAS_FS   = typeof window.showDirectoryPicker === 'function';
+let rawHandle  = null;   // handle to run/raw/  subfolder
+let trfHandle  = null;   // handle to run/TRF/  subfolder
+let runName    = '';     // e.g. "Strad 02"
+
+async function setupRunFolder() {
+  const instrument = document.getElementById('inp-instrument').value.trim();
+  if (!instrument) { alert('Enter an instrument name first.'); return; }
+
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    if (e.name !== 'AbortError') alert(`Folder error: ${e.message}`);
+    return;
+  }
+
+  // Scan existing numbered run folders to find the next number
+  const pfxSpace = instrument + ' ';
+  let maxNum = 0;
+  for await (const [name, h] of dirHandle.entries()) {
+    if (h.kind === 'directory' && name.startsWith(pfxSpace)) {
+      const n = parseInt(name.slice(pfxSpace.length));
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+  }
+  runName = `${instrument} ${String(maxNum + 1).padStart(2, '0')}`;
+
+  const runHandle = await dirHandle.getDirectoryHandle(runName, { create: true });
+  rawHandle = await runHandle.getDirectoryHandle('raw', { create: true });
+  trfHandle = await runHandle.getDirectoryHandle('TRF', { create: true });
+
+  const lbl = document.getElementById('run-label');
+  lbl.textContent = `→ ${runName}`;
+  lbl.classList.remove('unset');
+}
+
+async function _writeFile(folderHandle, filename, b64) {
+  const raw   = atob(b64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  const fh  = await folderHandle.getFileHandle(filename, { create: true });
+  const w   = await fh.createWritable();
+  await w.write(bytes);
+  await w.close();
+}
+
 // ── Plotly ────────────────────────────────────────────────────────────────────
 const PCFG = { responsive: true, displayModeBar: false };
 
@@ -144,7 +192,7 @@ window.onFRFUpdate = function(freq_js, H1db_js, pos, nHits) {
   renderFRF();
 };
 
-/** State machine changed — update status bar and buttons */
+/** State machine changed — update status bar, buttons, and settings grey-out */
 window.onStateChange = function(jsonStr) {
   const s  = JSON.parse(jsonStr);
   appState = s.state;
@@ -163,6 +211,11 @@ window.onStateChange = function(jsonStr) {
 
   bar.textContent = txt;
   bar.className   = `status-bar ${cls}`;
+
+  // Grey out the settings card while audio is running
+  const card = document.getElementById('settings-card');
+  if (card) card.classList.toggle('disabled', s.state !== 'idle');
+
   updateButtons(s);
 };
 
@@ -181,7 +234,6 @@ window.onBannerUpdate = function(jsonStr) {
       <span class="pos-dots">${dots}</span>
     </div>`;
   }).join('');
-  // Scroll current tab into view
   setTimeout(() => {
     const cur = el.querySelector('.pos-tab.current');
     if (cur) cur.scrollIntoView({ inline: 'nearest', behavior: 'smooth' });
@@ -193,7 +245,24 @@ window.onHistoryAdd = function(freq_js, H1db_js, label) {
   historyFRFs.push({ freq: Array.from(freq_js), H1db: Array.from(H1db_js), label });
 };
 
-/** Python finished encoding — trigger browser download */
+/** Python calls this after each accepted hit — write WAV to run/raw/ */
+window.onSaveHit = async function(b64, pos, hitN) {
+  if (!rawHandle) return;
+  const pfx = (document.getElementById('inp-prefix').value || 'H').trim();
+  const p   = String(Number(pos) + 1).padStart(3, '0');
+  const h   = String(Number(hitN)).padStart(3, '0');
+  await _writeFile(rawHandle, `${runName} ${pfx}_${p}_${h}.wav`, b64);
+};
+
+/** Python calls this when a position is complete — write TRF to run/TRF/ */
+window.onSaveTRF = async function(b64, pos) {
+  if (!trfHandle) return;
+  const pfx = (document.getElementById('inp-prefix').value || 'H').trim();
+  const p   = String(Number(pos) + 1).padStart(3, '0');
+  await _writeFile(trfHandle, `${runName} ${pfx}_${p}.trf`, b64);
+};
+
+/** Python finished encoding — trigger browser download (manual fallback) */
 window.onDownload = function(b64, filename) {
   if (!b64) { alert('No data to export.'); return; }
   const raw   = atob(b64);
@@ -411,6 +480,20 @@ window.addEventListener('load', async () => {
   };
   document.getElementById('btn-save-wav').onclick = () => window.pyExportWAV();
   document.getElementById('btn-save-trf').onclick = () => window.pyExportTRF();
+
+  // Folder button — requires File System Access API (Chrome)
+  const folderBtn = document.getElementById('btn-folder');
+  const runLbl    = document.getElementById('run-label');
+  if (HAS_FS) {
+    folderBtn.onclick = setupRunFolder;
+    runLbl.textContent = 'No folder selected';
+    runLbl.classList.add('unset');
+  } else {
+    folderBtn.disabled = true;
+    folderBtn.title    = 'Requires Chrome — use the WAV/TRF download buttons instead';
+    runLbl.textContent = 'Auto-save unavailable (use download buttons)';
+    runLbl.classList.add('unset');
+  }
 
   updateButtons({ state: 'idle', hit_n: 0 });
 });

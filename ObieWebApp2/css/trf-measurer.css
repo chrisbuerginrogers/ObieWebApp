@@ -54,6 +54,33 @@
   margin-bottom: 8px;
 }
 
+.full-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  margin-bottom: 5px;
+  box-sizing: border-box;
+}
+
+.run-label {
+  font-size: 10px;
+  color: var(--green);
+  padding: 2px 0 2px;
+  font-style: italic;
+  min-height: 14px;
+}
+.run-label.unset { color: var(--muted); }
+
+/* Grey out settings while audio is running */
+.sidebar-card.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: auto 1fr;
