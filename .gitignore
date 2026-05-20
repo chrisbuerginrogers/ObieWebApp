@@ -1,1 +1,3 @@
 .DS_Store
+*.cpython-32*
+__pycache__
