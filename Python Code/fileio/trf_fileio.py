@@ -1,7 +1,7 @@
 """
-trf_parser.py
+trf_fileio.py
 ─────────────
-Parses binary .trf files (Rational Acoustics / MtxVec format).
+Parse and build binary .trf files (Rational Acoustics / MtxVec format).
 
 Header format (little-endian, 110 bytes total):
   I       index
@@ -13,8 +13,6 @@ Header format (little-endian, 110 bytes total):
 
 Data from byte 110: alternating float64 real/imag pairs if complex,
 or plain float64 values if real.
-
-Returns dict: header, columns, freq, mag, n_rows, warnings
 """
 
 import struct
@@ -77,6 +75,65 @@ def parse_trf(data):
         'n_rows'  : fLength,
         'warnings': [],
     }
+
+
+def build_trf(freq, data, *,
+              index=0,
+              Xr=0.0, Yr=0.0, Xactual=0.0, YActual=0.0,
+              char_str=b'\x00\x00',
+              caption=b'\x00\x00\x00\x00',
+              Hz_Resolution=None):
+    """Return binary .trf bytes for the given freq and data arrays.
+
+    Args:
+        freq:          sequence of frequency values (Hz)
+        data:          sequence of float, complex, or (re, im) tuples
+        Hz_Resolution: override frequency step; inferred from freq if omitted
+    """
+    n = len(freq)
+    if n == 0:
+        raise ValueError('freq must not be empty')
+    if len(data) != n:
+        raise ValueError('freq and data must have the same length')
+
+    pairs = []
+    is_complex = False
+    for v in data:
+        if isinstance(v, complex):
+            pairs.append((v.real, v.imag))
+            is_complex = True
+        elif isinstance(v, (list, tuple)) and len(v) == 2:
+            pairs.append((float(v[0]), float(v[1])))
+            is_complex = True
+        else:
+            pairs.append((float(v), 0.0))
+
+    Start_Freq = float(freq[0])
+    End_Freq   = float(freq[-1])
+
+    if Hz_Resolution is None:
+        Hz_Resolution = ((End_Freq - Start_Freq) / (n - 1)) if n > 1 else 0.0
+
+    header = struct.pack(
+        _HEADER_FMT,
+        index,
+        Xr, Yr, Xactual, YActual,
+        char_str[:2].ljust(2, b'\x00'),
+        Hz_Resolution, Start_Freq, End_Freq,
+        1.0 if is_complex else 0.0,
+        float(n),
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        caption[:4].ljust(4, b'\x00'),
+    )
+
+    if is_complex:
+        flat = [v for re, im in pairs for v in (re, im)]
+    else:
+        flat = [re for re, _ in pairs]
+
+    body = struct.pack('<' + str(len(flat)) + 'd', *flat)
+
+    return header + body
 
 
 def _blank(warnings):

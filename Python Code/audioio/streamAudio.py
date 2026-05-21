@@ -15,7 +15,6 @@ Or use as a context manager:
 import numpy as np
 import pyaudio
 
-
 class AudioStream:
     """
     Wraps a PyAudio input stream for multi-channel audio capture.
@@ -30,8 +29,9 @@ class AudioStream:
         Number of input channels (1 = mono, 2 = stereo, …).
     chunk : int
         Frames read per PyAudio call. Smaller = lower latency, higher CPU.
-    fmt : int
-        PyAudio format constant (default: paInt16).
+    fmt : str
+        Audio sample format: '16' (default), '32', '8', '24', or 'float'.
+        Determines PyAudio format constant, NumPy dtype, and value range.
     """
 
     def __init__(
@@ -40,14 +40,27 @@ class AudioStream:
         sample_rate: int = 48000,
         channels: int = 2,
         chunk: int = 1024,
-        fmt: int = pyaudio.paInt16,
+        fmt: str = '16',
     ):
         self.device_index = device_index
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk = chunk
-        self.fmt = fmt
+        # Define all configurations together in one place
+        formats = {
+            '8':     {'pa': pyaudio.paInt8,    'np': np.int8,    'range': (-128,        127)},
+            '16':    {'pa': pyaudio.paInt16,   'np': np.int16,   'range': (-32768,      32767)},
+            '24':    {'pa': pyaudio.paInt24,   'np': np.int32,   'range': (-8388608,    8388607)},
+            '32':    {'pa': pyaudio.paInt32,   'np': np.int32,   'range': (-2147483648, 2147483647)},
+            'float': {'pa': pyaudio.paFloat32, 'np': np.float32, 'range': (-1.0,        1.0)},
+        }
 
+        # Fetch the specific config, defaulting to 16-bit if the key is missing
+        config = formats.get(fmt, formats['16'])
+
+        self.fmt = config['pa']
+        self.np_fmt = config['np']
+        self.value_range: tuple = config['range']
         self._pa: pyaudio.PyAudio | None = None
         self._stream: pyaudio.Stream | None = None
 
@@ -89,7 +102,7 @@ class AudioStream:
 
         Returns
         -------
-        np.ndarray of shape (n_samples, channels), dtype int16,
+        np.ndarray of shape (n_samples, channels), dtype np_fmt, with values in value_range
         or None if no new data was available this call.
         """
         if self._stream is None:
@@ -98,7 +111,13 @@ class AudioStream:
         frames = []
         while self._stream.get_read_available() >= self.chunk:
             raw = self._stream.read(self.chunk, exception_on_overflow=False)
-            interleaved = np.frombuffer(raw, dtype=np.int16)
+            if self.fmt == pyaudio.paInt24:
+                # paInt24 packs 3 bytes/sample; pad to 4 bytes with sign-extension before viewing as int32
+                b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3)
+                sign = np.where(b[:, 2] & 0x80, np.uint8(0xFF), np.uint8(0x00))
+                interleaved = np.column_stack([b, sign]).view('<i4').reshape(-1)
+            else:
+                interleaved = np.frombuffer(raw, dtype=self.np_fmt)
             frames.append(interleaved.reshape(-1, self.channels))
 
         if not frames:
@@ -109,16 +128,21 @@ class AudioStream:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def list_input_devices() -> list[dict]:
+    def list_input_devices(device_name: str = None) -> list[dict]:
         """
         Return a list of available input devices as dicts with keys:
         index, name, channels, sample_rate.
         """
         pa = pyaudio.PyAudio()
         devices = []
+        device_id = 0
         for i in range(pa.get_device_count()):
             info = pa.get_device_info_by_index(i)
             if info["maxInputChannels"] > 0:
+                print(f"[{i}] {info['name']} — {info['maxInputChannels']}ch @ {info['defaultSampleRate']}Hz")
+                if device_name is not None and device_name in info["name"]:
+                    print('found device '+ device_name)
+                    device_id = i
                 devices.append({
                     "index":       i,
                     "name":        info["name"],
@@ -126,7 +150,7 @@ class AudioStream:
                     "sample_rate": int(info["defaultSampleRate"]),
                 })
         pa.terminate()
-        return devices
+        return device_id, devices
 
     # ── Context manager ───────────────────────────────────────────────────────
 

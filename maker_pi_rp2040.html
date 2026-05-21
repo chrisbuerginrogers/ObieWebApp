@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MicroPython on the Maker Pi RP2040</title>
+
+<!-- CodeMirror -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+
+<!-- xterm.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --purple:   #6c48c5;
+  --purple-l: #9b7de8;
+  --green:    #3cb371;
+  --orange:   #ff7043;
+  --blue:     #2196f3;
+  --red:      #f44336;
+  --yellow:   #ffc107;
+  --bg:       #12121f;
+  --bg-card:  #1a1a2e;
+  --bg-deep:  #0d0d1a;
+  --border:   #2a2a4a;
+  --fg:       #e8e8f0;
+  --fg-dim:   #9090b0;
+}
+
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+
+/* ── Header ── */
+header {
+  background: linear-gradient(135deg, #1a1030 0%, #0f2040 100%);
+  padding: 2rem 2rem 1.5rem;
+  text-align: center;
+  border-bottom: 2px solid var(--purple);
+}
+header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+header h1 em { color: var(--purple-l); font-style: normal; }
+header p { color: var(--fg-dim); margin-top: 0.4rem; font-size: 1rem; }
+.chip-badge {
+  display: inline-block; background: rgba(108,72,197,.25); color: var(--purple-l);
+  border: 1px solid var(--purple); border-radius: 20px;
+  padding: 0.2rem 0.8rem; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.75rem;
+}
+
+/* ── Nav ── */
+nav {
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  display: flex; justify-content: center; position: sticky; top: 0; z-index: 100;
+}
+nav button {
+  background: none; border: none; color: var(--fg-dim);
+  padding: 1rem 1.4rem; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+  border-bottom: 3px solid transparent; transition: all 0.18s;
+}
+nav button:hover { color: var(--fg); background: rgba(255,255,255,.04); }
+nav button.active { color: var(--purple-l); border-bottom-color: var(--purple-l); }
+
+/* ── Sections ── */
+.section { display: none; max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem; }
+.section.active { display: block; }
+
+.sec-header { margin-bottom: 2rem; }
+.sec-header h1 { font-size: 1.7rem; }
+.sec-header p { color: var(--fg-dim); margin-top: 0.3rem; }
+.badge { display: inline-block; padding: .2rem .7rem; border-radius: 4px; font-size: .72rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem; }
+.badge-section { background: rgba(108,72,197,.25); color: var(--purple-l); }
+
+/* ── Cards ── */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+}
+.card h2 { font-size: 1.25rem; margin-bottom: 1rem; }
+.card h3 { font-size: 1rem; color: var(--purple-l); margin-bottom: .6rem; }
+
+/* ── Steps ── */
+.steps { counter-reset: step; }
+.step { counter-increment: step; display: flex; gap: .9rem; margin-bottom: 1rem; align-items: flex-start; }
+.step::before {
+  content: counter(step); background: var(--purple); color: #fff;
+  min-width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .82rem; flex-shrink: 0; margin-top: 2px;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .55rem 1.1rem; border: none; border-radius: 8px;
+  font-size: .88rem; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.btn:disabled { opacity: .4; cursor: not-allowed !important; }
+.btn-primary { background: var(--purple); color: #fff; }
+.btn-primary:not(:disabled):hover { background: var(--purple-l); }
+.btn-success { background: var(--green); color: #fff; }
+.btn-success:not(:disabled):hover { filter: brightness(1.12); }
+.btn-orange  { background: var(--orange); color: #fff; }
+.btn-orange:not(:disabled):hover  { filter: brightness(1.12); }
+.btn-blue    { background: var(--blue); color: #fff; }
+.btn-blue:not(:disabled):hover    { filter: brightness(1.12); }
+.btn-danger  { background: var(--red); color: #fff; }
+.btn-danger:not(:disabled):hover  { filter: brightness(1.12); }
+.btn-ghost {
+  background: transparent; color: var(--purple-l);
+  border: 1px solid var(--purple-l);
+}
+.btn-ghost:not(:disabled):hover { background: rgba(108,72,197,.15); }
+
+/* ── Status badge ── */
+.status-badge {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .3rem .8rem; border-radius: 20px; font-size: .78rem; font-weight: 700;
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.disconnected { background: rgba(244,67,54,.15); color: var(--red); }
+.disconnected .status-dot { background: var(--red); }
+.connected { background: rgba(60,179,113,.15); color: var(--green); }
+.connected .status-dot { background: var(--green); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Toolbar row ── */
+.toolbar {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: .6rem 1rem; margin-bottom: 1rem;
+}
+.toolbar-label { font-size: .78rem; font-weight: 700; color: var(--fg-dim);
+  text-transform: uppercase; letter-spacing: .06em; margin-right: .25rem; }
+
+/* ── Code / pre ── */
+code {
+  font-family: 'JetBrains Mono','Fira Code',monospace;
+  background: rgba(255,255,255,.07); padding: .12rem .38rem;
+  border-radius: 4px; font-size: .86em; color: #c8b1ff;
+}
+pre {
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1rem; overflow-x: auto;
+  font-family: 'JetBrains Mono','Fira Code',monospace;
+  font-size: .84rem; line-height: 1.6; color: var(--fg);
+}
+.cm { color: #6c8a9a; } .kw { color: #ff79c6; } .st { color: #f1fa8c; }
+.nu { color: #bd93f9; } .fn { color: #50fa7b; }
+
+/* ── Hint box ── */
+.hint {
+  background: rgba(108,72,197,.1); border-left: 3px solid var(--purple);
+  padding: .7rem 1rem; border-radius: 0 8px 8px 0; margin: .75rem 0; font-size: .88rem;
+}
+.hint strong { color: var(--purple-l); }
+
+/* ── Notice / warning ── */
+.notice {
+  background: rgba(33,150,243,.1); border: 1px solid rgba(33,150,243,.3);
+  border-radius: 8px; padding: .7rem 1rem; font-size: .86rem; color: #90caf9;
+  margin: .75rem 0; display: flex; gap: .5rem; align-items: flex-start;
+}
+.warn {
+  background: rgba(255,193,7,.08); border: 1px solid rgba(255,193,7,.25);
+  border-radius: 8px; padding: .7rem 1rem; font-size: .86rem; color: #ffe082;
+  margin: .75rem 0;
+}
+
+/* ── LED dots ── */
+.led-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.led { width: 17px; height: 17px; border-radius: 50%; background: #2a2a3e; transition: all .08s; }
+.led.on { box-shadow: 0 0 10px currentColor; }
+
+/* ── Demo area ── */
+.demo-area {
+  background: rgba(0,0,0,.25); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem; text-align: center;
+}
+.demo-area .led-row { justify-content: center; margin-bottom: 1rem; }
+
+/* ── CodeMirror overrides ── */
+.CodeMirror {
+  font-family: 'JetBrains Mono','Fira Code',monospace;
+  font-size: 13.5px; border-radius: 0 0 8px 8px;
+  border: 1px solid var(--border); border-top: none;
+  height: auto; min-height: 300px;
+}
+.editor-head {
+  background: #1e1e32; border: 1px solid var(--border); border-bottom: none;
+  border-radius: 8px 8px 0 0; padding: .5rem .9rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.editor-head-label { font-size: .76rem; color: var(--fg-dim); font-family: monospace; }
+.editor-btns { display: flex; gap: .4rem; }
+
+/* ── xterm ── */
+.term-head {
+  background: #1e1e32; border: 1px solid var(--border); border-bottom: none;
+  border-radius: 8px 8px 0 0; padding: .45rem .9rem;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 1.25rem;
+}
+.term-head-label { font-size: .76rem; color: var(--fg-dim); font-family: monospace; }
+.term-shortcuts { font-size: .72rem; color: var(--fg-dim); }
+#xterm-wrap {
+  background: var(--bg-deep); border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 8px 8px; padding: 6px; min-height: 280px;
+}
+
+kbd {
+  background: rgba(255,255,255,.1); border: 1px solid var(--border);
+  border-radius: 3px; padding: .05rem .38rem; font-family: monospace; font-size: .82em;
+}
+
+/* ── Challenges ── */
+.challenge-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 1.1rem; }
+.ch-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.2rem; border-top: 3px solid;
+  transition: transform .18s, box-shadow .18s;
+}
+.ch-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.ch-card.easy   { border-top-color: var(--green); }
+.ch-card.medium { border-top-color: var(--yellow); }
+.ch-card.hard   { border-top-color: var(--red); }
+.diff-badge {
+  font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  padding: .18rem .55rem; border-radius: 20px; display: inline-block; margin-bottom: .6rem;
+}
+.easy   .diff-badge { background: rgba(60,179,113,.18); color: var(--green); }
+.medium .diff-badge { background: rgba(255,193,7,.18);  color: var(--yellow); }
+.hard   .diff-badge { background: rgba(244,67,54,.18);  color: var(--red); }
+.ch-card h3 { font-size: .98rem; margin-bottom: .4rem; }
+.ch-card p  { font-size: .87rem; color: var(--fg-dim); margin-bottom: .75rem; }
+.hint-toggle-btn {
+  background: none; border: 1px solid var(--border); color: var(--fg-dim);
+  padding: .25rem .65rem; border-radius: 6px; cursor: pointer; font-size: .78rem;
+  transition: all .15s;
+}
+.hint-toggle-btn:hover { border-color: var(--purple-l); color: var(--purple-l); }
+.ch-hint {
+  display: none; margin-top: .7rem; font-size: .82rem; color: var(--fg-dim);
+  background: rgba(108,72,197,.08); padding: .6rem .75rem; border-radius: 6px;
+}
+.ch-hint.open { display: block; }
+
+/* ── Appendix ── */
+.appendix { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 1rem; }
+.app-head {
+  background: var(--bg-card); padding: .9rem 1.4rem; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; user-select: none;
+}
+.app-head:hover { background: rgba(108,72,197,.1); }
+.app-head h2 { font-size: 1.05rem; color: var(--purple-l); }
+.app-chevron { transition: transform .2s; color: var(--fg-dim); font-size: .85rem; }
+.appendix.open .app-chevron { transform: rotate(180deg); }
+.app-body { display: none; background: var(--bg); padding: 1.5rem; border-top: 1px solid var(--border); }
+.appendix.open .app-body { display: block; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+th { background: rgba(108,72,197,.18); color: var(--purple-l); padding: .55rem .8rem; text-align: left; font-weight: 700; }
+td { padding: .45rem .8rem; border-bottom: 1px solid var(--border); color: var(--fg-dim); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.025); }
+td:first-child { color: var(--fg); font-family: monospace; }
+
+/* ── Misc layout ── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+@media(max-width:700px){ .grid2{grid-template-columns:1fr;} header h1{font-size:1.4rem;} nav button{padding:.75rem .75rem;font-size:.8rem;} }
+
+ul.feature-list { list-style: disc; padding-left: 1.2rem; color: var(--fg-dim); font-size: .88rem; line-height: 1.85; }
+ul.feature-list li strong { color: var(--fg); }
+
+footer { text-align: center; padding: 2rem; color: var(--fg-dim); font-size: .82rem;
+  border-top: 1px solid var(--border); margin-top: 2rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MicroPython on the <em>Maker Pi RP2040</em></h1>
+  <p>Connect your board, write some code, and make things happen — step by step.</p>
+  <span class="chip-badge">Chrome / Edge required for board connection</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showSection('start',this)">🚀 Start</button>
+  <button onclick="showSection('codeit',this)">💻 Code It</button>
+  <button onclick="showSection('challenge',this)">🏆 Challenges</button>
+  <button onclick="showSection('reference',this)">📚 Reference</button>
+</nav>
+
+<!-- ════════════════════════════════════════════
+     SECTION 1 — START
+     ════════════════════════════════════════════ -->
+<section id="start" class="section active">
+  <div class="sec-header">
+    <span class="badge badge-section">Step 1</span>
+    <h1>Let's Get Started</h1>
+    <p>Connect your board and flash the LEDs with one click — no typing required.</p>
+  </div>
+
+  <div class="card">
+    <h2>🔌 Set Up Your Board</h2>
+    <div class="steps">
+      <div class="step">
+        Plug the Maker Pi RP2040 into your computer with a USB-C cable.
+        The board should power on — you may hear a startup beep and see LEDs flash briefly.
+      </div>
+      <div class="step">
+        <div>
+          <strong>MicroPython already installed?</strong> Skip to step 3.<br>
+          <strong>New board / blank flash?</strong> The board will appear as a USB drive called <strong>RPI-RP2</strong>.
+          Download the MicroPython <code>.uf2</code> firmware from
+          <em>micropython.org/download/rp2-pico</em> and drag it onto that drive.
+          The board reboots automatically.
+        </div>
+      </div>
+      <div class="step">
+        Click <strong>Connect to Board</strong> below. Chrome will pop up a list of serial ports —
+        choose the one labelled something like <em>USB Serial Device</em> or <em>Raspberry Pi RP2040</em>.
+      </div>
+      <div class="step">
+        Hit <strong>⚡ Flash the LEDs!</strong> and watch the 13 NeoPixel LEDs blink red.
+        That's live MicroPython running on the chip.
+      </div>
+    </div>
+    <div class="notice">
+      ℹ️ <span>This page uses the <strong>Web Serial API</strong> — only <strong>Chrome or Edge 89+</strong> are supported.
+      Firefox and Safari cannot connect to serial devices from a webpage.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚡ Flash the LEDs</h2>
+    <div class="toolbar">
+      <span class="toolbar-label">Board</span>
+      <span id="s-status" class="status-badge disconnected"><span class="status-dot"></span>Disconnected</span>
+      <button class="btn btn-primary" id="s-connect-btn" onclick="boardConnect()">🔌 Connect to Board</button>
+      <button class="btn btn-danger"  id="s-disconnect-btn" style="display:none" onclick="boardDisconnect()">✕ Disconnect</button>
+    </div>
+
+    <div class="demo-area">
+      <div class="led-row" id="led-row"></div>
+      <button class="btn btn-success" id="flash-btn" disabled onclick="doFlash()">⚡ Flash the LEDs!</button>
+      <button class="btn btn-orange"  id="stop-btn"  disabled onclick="doStop()"  style="margin-left:.5rem">■ Stop</button>
+    </div>
+
+    <div style="margin-top:1.25rem">
+      <h3>What just happened?</h3>
+      <p style="color:var(--fg-dim);font-size:.88rem;margin-top:.4rem;margin-bottom:.75rem">
+        Clicking Flash sends this MicroPython program to the board over USB and runs it immediately:
+      </p>
+<pre><span class="kw">import</span> neopixel, machine, time
+
+np = neopixel.NeoPixel(machine.Pin(<span class="nu">18</span>), <span class="nu">13</span>)   <span class="cm"># 13 NeoPixels wired to GP18</span>
+
+<span class="kw">while</span> <span class="kw">True</span>:
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">13</span>):
+        np[i] = (<span class="nu">255</span>, <span class="nu">0</span>, <span class="nu">0</span>)      <span class="cm"># set LED i to red (R, G, B)</span>
+    np.write()                     <span class="cm"># push to LEDs — always needed!</span>
+    time.sleep(<span class="nu">0.4</span>)
+
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">13</span>):
+        np[i] = (<span class="nu">0</span>, <span class="nu">0</span>, <span class="nu">0</span>)        <span class="cm"># off</span>
+    np.write()
+    time.sleep(<span class="nu">0.4</span>)</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     SECTION 2 — CODE IT
+     ════════════════════════════════════════════ -->
+<section id="codeit" class="section">
+  <div class="sec-header">
+    <span class="badge badge-section">Step 2</span>
+    <h1>Code It</h1>
+    <p>Edit the starter code in the editor, then send it to the board or type directly in the REPL.</p>
+  </div>
+
+  <div class="card">
+    <h2>🎯 Your Task</h2>
+    <p style="color:var(--fg-dim);margin-bottom:1rem">
+      Modify the code so that <strong>pressing Button 1 (GP20)</strong> makes the LEDs flash
+      <strong>blue</strong> and the <strong>buzzer beep</strong>. Use the hints below.
+    </p>
+
+    <div class="hint">
+      <strong>Reading a button (active-low with pull-up):</strong><br>
+      <code>btn = machine.Pin(20, machine.Pin.IN, machine.Pin.PULL_UP)</code><br>
+      <code>if btn.value() == 0:</code>&nbsp; ← <code>0</code> when pressed, <code>1</code> when released
+    </div>
+    <div class="hint">
+      <strong>Sounding the buzzer (PWM tone):</strong><br>
+      <code>buzzer = machine.PWM(machine.Pin(22))</code><br>
+      <code>buzzer.freq(880)</code>&nbsp; &nbsp;← frequency in Hz (pitch)<br>
+      <code>buzzer.duty_u16(28000)</code>&nbsp; ← loudness (~43%); set to <code>0</code> to silence
+    </div>
+    <div class="hint">
+      <strong>NeoPixel colours</strong> — <code>np[i] = (R, G, B)</code> where each is 0–255.<br>
+      Blue&nbsp;<code>(0, 0, 255)</code> &nbsp;·&nbsp; Green&nbsp;<code>(0, 200, 0)</code>
+      &nbsp;·&nbsp; White&nbsp;<code>(80, 80, 80)</code> &nbsp;·&nbsp; Off&nbsp;<code>(0, 0, 0)</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📝 Editor + REPL</h2>
+
+    <div class="toolbar">
+      <span class="toolbar-label">Board</span>
+      <span id="ci-status" class="status-badge disconnected"><span class="status-dot"></span>Disconnected</span>
+      <button class="btn btn-primary" id="ci-connect-btn"    onclick="boardConnect()">🔌 Connect</button>
+      <button class="btn btn-danger"  id="ci-disconnect-btn" onclick="boardDisconnect()" style="display:none">✕ Disconnect</button>
+    </div>
+
+    <!-- Code editor -->
+    <div class="editor-head">
+      <span class="editor-head-label">main.py</span>
+      <div class="editor-btns">
+        <button class="btn btn-ghost"   style="padding:.28rem .7rem;font-size:.78rem" onclick="resetCode()">↺ Reset</button>
+        <button class="btn btn-success" id="run-btn"    disabled onclick="runCode()">▶ Run on Board</button>
+        <button class="btn btn-blue"    id="upload-btn" disabled onclick="uploadCode()" title="Writes main.py to the board — runs on every power-up">↑ Upload &amp; Run</button>
+      </div>
+    </div>
+    <div id="editor-wrap"></div>
+
+    <!-- REPL terminal -->
+    <div class="term-head">
+      <span class="term-head-label">REPL — MicroPython Interactive Console</span>
+      <span class="term-shortcuts">
+        <kbd>Ctrl+C</kbd> interrupt &nbsp; <kbd>Ctrl+D</kbd> soft reset &nbsp; <kbd>Tab</kbd> autocomplete
+        &nbsp;&nbsp;
+        <button class="hint-toggle-btn" onclick="clearTerm()">Clear</button>
+      </span>
+    </div>
+    <div id="xterm-wrap"></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     SECTION 3 — CHALLENGES
+     ════════════════════════════════════════════ -->
+<section id="challenge" class="section">
+  <div class="sec-header">
+    <span class="badge badge-section">Step 3</span>
+    <h1>Challenge Me</h1>
+    <p>Ready to go further? Pick a challenge, write the code in the <strong>Code It</strong> editor, and run it.</p>
+  </div>
+
+  <div class="challenge-grid">
+
+    <div class="ch-card easy">
+      <span class="diff-badge">Easy</span>
+      <h3>🌈 Rainbow Cycle</h3>
+      <p>Make all 13 NeoPixels sweep smoothly through the rainbow, wrapping around continuously.</p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+<pre style="font-size:.78rem"><span class="kw">def</span> <span class="fn">hsv</span>(h):   <span class="cm"># h in 0..1 → (R,G,B)</span>
+    i = int(h*6); f = h*6-i
+    p,q,t = 0, int(255*(1-f)), int(255*f)
+    v = <span class="nu">60</span>  <span class="cm"># brightness</span>
+    return [(<span class="nu">v</span>,t,<span class="nu">0</span>),(q,<span class="nu">v</span>,<span class="nu">0</span>),(<span class="nu">0</span>,<span class="nu">v</span>,t),
+            (<span class="nu">0</span>,q,<span class="nu">v</span>),(t,<span class="nu">0</span>,<span class="nu">v</span>),(<span class="nu">v</span>,<span class="nu">0</span>,q)][i%6]
+
+j = <span class="nu">0</span>
+<span class="kw">while</span> <span class="kw">True</span>:
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">13</span>):
+        np[i] = hsv((i/<span class="nu">13</span> + j/<span class="nu">256</span>) % <span class="nu">1</span>)
+    np.write(); j = (j+<span class="nu">1</span>) % <span class="nu">256</span>; time.sleep(<span class="nu">0.02</span>)</pre>
+      </div>
+    </div>
+
+    <div class="ch-card easy">
+      <span class="diff-badge">Easy</span>
+      <h3>🎵 Play a Melody</h3>
+      <p>Use the buzzer to play a short tune — try "Twinkle Twinkle" or invent your own using note frequencies.</p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+<pre style="font-size:.78rem">NOTES = {<span class="st">'C4'</span>:<span class="nu">262</span>,<span class="st">'D4'</span>:<span class="nu">294</span>,<span class="st">'E4'</span>:<span class="nu">330</span>,
+         <span class="st">'G4'</span>:<span class="nu">392</span>,<span class="st">'A4'</span>:<span class="nu">440</span>,<span class="st">'C5'</span>:<span class="nu">523</span>}
+SONG = [<span class="st">'C4','C4','G4','G4','A4','A4','G4'</span>]
+BEAT = [  <span class="nu">1</span>,  <span class="nu">1</span>,  <span class="nu">1</span>,  <span class="nu">1</span>,  <span class="nu">1</span>,  <span class="nu">1</span>,  <span class="nu">2</span>]
+
+bz = machine.PWM(machine.Pin(<span class="nu">22</span>))
+<span class="kw">for</span> note, dur <span class="kw">in</span> zip(SONG, BEAT):
+    bz.freq(NOTES[note]); bz.duty_u16(<span class="nu">22000</span>)
+    time.sleep(<span class="nu">0.22</span> * dur)
+    bz.duty_u16(<span class="nu">0</span>); time.sleep(<span class="nu">0.05</span>)
+bz.deinit()</pre>
+      </div>
+    </div>
+
+    <div class="ch-card medium">
+      <span class="diff-badge">Medium</span>
+      <h3>⏱ Reaction Timer</h3>
+      <p>Flash the LEDs after a random pause. Measure how fast the user presses Button 1. Green = fast, red = slow.</p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+<pre style="font-size:.78rem"><span class="kw">import</span> random
+time.sleep(random.uniform(<span class="nu">2</span>, <span class="nu">5</span>))   <span class="cm"># surprise!</span>
+np.fill((<span class="nu">80</span>,<span class="nu">80</span>,<span class="nu">80</span>)); np.write()   <span class="cm"># GO signal</span>
+t0 = time.ticks_ms()
+<span class="kw">while</span> btn.value() == <span class="nu">1</span>: <span class="kw">pass</span>      <span class="cm"># wait for press</span>
+rt = time.ticks_diff(time.ticks_ms(), t0)
+print(f<span class="st">"Reaction: {rt} ms"</span>)
+c = (<span class="nu">0</span>,<span class="nu">200</span>,<span class="nu">0</span>) <span class="kw">if</span> rt &lt; <span class="nu">350</span> <span class="kw">else</span> (<span class="nu">200</span>,<span class="nu">0</span>,<span class="nu">0</span>)
+np.fill(c); np.write()</pre>
+      </div>
+    </div>
+
+    <div class="ch-card medium">
+      <span class="diff-badge">Medium</span>
+      <h3>🎚 ADC Brightness Slider</h3>
+      <p>Connect a potentiometer to GP26 and use its voltage to smoothly control the brightness of all LEDs.</p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+<pre style="font-size:.78rem">adc = machine.ADC(machine.Pin(<span class="nu">26</span>))
+<span class="kw">while</span> <span class="kw">True</span>:
+    v = adc.read_u16()              <span class="cm"># 0..65535</span>
+    b = int(v / <span class="nu">65535</span> * <span class="nu">180</span>)      <span class="cm"># scale to 0..180</span>
+    np.fill((<span class="nu">0</span>, b, b))             <span class="cm"># cyan, variable bright</span>
+    np.write(); time.sleep(<span class="nu">0.04</span>)</pre>
+      </div>
+    </div>
+
+    <div class="ch-card hard">
+      <span class="diff-badge">Hard</span>
+      <h3>🚦 Traffic Light State Machine</h3>
+      <p>
+        Implement a traffic light (Red → Green → Yellow → Red) with the LEDs.
+        Button 1 acts as a pedestrian-crossing request that cuts the green phase short.
+      </p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+        Use a <code>state</code> variable (<code>'red'</code>, <code>'green'</code>, <code>'yellow'</code>).
+        In each state, set all LEDs to the right colour and wait out a timer using
+        <code>time.ticks_ms()</code>. During the green state, also check <code>btn.value()==0</code>
+        and break early if the button is pressed. Transition to the next state in a loop.
+      </div>
+    </div>
+
+    <div class="ch-card hard">
+      <span class="diff-badge">Hard</span>
+      <h3>🕐 Binary Clock</h3>
+      <p>
+        Display the current time in binary on the NeoPixels: 5 LEDs for hours, 6 for minutes,
+        1 blinking for seconds, 1 for AM/PM. Increment once per second with a timer interrupt.
+      </p>
+      <button class="hint-toggle-btn" onclick="toggleHint(this)">Show hint</button>
+      <div class="ch-hint">
+        Use <code>time.localtime()</code> for H, M, S. Extract bits with <code>&gt;&gt;</code> and
+        <code>&amp; 1</code> — e.g. <code>(hours &gt;&gt; bit) &amp; 1</code>.
+        Map bits to LED indices 0–4 (hours), 5–10 (minutes), 11 (seconds blink), 12 (AM/PM).
+        Use <code>machine.Timer</code> with <code>period=1000</code> to tick every second without blocking.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     SECTION 4 — REFERENCE
+     ════════════════════════════════════════════ -->
+<section id="reference" class="section">
+  <div class="sec-header">
+    <h1>📚 Reference</h1>
+    <p>Board overview, MicroPython primer, and a full command reference. Click any header to expand.</p>
+  </div>
+
+  <!-- ── Appendix A: Board Overview ── -->
+  <div class="appendix open" id="app-a">
+    <div class="app-head" onclick="toggleApp('app-a')">
+      <h2>Appendix A — Maker Pi RP2040 Board Overview</h2>
+      <span class="app-chevron">▼</span>
+    </div>
+    <div class="app-body">
+      <div class="grid2" style="margin-bottom:1.5rem">
+        <div>
+          <h3>Key Features</h3>
+          <ul class="feature-list" style="margin-top:.5rem">
+            <li><strong>RP2040</strong> dual-core ARM Cortex-M0+ @ up to 133 MHz</li>
+            <li><strong>2 MB</strong> on-board QSPI Flash, 264 kB SRAM</li>
+            <li><strong>13 × WS2812B</strong> (NeoPixel) RGB LEDs — GP18</li>
+            <li><strong>2 push-buttons</strong> — GP20, GP21</li>
+            <li><strong>Piezo buzzer</strong> — GP22</li>
+            <li><strong>4-ch DC motor driver</strong> (2 × DRV8833)</li>
+            <li><strong>7 servo motor headers</strong> (3.3 V signal, external power)</li>
+            <li><strong>2 × Grove I2C</strong> — SDA/SCL on GP4/GP5</li>
+            <li><strong>1 × Grove UART</strong> — TX/RX on GP0/GP1</li>
+            <li><strong>3 × ADC</strong> — GP26, GP27, GP28 (0–3.3 V)</li>
+            <li><strong>USB-C</strong> for power &amp; programming</li>
+            <li>Separate <strong>motor power connector</strong> (up to 10 V)</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Important Pins at a Glance</h3>
+          <table style="margin-top:.5rem">
+            <tr><th>Function</th><th>GPIO</th></tr>
+            <tr><td>NeoPixel LEDs (×13)</td><td>GP18</td></tr>
+            <tr><td>Button 1</td><td>GP20</td></tr>
+            <tr><td>Button 2</td><td>GP21</td></tr>
+            <tr><td>Buzzer (PWM)</td><td>GP22</td></tr>
+            <tr><td>Motor M1A / M1B</td><td>GP8 / GP9</td></tr>
+            <tr><td>Motor M2A / M2B</td><td>GP10 / GP11</td></tr>
+            <tr><td>Servo 1–4</td><td>GP12–GP15</td></tr>
+            <tr><td>Servo 5–7</td><td>GP16–GP18</td></tr>
+            <tr><td>Grove I2C SDA / SCL</td><td>GP4 / GP5</td></tr>
+            <tr><td>Grove UART TX / RX</td><td>GP0 / GP1</td></tr>
+            <tr><td>ADC 0 / 1 / 2</td><td>GP26 / GP27 / GP28</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <h3>Board Layout (simplified)</h3>
+<pre style="font-size:.76rem;line-height:1.65;margin-top:.5rem">
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Maker Pi RP2040  (Cytron)                        [USB-C]        │
+  │                                                   [RESET]        │
+  │  ●●●●●●●●●●●●●  ← 13 NeoPixel LEDs (GP18 data)  [BOOTSEL]      │
+  │                                                                   │
+  │  [BTN1 GP20]              [BTN2 GP21]                            │
+  │  [BUZZER GP22]                                                   │
+  │                                                                   │
+  │  MOTOR DRIVER                    SERVO HEADERS                   │
+  │  M1+ M1−  (GP8 / GP9)    S1(GP12) S2(GP13) S3(GP14) S4(GP15)   │
+  │  M2+ M2−  (GP10 / GP11)  S5(GP16) S6(GP17) S7(GP18)            │
+  │                                                                   │
+  │  GROVE I2C (GP4 SDA / GP5 SCL)   GROVE UART (GP0 TX / GP1 RX)  │
+  │                                                                   │
+  │  ADC:  A0=GP26    A1=GP27    A2=GP28                            │
+  │                              [MOTOR PWR connector]               │
+  └──────────────────────────────────────────────────────────────────┘</pre>
+
+      <div class="warn" style="margin-top:1rem">
+        ⚠️ <strong>Always verify against your physical board.</strong>
+        Pin assignments above follow the standard Maker Pi RP2040 v1.0 schematic.
+        Check the silkscreen and Cytron's official documentation at <em>cytron.io</em>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Appendix B: MicroPython Intro ── -->
+  <div class="appendix" id="app-b">
+    <div class="app-head" onclick="toggleApp('app-b')">
+      <h2>Appendix B — Introduction to MicroPython</h2>
+      <span class="app-chevron">▼</span>
+    </div>
+    <div class="app-body">
+      <div class="grid2">
+        <div>
+          <h3>What is MicroPython?</h3>
+          <p style="color:var(--fg-dim);font-size:.88rem;margin-top:.4rem;line-height:1.75">
+            MicroPython is a lean Python 3 implementation that runs directly on microcontrollers —
+            no operating system, no computer needed. It supports most of Python's core syntax
+            (variables, loops, functions, lists, dicts, classes) plus hardware modules for GPIO,
+            PWM, ADC, I2C, SPI, and UART.
+          </p>
+          <p style="color:var(--fg-dim);font-size:.88rem;margin-top:.65rem;line-height:1.75">
+            You talk to it via a <strong>REPL</strong> (Read-Eval-Print Loop) over USB —
+            just like a Python shell on your laptop, but running on the RP2040 at 133 MHz.
+          </p>
+
+          <h3 style="margin-top:1.1rem">Essential syntax</h3>
+<pre style="margin-top:.4rem;font-size:.8rem"><span class="cm"># Variables &amp; types</span>
+x = <span class="nu">42</span>;  name = <span class="st">"RP2040"</span>;  flag = <span class="kw">True</span>
+
+<span class="cm"># Conditionals</span>
+<span class="kw">if</span> x > <span class="nu">10</span>:
+    print(<span class="st">"big"</span>)
+<span class="kw">elif</span> x > <span class="nu">5</span>:
+    print(<span class="st">"medium"</span>)
+<span class="kw">else</span>:
+    print(<span class="st">"small"</span>)
+
+<span class="cm"># for loop</span>
+<span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">10</span>):   <span class="cm"># 0, 1, 2 … 9</span>
+    print(i)
+
+<span class="cm"># while loop — run forever</span>
+<span class="kw">while</span> <span class="kw">True</span>:
+    <span class="kw">pass</span>
+
+<span class="cm"># Functions</span>
+<span class="kw">def</span> <span class="fn">add</span>(a, b):
+    <span class="kw">return</span> a + b
+
+<span class="cm"># f-strings (print with values)</span>
+print(f<span class="st">"x = {x}, name = {name}"</span>)</pre>
+        </div>
+
+        <div>
+          <h3>Key hardware modules</h3>
+<pre style="font-size:.8rem"><span class="kw">import</span> machine, time, neopixel
+
+<span class="cm"># ── Digital output ──</span>
+led = machine.Pin(<span class="nu">25</span>, machine.Pin.OUT)
+led.value(<span class="nu">1</span>)       <span class="cm"># HIGH (on)</span>
+led.value(<span class="nu">0</span>)       <span class="cm"># LOW  (off)</span>
+led.toggle()        <span class="cm"># flip state</span>
+
+<span class="cm"># ── Digital input ──</span>
+btn = machine.Pin(<span class="nu">20</span>, machine.Pin.IN,
+                  machine.Pin.PULL_UP)
+v = btn.value()     <span class="cm"># 0=pressed, 1=open</span>
+
+<span class="cm"># ── PWM ──</span>
+pwm = machine.PWM(machine.Pin(<span class="nu">22</span>))
+pwm.freq(<span class="nu">1000</span>)     <span class="cm"># 1 kHz</span>
+pwm.duty_u16(<span class="nu">32768</span>) <span class="cm"># 50% duty (0–65535)</span>
+pwm.duty_u16(<span class="nu">0</span>)     <span class="cm"># silent / off</span>
+
+<span class="cm"># ── ADC (analogue in) ──</span>
+adc = machine.ADC(machine.Pin(<span class="nu">26</span>))
+raw = adc.read_u16()   <span class="cm"># 0 .. 65535</span>
+v   = raw * <span class="nu">3.3</span> / <span class="nu">65535</span> <span class="cm"># convert to volts</span>
+
+<span class="cm"># ── Timing ──</span>
+time.sleep(<span class="nu">1</span>)          <span class="cm"># 1 second</span>
+time.sleep_ms(<span class="nu">250</span>)     <span class="cm"># 250 ms</span>
+t0 = time.ticks_ms()
+elapsed = time.ticks_diff(time.ticks_ms(), t0)</pre>
+
+          <h3 style="margin-top:1rem">REPL shortcuts</h3>
+          <table style="margin-top:.4rem">
+            <tr><th>Key</th><th>What it does</th></tr>
+            <tr><td><kbd>Ctrl+C</kbd></td><td>Interrupt running code</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>Soft-reset the board</td></tr>
+            <tr><td><kbd>↑ / ↓</kbd></td><td>History navigation</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>Auto-complete</td></tr>
+            <tr><td><kbd>Ctrl+E</kbd></td><td>Paste mode (multi-line input)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1.4rem">boot.py vs main.py</h3>
+      <table style="margin-top:.5rem">
+        <tr><th>File</th><th>When it runs</th><th>Typical use</th></tr>
+        <tr><td><code>boot.py</code></td><td>First, on every power-on / reset</td><td>One-time setup, disable USB storage, configure networking</td></tr>
+        <tr><td><code>main.py</code></td><td>After <code>boot.py</code>, automatically</td><td>Your main application loop</td></tr>
+      </table>
+      <p style="color:var(--fg-dim);font-size:.86rem;margin-top:.65rem">
+        The <strong>↑ Upload &amp; Run</strong> button in the Code It section writes your editor content to
+        <code>main.py</code> on the board's flash, then soft-resets so it runs on every future power-up.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Appendix C: Board Command Reference ── -->
+  <div class="appendix" id="app-c">
+    <div class="app-head" onclick="toggleApp('app-c')">
+      <h2>Appendix C — Complete Board Command Reference</h2>
+      <span class="app-chevron">▼</span>
+    </div>
+    <div class="app-body">
+
+      <h3>NeoPixel LEDs — GP18 (×13)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> neopixel, machine
+
+NUM = <span class="nu">13</span>
+np = neopixel.NeoPixel(machine.Pin(<span class="nu">18</span>), NUM)
+
+np[<span class="nu">0</span>] = (<span class="nu">255</span>, <span class="nu">0</span>,   <span class="nu">0</span>)    <span class="cm"># LED 0 → red</span>
+np[<span class="nu">5</span>] = (<span class="nu">0</span>,   <span class="nu">0</span>, <span class="nu">255</span>)    <span class="cm"># LED 5 → blue</span>
+np.fill((<span class="nu">0</span>, <span class="nu">80</span>, <span class="nu">0</span>))       <span class="cm"># all LEDs dim green</span>
+np.fill((<span class="nu">0</span>,  <span class="nu">0</span>, <span class="nu">0</span>))       <span class="cm"># all off</span>
+np.write()                  <span class="cm"># ALWAYS call after changes or nothing updates</span>
+
+<span class="cm"># Brightness tip: scale (R,G,B) values — (255,0,0) is full, (30,0,0) is dim</span></pre>
+
+      <h3 style="margin-top:1.3rem">Push Buttons — GP20, GP21 (active-low)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+btn1 = machine.Pin(<span class="nu">20</span>, machine.Pin.IN, machine.Pin.PULL_UP)
+btn2 = machine.Pin(<span class="nu">21</span>, machine.Pin.IN, machine.Pin.PULL_UP)
+
+<span class="cm"># Polling (check in a loop)</span>
+<span class="kw">if</span> btn1.value() == <span class="nu">0</span>:          <span class="cm"># 0 = pressed, 1 = not pressed</span>
+    print(<span class="st">"Button 1!"</span>)
+
+<span class="cm"># Interrupt-driven (non-blocking callback)</span>
+<span class="kw">def</span> <span class="fn">on_press</span>(pin):
+    print(<span class="st">"Pressed!"</span>)
+
+btn1.irq(trigger=machine.Pin.IRQ_FALLING, handler=on_press)
+<span class="cm"># IRQ_FALLING = fires when pin drops from 1→0 (button pressed)</span>
+<span class="cm"># IRQ_RISING  = fires when pin rises 0→1 (button released)</span></pre>
+
+      <h3 style="margin-top:1.3rem">Piezo Buzzer — GP22</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine, time
+
+<span class="cm"># ── Simple click (no pitch) ──</span>
+pin = machine.Pin(<span class="nu">22</span>, machine.Pin.OUT)
+pin.value(<span class="nu">1</span>); time.sleep_ms(<span class="nu">5</span>); pin.value(<span class="nu">0</span>)
+
+<span class="cm"># ── Tonal buzz (PWM) ──</span>
+bz = machine.PWM(machine.Pin(<span class="nu">22</span>))
+bz.freq(<span class="nu">440</span>)              <span class="cm"># Hz  — A4 = 440, middle C = 262</span>
+bz.duty_u16(<span class="nu">28000</span>)        <span class="cm"># ~43% duty; lower = quieter</span>
+time.sleep(<span class="nu">0.5</span>)
+bz.duty_u16(<span class="nu">0</span>)             <span class="cm"># silence — do NOT deinit mid-program</span>
+bz.deinit()                 <span class="cm"># release PWM slice when fully done</span>
+
+<span class="cm"># Note frequencies (Hz)
+# C4=262  D4=294  E4=330  F4=349  G4=392  A4=440  B4=494  C5=523</span></pre>
+
+      <h3 style="margin-top:1.3rem">Analogue Inputs — GP26 / GP27 / GP28</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+adc0 = machine.ADC(machine.Pin(<span class="nu">26</span>))   <span class="cm"># channel A0</span>
+adc1 = machine.ADC(machine.Pin(<span class="nu">27</span>))   <span class="cm"># channel A1</span>
+adc2 = machine.ADC(machine.Pin(<span class="nu">28</span>))   <span class="cm"># channel A2</span>
+
+raw   = adc0.read_u16()              <span class="cm"># integer 0 .. 65535</span>
+volts = raw * <span class="nu">3.3</span> / <span class="nu">65535</span>           <span class="cm"># convert to volts (3.3 V full-scale)</span>
+pct   = raw / <span class="nu">65535</span>                  <span class="cm"># fraction 0.0 .. 1.0</span>
+
+<span class="cm"># On-chip temperature sensor (ADC channel 4)</span>
+ts  = machine.ADC(<span class="nu">4</span>)
+raw = ts.read_u16()
+c   = <span class="nu">27</span> - (raw * <span class="nu">3.3</span> / <span class="nu">65535</span> - <span class="nu">0.706</span>) / <span class="nu">0.001721</span></pre>
+
+      <h3 style="margin-top:1.3rem">DC Motor Driver (DRV8833)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+<span class="cm"># Motor 1: GP8 (IN1), GP9 (IN2)   Motor 2: GP10 (IN1), GP11 (IN2)</span>
+m1a = machine.PWM(machine.Pin(<span class="nu">8</span>));  m1b = machine.PWM(machine.Pin(<span class="nu">9</span>))
+m1a.freq(<span class="nu">1000</span>);                     m1b.freq(<span class="nu">1000</span>)
+
+<span class="cm"># Forward at ~60% speed</span>
+m1a.duty_u16(<span class="nu">39321</span>); m1b.duty_u16(<span class="nu">0</span>)
+
+<span class="cm"># Reverse at ~60%</span>
+m1a.duty_u16(<span class="nu">0</span>);     m1b.duty_u16(<span class="nu">39321</span>)
+
+<span class="cm"># Coast (free-spin stop)</span>
+m1a.duty_u16(<span class="nu">0</span>);     m1b.duty_u16(<span class="nu">0</span>)
+
+<span class="cm"># Brake (hold)</span>
+m1a.duty_u16(<span class="nu">65535</span>); m1b.duty_u16(<span class="nu">65535</span>)</pre>
+
+      <h3 style="margin-top:1.3rem">Servo Motors — GP12–GP18</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+servo = machine.PWM(machine.Pin(<span class="nu">12</span>))  <span class="cm"># Servo on S1 header</span>
+servo.freq(<span class="nu">50</span>)                         <span class="cm"># 50 Hz standard servo</span>
+
+<span class="kw">def</span> <span class="fn">set_angle</span>(pwm, deg):
+    <span class="cm"># 0° → ~1 ms pulse, 180° → ~2.4 ms pulse (tune max_duty for your servo)</span>
+    min_d, max_d = <span class="nu">1638</span>, <span class="nu">7864</span>          <span class="cm"># out of 65535 at 50 Hz</span>
+    pwm.duty_u16(int(min_d + (max_d - min_d) * deg / <span class="nu">180</span>))
+
+set_angle(servo, <span class="nu">0</span>)    <span class="cm"># fully anti-clockwise</span>
+set_angle(servo, <span class="nu">90</span>)   <span class="cm"># centre</span>
+set_angle(servo, <span class="nu">180</span>)  <span class="cm"># fully clockwise</span></pre>
+
+      <h3 style="margin-top:1.3rem">I2C — Grove connector (GP4 SDA / GP5 SCL)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+i2c = machine.I2C(<span class="nu">0</span>, sda=machine.Pin(<span class="nu">4</span>), scl=machine.Pin(<span class="nu">5</span>), freq=<span class="nu">400_000</span>)
+
+print([hex(a) <span class="kw">for</span> a <span class="kw">in</span> i2c.scan()])    <span class="cm"># list devices on the bus</span>
+
+<span class="cm"># Read 2 bytes from device at 0x48</span>
+data = i2c.readfrom(<span class="nu">0x48</span>, <span class="nu">2</span>)
+
+<span class="cm"># Write 0xFF to register 0x01 of device 0x48</span>
+i2c.writeto_mem(<span class="nu">0x48</span>, <span class="nu">0x01</span>, bytes([<span class="nu">0xFF</span>]))</pre>
+
+      <h3 style="margin-top:1.3rem">UART — Grove connector (GP0 TX / GP1 RX)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine
+
+uart = machine.UART(<span class="nu">0</span>, baudrate=<span class="nu">9600</span>, tx=machine.Pin(<span class="nu">0</span>), rx=machine.Pin(<span class="nu">1</span>))
+
+uart.write(<span class="st">b'Hello\r\n'</span>)
+
+<span class="kw">if</span> uart.any():
+    data = uart.read()
+    print(data)</pre>
+
+      <h3 style="margin-top:1.3rem">Timers (periodic callbacks)</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> machine, time
+
+<span class="cm"># Hardware timer — fires a callback every 500 ms</span>
+<span class="kw">def</span> <span class="fn">tick</span>(t):
+    print(<span class="st">"tick"</span>)
+
+timer = machine.Timer()
+timer.init(period=<span class="nu">500</span>, mode=machine.Timer.PERIODIC, callback=tick)
+<span class="cm"># timer.deinit()   # stop the timer</span>
+
+<span class="cm"># One-shot timer (fires once after 2 s)</span>
+timer.init(period=<span class="nu">2000</span>, mode=machine.Timer.ONE_SHOT, callback=tick)</pre>
+
+      <h3 style="margin-top:1.3rem">Filesystem</h3>
+<pre style="font-size:.82rem"><span class="kw">import</span> os
+
+os.listdir()              <span class="cm"># list files on flash</span>
+os.stat(<span class="st">'main.py'</span>)       <span class="cm"># (type, size, …)</span>
+os.remove(<span class="st">'main.py'</span>)     <span class="cm"># delete file</span>
+
+<span class="kw">with</span> open(<span class="st">'log.txt'</span>, <span class="st">'w'</span>) <span class="kw">as</span> f:
+    f.write(<span class="st">'value=42\n'</span>)
+
+<span class="kw">with</span> open(<span class="st">'log.txt'</span>) <span class="kw">as</span> f:
+    print(f.read())</pre>
+
+    </div>
+  </div>
+
+</section>
+
+<footer>
+  Maker Pi RP2040 + MicroPython Getting Started Guide &nbsp;·&nbsp; Board by Cytron &nbsp;·&nbsp;
+  Requires Chrome or Edge for Web Serial board connection
+</footer>
+
+<!-- ════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ── Navigation ──────────────────────────────────────────────
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'codeit') {
+    if (!editor) initEditor();
+    if (!term)   initTerminal();
+    setTimeout(() => fitAddon?.fit(), 50);
+  }
+}
+
+function toggleApp(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleHint(btn) {
+  const h = btn.nextElementSibling;
+  const open = h.classList.toggle('open');
+  btn.textContent = open ? 'Hide hint' : 'Show hint';
+}
+
+// ── LED preview ──────────────────────────────────────────────
+const NUM_LEDS = 13;
+let ledTimer = null;
+
+(function buildLedRow() {
+  const row = document.getElementById('led-row');
+  for (let i = 0; i < NUM_LEDS; i++) {
+    const d = document.createElement('div');
+    d.className = 'led'; d.id = 'led' + i;
+    row.appendChild(d);
+  }
+})();
+
+function setLed(i, r, g, b) {
+  const el = document.getElementById('led' + i);
+  if (!el) return;
+  if (!r && !g && !b) {
+    el.style.background = ''; el.style.color = ''; el.classList.remove('on');
+  } else {
+    const c = `rgb(${r},${g},${b})`;
+    el.style.background = c; el.style.color = c; el.classList.add('on');
+  }
+}
+
+function ledAnim(r, g, b, period = 400) {
+  stopLedAnim();
+  let on = false;
+  const frame = () => {
+    on = !on;
+    for (let i = 0; i < NUM_LEDS; i++) setLed(i, on?r:0, on?g:0, on?b:0);
+    ledTimer = setTimeout(frame, period);
+  };
+  frame();
+}
+
+function stopLedAnim() {
+  clearTimeout(ledTimer); ledTimer = null;
+  for (let i = 0; i < NUM_LEDS; i++) setLed(i, 0, 0, 0);
+}
+
+// ── Serial connection ────────────────────────────────────────
+const serial = { port: null, writer: null, reader: null, active: false };
+
+async function boardConnect() {
+  if (!('serial' in navigator)) {
+    alert('Web Serial is not supported.\nPlease use Chrome or Edge (version 89+).');
+    return;
+  }
+  if (serial.active) return;
+  try {
+    serial.port = await navigator.serial.requestPort();
+    await serial.port.open({ baudRate: 115200 });
+    serial.writer = serial.port.writable.getWriter();
+    serial.active = true;
+    updateUI(true);
+    readLoop();
+  } catch (e) {
+    console.error('Connect error:', e);
+    if (e.name !== 'NotSelectedError') alert('Could not open port:\n' + e.message);
+  }
+}
+
+async function boardDisconnect() {
+  serial.active = false;
+  try { await serial.reader?.cancel(); } catch(e) {}
+  try { serial.writer?.releaseLock(); } catch(e) {}
+  try { await serial.port?.close();   } catch(e) {}
+  serial.port = serial.writer = serial.reader = null;
+  stopLedAnim();
+  updateUI(false);
+  if (term) term.writeln('\r\n\x1b[1;31m✗ Disconnected.\x1b[0m');
+}
+
+async function readLoop() {
+  if (!serial.port?.readable) return;
+  try {
+    serial.reader = serial.port.readable.getReader();
+    while (serial.active) {
+      const { value, done } = await serial.reader.read();
+      if (done) break;
+      if (value && term) term.write(value);
+    }
+  } catch(e) {
+    if (serial.active) console.error('Read error:', e);
+  } finally {
+    serial.reader?.releaseLock();
+    serial.reader = null;
+  }
+  if (serial.active) { serial.active = false; updateUI(false); }
+}
+
+function updateUI(connected) {
+  const badge    = connected ? '<span class="status-dot"></span>Connected'
+                              : '<span class="status-dot"></span>Disconnected';
+  const cls      = connected ? 'status-badge connected' : 'status-badge disconnected';
+  for (const id of ['s-status','ci-status']) {
+    const el = document.getElementById(id);
+    if (el) { el.className = cls; el.innerHTML = badge; }
+  }
+  const show = v => v ? '' : 'none';
+  const dis  = v => { if(v) v.disabled = !connected; };
+  document.getElementById('s-connect-btn').style.display    = show(!connected);
+  document.getElementById('s-disconnect-btn').style.display = show(connected);
+  document.getElementById('ci-connect-btn').style.display   = show(!connected);
+  document.getElementById('ci-disconnect-btn').style.display= show(connected);
+  dis(document.getElementById('flash-btn'));
+  dis(document.getElementById('stop-btn'));
+  dis(document.getElementById('run-btn'));
+  dis(document.getElementById('upload-btn'));
+  if (connected && term) {
+    term.writeln('\x1b[1;32m✓ Board connected. Type MicroPython here or use ▶ Run.\x1b[0m\r\n');
+  }
+}
+
+// ── Low-level serial writes ──────────────────────────────────
+const enc = new TextEncoder();
+async function writeBytes(arr) {
+  if (!serial.writer) return;
+  await serial.writer.write(arr instanceof Uint8Array ? arr : new Uint8Array(arr));
+}
+async function writeStr(s) { await writeBytes(enc.encode(s)); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function ctrlC() { await writeBytes([0x03]); }
+async function ctrlD() { await writeBytes([0x04]); }
+async function ctrlE() { await writeBytes([0x05]); }
+
+// ── Send code via MicroPython paste mode ─────────────────────
+async function sendPaste(code) {
+  await ctrlC(); await sleep(150);
+  await ctrlE(); await sleep(60);
+  const lines = code.split('\n');
+  for (const line of lines) {
+    await writeStr(line + '\r\n');
+    await sleep(4);
+  }
+  await ctrlD();
+}
+
+// ── Start section actions ────────────────────────────────────
+const FLASH_CODE = `
+import neopixel, machine, time
+np = neopixel.NeoPixel(machine.Pin(18), 13)
+while True:
+    for i in range(13):
+        np[i] = (255, 0, 0)
+    np.write()
+    time.sleep(0.4)
+    for i in range(13):
+        np[i] = (0, 0, 0)
+    np.write()
+    time.sleep(0.4)
+`.trim();
+
+async function doFlash() {
+  if (!serial.active) return;
+  document.getElementById('flash-btn').disabled = true;
+  await sendPaste(FLASH_CODE);
+  ledAnim(255, 0, 0);
+  document.getElementById('flash-btn').disabled = false;
+}
+
+async function doStop() {
+  if (!serial.active) return;
+  await ctrlC();
+  stopLedAnim();
+}
+
+// ── Code It section ──────────────────────────────────────────
+let editor = null, term = null, fitAddon = null;
+
+const STARTER = `import neopixel, machine, time
+
+# ── Setup ───────────────────────────────────────────────────
+np     = neopixel.NeoPixel(machine.Pin(18), 13)   # 13 LEDs on GP18
+btn    = machine.Pin(20, machine.Pin.IN, machine.Pin.PULL_UP)
+buzzer = machine.PWM(machine.Pin(22))
+
+# ── Helpers ─────────────────────────────────────────────────
+def flash(color=(200, 0, 0), n=3, t=0.12):
+    for _ in range(n):
+        np.fill(color); np.write(); time.sleep(t)
+        np.fill((0, 0, 0)); np.write(); time.sleep(t)
+
+def buzz(freq=880, dur=0.2):
+    buzzer.freq(freq)
+    buzzer.duty_u16(28000)
+    time.sleep(dur)
+    buzzer.duty_u16(0)
+
+# ── Main loop ────────────────────────────────────────────────
+print("Ready!  Press Button 1 (GP20) to trigger...")
+
+while True:
+    # TODO: wait for button press (btn.value() == 0), then flash + buzz!
+    time.sleep(0.05)
+`;
+
+function initEditor() {
+  const wrap = document.getElementById('editor-wrap');
+  wrap.innerHTML = '<textarea id="code-ta"></textarea>';
+  editor = CodeMirror.fromTextArea(document.getElementById('code-ta'), {
+    mode: 'python', theme: 'monokai', lineNumbers: true,
+    indentUnit: 4, tabSize: 4, indentWithTabs: false,
+    extraKeys: { Tab: cm => cm.replaceSelection('    ') },
+    lineWrapping: false,
+  });
+  editor.setValue(STARTER);
+  editor.setSize(null, 400);
+}
+
+function initTerminal() {
+  term = new Terminal({
+    theme: {
+      background: '#0d0d1a', foreground: '#e8e8f0',
+      cursor: '#a080ff', selectionBackground: 'rgba(108,72,197,.35)',
+    },
+    fontFamily: "'JetBrains Mono','Fira Code',monospace",
+    fontSize: 13, cursorBlink: true, scrollback: 2000,
+  });
+  fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById('xterm-wrap'));
+  fitAddon.fit();
+  term.writeln('\x1b[1;35mMicroPython REPL\x1b[0m');
+  term.writeln('Connect your board, then type here or use \x1b[1m▶ Run on Board\x1b[0m above.\r\n');
+  term.onData(data => { if (serial.active) writeStr(data); });
+  window.addEventListener('resize', () => fitAddon?.fit());
+}
+
+function resetCode() { if (editor) editor.setValue(STARTER); }
+function clearTerm()  { if (term)   term.clear(); }
+
+async function runCode() {
+  if (!serial.active || !editor) return;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true; btn.textContent = '⏳ Sending…';
+  if (term) term.writeln('\r\n\x1b[1;33m▶ Sending code to board…\x1b[0m\r\n');
+  try { await sendPaste(editor.getValue()); }
+  catch(e) { if (term) term.writeln(`\r\n\x1b[1;31mError: ${e.message}\x1b[0m\r\n`); }
+  btn.disabled = false; btn.innerHTML = '▶ Run on Board';
+}
+
+// Upload: write main.py line-by-line then soft-reset
+async function uploadCode() {
+  if (!serial.active || !editor) return;
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true; btn.textContent = '⏳ Uploading…';
+
+  const lines = editor.getValue().split('\n');
+  // Build a Python snippet that writes the file safely
+  const escaped = lines.map(l =>
+    l.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '')
+  );
+  const writeLines = escaped.map(l => `_f.write('${l}\\n')`).join('\n');
+  const cmd = `_f=open('main.py','w')\n${writeLines}\n_f.close()\nprint('main.py saved')\ndel _f`;
+
+  if (term) term.writeln('\r\n\x1b[1;33m↑ Writing main.py to board…\x1b[0m\r\n');
+  try {
+    await sendPaste(cmd);
+    await sleep(800);
+    if (term) term.writeln('\r\n\x1b[1;33m↻ Soft-resetting…\x1b[0m\r\n');
+    await ctrlD();
+  } catch(e) {
+    if (term) term.writeln(`\r\n\x1b[1;31mError: ${e.message}\x1b[0m\r\n`);
+  }
+  btn.disabled = false; btn.innerHTML = '↑ Upload &amp; Run';
+}
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ Usage:
     The plot will display with header information on the right side.
 """
 
-import TRF_parser as trf
+from trf_fileio import parse_trf
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 
@@ -18,7 +18,7 @@ from matplotlib.widgets import Slider
 file_path = 'Betts Strad RHV20 H_001.trf'
 with open(file_path, 'rb') as f:
     raw_data = f.read()
-data = trf.parse_trf(raw_data)
+data = parse_trf(raw_data)
 
 # Format header information as text
 header_text = '\n'.join([f"{key}: {value}" for key, value in data['header'].items()])

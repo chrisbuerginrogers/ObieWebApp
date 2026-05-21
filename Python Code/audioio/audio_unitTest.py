@@ -2,32 +2,26 @@
 audio_plot.py — live stereo waveform plotter.
 
 Depends on audio_stream.py being in the same directory (or on PYTHONPATH).
-
-Requirements:
-    pip install pyaudio matplotlib numpy
-    (On Linux you may also need: sudo apt-get install portaudio19-dev)
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib
+matplotlib.use('TkAgg')   # or 'Qt5Agg' / 'Gtk3Agg'
 
+from config import DEVICE_NAME, AUDIO_FORMAT, DISPLAY_SECONDS, MIN_MAX_DECAY
 from streamAudio import AudioStream
 
-for d in AudioStream.list_input_devices():
-    print(f"[{d['index']}] {d['name']} — {d['channels']}ch @ {d['sample_rate']}Hz")
-
-# ── Configuration ─────────────────────────────────────────────────────────────
-DISPLAY_SECONDS = 0.05   # Width of the scrolling window (seconds)
-MIN_MAX_DECAY   = 0.995  # Peak hold decay per frame (1.0 = hold forever)
+id,devices =  AudioStream.list_input_devices(DEVICE_NAME)
 
 # ── Build the AudioStream ─────────────────────────────────────────────────────
-stream = AudioStream(0)  # device_index=0 is usually the default input, but check the list above
+stream = AudioStream(device_index=id, sample_rate=48000, chunk=1024, fmt=AUDIO_FORMAT)
 
 BUFFER_SIZE = int(stream.sample_rate * DISPLAY_SECONDS)
-x = np.linspace(0, DISPLAY_SECONDS * 1000, BUFFER_SIZE)  # ms
+x = np.linspace(2, DISPLAY_SECONDS * 1000, BUFFER_SIZE)  # ms
 
-buffers     = [np.zeros(BUFFER_SIZE, dtype=np.int16) for _ in range(stream.channels)]
+buffers     = [np.zeros(BUFFER_SIZE, dtype=stream.np_fmt) for _ in range(stream.channels)]
 running_min = [0.0] * stream.channels
 running_max = [0.0] * stream.channels
 
@@ -67,8 +61,8 @@ for i, ax in enumerate(axes):
                             va="bottom", ha="left", bbox=bbox_props))
 
     ax.set_xlim(0, DISPLAY_SECONDS * 1000)
-    ax.set_ylim(-32768, 32767)
-    ax.set_ylabel(LABELS[i], color=COLORS[i], fontsize=10)
+    ax.set_ylim(*stream.value_range)
+    ax.set_ylabel(f"{LABELS[i]}  ({stream.np_fmt.__name__})", color=COLORS[i], fontsize=10)
     ax.tick_params(colors="#aaaaaa")
     for spine in ax.spines.values():
         spine.set_edgecolor("#333333")
