@@ -10,13 +10,27 @@ import matplotlib.animation as animation
 import matplotlib
 matplotlib.use('TkAgg')   # or 'Qt5Agg' / 'Gtk3Agg'
 
-from config import DEVICE_NAME, AUDIO_FORMAT, DISPLAY_SECONDS, MIN_MAX_DECAY
-from streamAudio import AudioStream
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))  # add Python Code/ so fileio is findable
+
+from fileio.obieapp_config import load
+
+_audio   = load("audio")
+_display = load("display")
+DEVICE_NAME     = _audio["device_name"]
+AUDIO_FORMAT    = _audio["format"]
+SAMPLE_RATE     = _audio["sample_rate"]
+CHUNK_SIZE      = _audio["chunk_size"]
+DISPLAY_SECONDS = _display["display_seconds"]
+MIN_MAX_DECAY   = _display["min_max_decay"]
+
+from audioio.streamAudio import AudioStream
 
 id,devices =  AudioStream.list_input_devices(DEVICE_NAME)
 
 # ── Build the AudioStream ─────────────────────────────────────────────────────
-stream = AudioStream(device_index=id, sample_rate=48000, chunk=1024, fmt=AUDIO_FORMAT)
+stream = AudioStream(device_index=id, sample_rate=SAMPLE_RATE, chunk=CHUNK_SIZE, fmt=AUDIO_FORMAT)
 
 BUFFER_SIZE = int(stream.sample_rate * DISPLAY_SECONDS)
 x = np.linspace(2, DISPLAY_SECONDS * 1000, BUFFER_SIZE)  # ms
@@ -26,9 +40,9 @@ running_min = [0.0] * stream.channels
 running_max = [0.0] * stream.channels
 
 # ── Plot layout ───────────────────────────────────────────────────────────────
-COLORS        = ["#00ff88", "#ff6b6b"]
-MINMAX_COLORS = ["#00cc66", "#cc4444"]
-LABELS        = ["Left (L)", "Right (R)"]
+COLORS        = ["#ff4444", "#4488ff"]
+MINMAX_COLORS = ["#cc2222", "#2266cc"]
+LABELS        = ["Left (hammer)", "Right (microphone)"]
 
 fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
 fig.patch.set_facecolor("#0d1117")
@@ -91,8 +105,8 @@ def update(_frame):
     for ch in range(stream.channels):
         hlines_max[ch].set_ydata([running_max[ch], running_max[ch]])
         hlines_min[ch].set_ydata([running_min[ch], running_min[ch]])
-        txt_max[ch].set_text(f"max {int(running_max[ch]):+d}")
-        txt_min[ch].set_text(f"min {int(running_min[ch]):+d}")
+        txt_max[ch].set_text(f"max: {running_max[ch]:+f}")
+        txt_min[ch].set_text(f"min: {running_min[ch]:+f}")
         artists += [hlines_max[ch], hlines_min[ch], txt_max[ch], txt_min[ch]]
 
     return artists
