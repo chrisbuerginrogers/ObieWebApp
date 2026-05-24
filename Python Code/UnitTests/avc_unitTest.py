@@ -4,10 +4,14 @@ avc_unitTest.py
 Read the sample .AvC and .AvR files from SampleData and plot them.
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import numpy as np
 import matplotlib.pyplot as plt
-from avc_fileio import parse_avc, parse_avr
+from fileio.avc_fileio import parse_avc, parse_avr
 
 _SAMPLE_DIR = Path(__file__).parent.parent / "SampleData"
 
