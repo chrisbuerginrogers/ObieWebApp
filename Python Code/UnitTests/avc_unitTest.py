@@ -11,12 +11,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import numpy as np
 import matplotlib.pyplot as plt
-from fileio.avc_fileio import parse_avc, parse_avr
+from fileio.avc_fileio import parse_avc, parse_avr, build_avc, build_avr
 
 _SAMPLE_DIR = Path(__file__).parent.parent / "SampleData"
+#_SAMPLE_DIR = Path('/Users/crogers/Rogers Dropbox/Chris Rogers/Violin Stuff/Old/AVR read')
 
 avc_path = _SAMPLE_DIR / "Violin 03 H.AvC"
 avr_path = _SAMPLE_DIR / "Violin 03 H.AvR"
+#avc_path = _SAMPLE_DIR / "Titian Strad All groups.AvC"
+#avr_path = _SAMPLE_DIR / "Titian Strad All groups.AvR"
 
 avc = parse_avc(avc_path.read_bytes())
 avr = parse_avr(avr_path.read_bytes())
@@ -57,3 +60,46 @@ for spine in ax.spines.values():
     spine.set_edgecolor("#333333")
 
 plt.show()
+
+# ── Round-trip tests ──────────────────────────────────────────────────────────
+def _check(label, ok):
+    print(f"  {'PASS' if ok else 'FAIL'}  {label}")
+    if not ok:
+        raise AssertionError(label)
+
+print("\n=== Round-trip: .AvC ===")
+avc_rt_path = _SAMPLE_DIR / "test.AvC"
+avc_rt_path.write_bytes(build_avc(
+    avc["freqs"], avc["H_complex"],
+    data_type=avc["data_type"], scale_factor=avc["scale_factor"],
+    n_averages=avc["n_averages"], averaging_type=avc["averaging_type"],
+))
+avc2 = parse_avc(avc_rt_path.read_bytes())
+_check("data_type",      avc2["data_type"]     == avc["data_type"])
+_check("n_averages",     avc2["n_averages"]    == avc["n_averages"])
+_check("averaging_type", avc2["averaging_type"]== avc["averaging_type"])
+_check("hz_res",         np.isclose(avc2["hz_res"],    avc["hz_res"]))
+_check("start_freq",     np.isclose(avc2["start_freq"],avc["start_freq"]))
+_check("scale_factor",   np.isclose(avc2["scale_factor"], avc["scale_factor"]))
+_check("freqs array",    np.allclose(avc2["freqs"],    avc["freqs"]))
+_check("H_complex array",np.allclose(avc2["H_complex"],avc["H_complex"]))
+
+print("\n=== Round-trip: .AvR ===")
+avr_rt_path = _SAMPLE_DIR / "test.AvR"
+avr_rt_path.write_bytes(build_avr(
+    avr["freqs"], avr["data"],
+    data_type=avr["data_type"], scale_factor=avr["scale_factor"],
+    n_averages=avr["n_averages"], averaging_type=avr["averaging_type"],
+))
+avr2 = parse_avr(avr_rt_path.read_bytes())
+_check("data_type",      avr2["data_type"]     == avr["data_type"])
+_check("n_averages",     avr2["n_averages"]    == avr["n_averages"])
+_check("averaging_type", avr2["averaging_type"]== avr["averaging_type"])
+_check("hz_res",         np.isclose(avr2["hz_res"],    avr["hz_res"]))
+_check("start_freq",     np.isclose(avr2["start_freq"],avr["start_freq"]))
+_check("scale_factor",   np.isclose(avr2["scale_factor"], avr["scale_factor"]))
+_check("freqs array",    np.allclose(avr2["freqs"],    avr["freqs"]))
+_check("data array",     np.allclose(avr2["data"],     avr["data"]))
+
+avc_rt_path.unlink()
+avr_rt_path.unlink()

@@ -92,12 +92,13 @@ def parse_avc(raw: bytes) -> dict:
     f_complex, f_length                        = int(h[7]), int(h[8])
 
     freqs = start_f + np.arange(f_length) * hz_res
-    vals  = np.frombuffer(raw[_HDR_SIZE:], dtype=np.float64)
+    n_bytes = f_length * 16 if f_complex else f_length * 8
+    vals  = np.frombuffer(raw[_HDR_SIZE:_HDR_SIZE + n_bytes], dtype=np.float64)
 
     if f_complex:
-        H = vals[0::2][:f_length] + 1j * vals[1::2][:f_length]
+        H = vals[0::2] + 1j * vals[1::2]
     else:
-        H = vals[:f_length].astype(complex)
+        H = vals.astype(complex)
 
     return {'data_type': data_type, 'hz_res': hz_res, 'start_freq': start_f,
             'stop_freq': stop_f, 'scale_factor': scale,
@@ -113,7 +114,8 @@ def parse_avr(raw: bytes) -> dict:
     f_length                                   = int(h[8])
 
     freqs = start_f + np.arange(f_length) * hz_res
-    data  = np.frombuffer(raw[_HDR_SIZE:], dtype=np.float64)[:f_length]
+    n_bytes = f_length * 8
+    data  = np.frombuffer(raw[_HDR_SIZE:_HDR_SIZE + n_bytes], dtype=np.float64)
 
     return {'data_type': data_type, 'hz_res': hz_res, 'start_freq': start_f,
             'stop_freq': stop_f, 'scale_factor': scale,
