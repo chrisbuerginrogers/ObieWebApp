@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-_PATH = Path(__file__).parent.parent / "ObieApp Settings" / "config.json"
+ROOT  = Path(__file__).parent.parent
+_PATH = ROOT / "ObieApp Settings" / "config.json"
 
 
 def load(section: str | None = None) -> dict[str, Any]:
@@ -21,4 +22,4 @@ def save(section: str | None, data: dict[str, Any]) -> None:
         json.dump(cfg, f, indent=2)
 
 
-__all__ = ["load", "save"]
+__all__ = ["ROOT", "load", "save"]

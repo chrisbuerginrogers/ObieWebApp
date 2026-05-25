@@ -1,24 +1,17 @@
-# this lets you explore existin data sets
-
 """
-TRF File Visualization Tool
-
-This script loads a TRF (Transfer Function) file and displays it as an interactive plot.
-The plot includes the frequency response data with a header information box showing
-metadata from the TRF file.
-
-Usage:
-    Update 'file_path' with the path to your TRF file, then run the script.
-    The plot will display with header information on the right side.
+Explore.py — load a TRF file and visualise it with band analysis.
 """
 
+from fileio.obieapp_config import ROOT, load
 from fileio.trf_fileio import parse_trf
-from plotio.plotIt import plot_trf
+from processing.bands import compute_bands, print_bands
+from plotio.plotIt import plot_trf_bands
 
-# Load a sample TRF file
-file_path = 'SampleData/Betts Strad RHV20 H_001.trf'
+cfg       = load()
+file_path = ROOT / cfg['data']['base_dir'] / 'Betts Strad RHV20 H_001.trf'
 with open(file_path, 'rb') as f:
-    raw_data = f.read()
-data = parse_trf(raw_data)
+    data = parse_trf(f.read())
 
-plot_trf(data, file_path)
+bands = compute_bands(data['freq'], data['mag'], cfg.get('bands', []))
+print_bands(bands)
+plot_trf_bands(data, bands, file_path.name)

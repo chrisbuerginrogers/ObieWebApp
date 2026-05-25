@@ -4,15 +4,11 @@ trf_unitTest.py
 Parse a sample .trf file from SampleData and print the header.
 """
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
+from test_header import ROOT, load
 import numpy as np
 from fileio.trf_fileio import parse_trf, build_trf
 
-file_path = Path(__file__).parent.parent / "SampleData" / "Betts Strad RHV20 H_001.trf"
+file_path = ROOT / load('data')['base_dir'] / "Betts Strad RHV20 H_001.trf"
 #file_path = Path("/Users/crogers/Rogers Dropbox/Chris Rogers/Violin Stuff/My Violin - GS/GS Huberman 2020/GS Huberman Rad with chinrest/GS_Huberman_21 with ch rst H_012.trf")
 
 with open(file_path, "rb") as f:

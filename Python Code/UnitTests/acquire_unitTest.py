@@ -8,19 +8,16 @@ through the FRF accumulator exactly as Acquire.py would, then plots per-position
 FRFs and the grand-average AvC/AvR on a single figure.
 """
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
+from test_header import ROOT, load
 import re
 import numpy as np
 import matplotlib.pyplot as plt
 from fileio.wavfileio import load_wav
 from processing.frf import FRFAccumulator, add_hit, compute_frf, reset_frf, merge_accumulator
 
-RAW_DIR = Path(__file__).parent.parent / "SampleData" / "Test violin" / "Raw"
-SAMPLE_RATE = 48000
+_cfg        = load()
+RAW_DIR     = ROOT / _cfg['data']['base_dir'] / "Test violin" / "Raw"
+SAMPLE_RATE = _cfg['audio']['sample_rate']
 
 # ── Collect and group WAV files by position ───────────────────────────────────
 wav_files = sorted(RAW_DIR.glob("*.wav"))

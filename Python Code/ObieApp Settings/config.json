@@ -25,5 +25,12 @@
     "designation": "H",
     "hits": 5,
     "positions": 2
-  }
+  },
+  "bands": [
+    { "label": "Low body",    "start": 200,  "end": 400  },
+    { "label": "Bridge rise", "start": 400,  "end": 800  },
+    { "label": "Bridge hill", "start": 800,  "end": 1600 },
+    { "label": "Upper mid",   "start": 1600, "end": 3200 },
+    { "label": "High",        "start": 3200, "end": 7000 }
+  ]
 }
