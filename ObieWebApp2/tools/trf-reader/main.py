@@ -37,4 +37,4 @@ def handle_clear(event):
 
 # ── Ready ─────────────────────────────────────────────────────────────────
 js.document.getElementById('loading').classList.add('gone')
-set_status('Drop TRF or TSV files here, or click to choose.', 'info')
+set_status('Drop TRF, AvC, AvR or TSV files here, or click to choose.', 'info')
