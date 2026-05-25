@@ -13,7 +13,7 @@ modules to the VFS root: "../../py/foo.py" → "./foo.py".
 
 import js
 from pyscript.ffi import to_js
-from trf_parser import parse_trf
+from trf_fileio import parse_trf
 from tsv_parser import parse_tsv
 from dom import set_status, render_header, render_fileinfo
 

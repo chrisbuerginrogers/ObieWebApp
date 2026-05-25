@@ -13,7 +13,7 @@ import js
 import numpy as np
 from math import isfinite
 from pyscript.ffi import to_js
-from trf_parser import parse_trf
+from trf_fileio import parse_trf
 
 
 # ── FRF CSV parser ────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ def _parse_csv(text: str):
 def load_frf(filename_js, data_js):
     """
     Parse an FRF file from raw bytes.
-      .trf  → binary parser  (trf_parser.parse_trf)
+      .trf  → binary parser  (trf_fileio.parse_trf)
       .csv  → CSV text parser (_parse_csv)
     Fires window.onFRFResult(freqs, dbs, info) or window.onFRFError(msg).
     """

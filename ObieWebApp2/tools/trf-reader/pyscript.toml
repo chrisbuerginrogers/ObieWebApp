@@ -1,0 +1,7 @@
+packages = []
+
+[files]
+"../../py/dom.py"        = "./dom.py"
+"../../py/files.py"      = "./files.py"
+"../../py/tsv_parser.py" = "./tsv_parser.py"
+"https://raw.githubusercontent.com/chrisbuerginrogers/ObieWebApp/main/Python%20Code/fileio/trf_fileio.py" = "./trf_fileio.py"

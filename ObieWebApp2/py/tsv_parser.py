@@ -10,7 +10,7 @@ Format (tab-delimited):
 Returns the standard result dict:
   { header, columns, freq, mag, n_rows, warnings }
 
-Magnitude is returned as dB (20*log10(|H|)) to match trf_parser output.
+Magnitude is returned as dB (20*log10(|H|)) to match trf_fileio output.
 """
 
 import math

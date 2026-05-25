@@ -6,7 +6,7 @@ Uses the @when decorator for DOM event binding where possible;
 create_proxy only for the file-data callback (called by JS, not a DOM event).
 
 Flat imports work because py-config maps each shared module to VFS root:
-  "../../py/files.py" → "./files.py"  (and likewise dom, trf_parser, tsv_parser)
+  "../../py/files.py" → "./files.py"  (and likewise dom, trf_fileio, tsv_parser)
 """
 
 import js

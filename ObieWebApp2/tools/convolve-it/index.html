@@ -133,17 +133,7 @@
 
 </main>
 
-<!--
-  trf_parser.py mapped here because dsp.py imports it for FRF loading.
-  All FRF parsing (TRF binary + CSV text) runs in Python.
--->
-<script type="py" src="./main.py" config='{
-  "packages": ["numpy"],
-  "files": {
-    "../../py/dsp.py":        "./dsp.py",
-    "../../py/trf_parser.py": "./trf_parser.py"
-  }
-}' async></script>
+<script type="py" src="./main.py" config="./pyscript.toml" async></script>
 
 </body>
 </html>
