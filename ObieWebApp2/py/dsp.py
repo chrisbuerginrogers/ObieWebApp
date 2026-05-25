@@ -4,9 +4,12 @@ dsp.py — DSP core for ObieWebApp2 (Convolve It tool).
 Public functions
 ----------------
   load_frf(filename_js, data_js)   — parse .trf/.csv FRF  → onFRFResult
-  convolve(frf_f, frf_db, wav, …)  — Y(f)=H(f)X(f)        → onConvolveResult
+  convolve(frf_f, frf_db, wav, …)  — IR convolution        → onConvolveResult
   compute_spectrum(samples, sr)    — Hann-windowed dB       → onSpectrumResult
   compute_wav_spectrum(samples, sr)                         → onWavSpectrumResult
+
+convolution.py (fetched from GitHub) provides _frf_to_ir — it imports scipy
+at module level, so scipy must be listed in pyscript.toml packages.
 """
 
 import js
@@ -14,6 +17,8 @@ import numpy as np
 from math import isfinite
 from pyscript.ffi import to_js
 from trf_fileio import parse_trf
+from avc_fileio import parse_avc, parse_avr
+from convolution import _frf_to_ir
 
 
 # ── FRF CSV parser ────────────────────────────────────────────────────────
@@ -42,11 +47,20 @@ def _parse_csv(text: str):
 
 # ── FRF loader — dispatches by extension ──────────────────────────────────
 
+def _av_freqs_dbs(parsed, values):
+    """Shared converter for parse_avc / parse_avr output → (freqs, dbs, info)."""
+    freqs = parsed['freqs'].tolist()
+    dbs   = [round(20.0 * np.log10(max(abs(complex(v)), 1e-12)), 4) for v in values]
+    info  = f'✓ {len(freqs)} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
+    return freqs, dbs, info
+
+
 def load_frf(filename_js, data_js):
     """
     Parse an FRF file from raw bytes.
-      .trf  → binary parser  (trf_fileio.parse_trf)
-      .csv  → CSV text parser (_parse_csv)
+      .trf       → trf_fileio.parse_trf
+      .avc / avr → avc_fileio.parse_avc / parse_avr
+      .csv       → _parse_csv
     Fires window.onFRFResult(freqs, dbs, info) or window.onFRFError(msg).
     """
     try:
@@ -62,13 +76,17 @@ def load_frf(filename_js, data_js):
                 return
             freqs = result['freq']
             dbs   = result['mag']
-            n     = result['n_rows']
-            end   = freqs[0] + (n - 1) * (freqs[-1] - freqs[0]) / max(n - 1, 1)
-            info  = f'✓ {n} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
+            info  = f'✓ {result["n_rows"]} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
+        elif ext == 'avc':
+            p = parse_avc(raw)
+            freqs, dbs, info = _av_freqs_dbs(p, p['H_complex'])
+        elif ext == 'avr':
+            p = parse_avr(raw)
+            freqs, dbs, info = _av_freqs_dbs(p, p['data'])
         elif ext == 'csv':
             freqs, dbs, info = _parse_csv(raw.decode('utf-8', errors='replace'))
         else:
-            js.window.onFRFError(f'Unsupported: .{ext} — use .trf or .csv')
+            js.window.onFRFError(f'Unsupported: .{ext} — use .trf, .avc, .avr, or .csv')
             return
 
         js.window.onFRFResult(to_js(freqs), to_js(dbs), info)
@@ -94,7 +112,7 @@ def _build_min_phase(H_mag: np.ndarray, N: int) -> np.ndarray:
 # ── Convolution ────────────────────────────────────────────────────────────
 
 def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js):
-    """Y(f) = H(f) · X(f). All heavy lifting in Python/numpy."""
+    """Build IR via convolution._frf_to_ir, then convolve with the WAV signal."""
     try:
         frf_f  = np.asarray(frf_freqs_js.to_py(), dtype=np.float64)
         frf_db = np.asarray(frf_db_js.to_py(),    dtype=np.float64)
@@ -104,23 +122,21 @@ def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js)
         gain   = 10.0 ** (float(gain_db_js) / 20.0)
         N      = len(wav)
 
-        js.window.setProgMsg('FFT of input signal…')
-        X     = np.fft.rfft(wav)
-        freqs = np.fft.rfftfreq(N, 1.0 / sr)
+        js.window.setProgMsg('Building impulse response…')
+        frf_mag = np.power(10.0, frf_db / 20.0) * gain
 
-        js.window.setProgMsg('Interpolating FRF onto FFT bins…')
-        frf_mag = np.power(10.0, frf_db / 20.0)
-        log_f   = np.log10(np.maximum(frf_f,  1e-3))
-        log_q   = np.log10(np.maximum(freqs,  1e-3))
-        H_mag   = np.interp(log_q, log_f, frf_mag,
-                            left=frf_mag[0], right=frf_mag[-1]) * gain
+        H = (_build_min_phase(frf_mag, (len(frf_mag) - 1) * 2)
+             if mode == 'minphase'
+             else frf_mag.astype(np.complex128))
 
-        js.window.setProgMsg(f'Building {mode} filter…')
-        H = (_build_min_phase(H_mag, N) if mode == 'minphase'
-             else H_mag.astype(np.complex128))
+        ir = _frf_to_ir(frf_f, H, sr, ir_length=8192)
 
-        js.window.setProgMsg('IFFT…')
-        y = np.fft.irfft(X * H, N)
+        js.window.setProgMsg('Convolving…')
+        n_fft = 1 << (N + len(ir) - 2).bit_length()
+        y = np.fft.irfft(
+            np.fft.rfft(wav, n_fft) * np.fft.rfft(ir.astype(np.float64), n_fft),
+            n_fft,
+        )[:N].real
 
         peak = np.max(np.abs(y))
         if peak > 1e-12:

@@ -12,7 +12,7 @@ Flat imports work because py-config maps each shared module to VFS root:
 import js
 from pyscript.ffi import create_proxy
 from pyscript import when
-from files import on_file_data, on_clear
+from files import on_file_data, on_clear, on_bands_change
 from dom import set_status
 
 # ── Initialise plot + axis controls ──────────────────────────────────────
@@ -30,10 +30,15 @@ cfg.fileInputId = 'file-input'
 cfg.onData      = create_proxy(on_file_data)
 js.window.obieInitFileLoader(cfg)
 
-# ── Clear button — use @when instead of addEventListener ──────────────────
+# ── Clear button ──────────────────────────────────────────────────────────
 @when('click', '#clear-btn')
 def handle_clear(event):
     on_clear(event)
+
+# ── Band preset dropdown ───────────────────────────────────────────────────
+@when('change', '#band-select')
+def handle_band_select(event):
+    on_bands_change(event.target.value)
 
 # ── Ready ─────────────────────────────────────────────────────────────────
 js.document.getElementById('loading').classList.add('gone')

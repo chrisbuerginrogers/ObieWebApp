@@ -23,6 +23,14 @@
     '#00bcd4', '#ff5722', '#8bc34a', '#ffc107', '#607d8b',
   ];
 
+  const BAND_COLORS = [
+    '#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6',
+  ];
+
+  // Band overlay state — rebuilt by obieSetBands, cleared by obieClearBands
+  let bandShapes = [];
+  let bandTraces = [];
+
   const state = {
     plotDiv:   'plot',
     xLabel:    'Frequency [Hz]',
@@ -71,7 +79,7 @@
 
   /* ── Render plot ─────────────────────────────────────────────────── */
   function render() {
-    // Auto y when user hasn't set manual limits
+    // Auto y when user hasn't set manual limits (bands excluded from range calc)
     const autoY = (state.yMin == null && state.yMax == null)
       ? _visibleYRange() : null;
 
@@ -80,18 +88,45 @@
       : state;
 
     const layout = window.obieBuildPlotLayout(s);
+    if (bandShapes.length) layout.shapes = bandShapes;
 
-    const data = traces.length
+    const frhTraces = traces.length
       ? traces.map(t => ({
           x: t.x, y: t.y,
           type: 'scatter', mode: 'lines',
           name: t.name,
           line: { color: t.color, width: state.lineWidth },
+          showlegend: false,
         }))
       : [{ x: [], y: [], type: 'scatter', mode: 'lines',
-           line: { color: PALETTE[0], width: state.lineWidth } }];
+           line: { color: PALETTE[0], width: state.lineWidth },
+           showlegend: false }];
 
-    Plotly.react(state.plotDiv, data, layout, window.OBIE_PLOT_CONFIG);
+    Plotly.react(state.plotDiv, [...frhTraces, ...bandTraces],
+                 layout, window.OBIE_PLOT_CONFIG);
+  }
+
+  /* ── Band table ──────────────────────────────────────────────────── */
+  function _renderBandTable(bands) {
+    const el = document.getElementById('band-table');
+    if (!el) return;
+    if (!bands || !bands.length) {
+      el.innerHTML = '<span class="muted">select a preset above</span>';
+      return;
+    }
+    const rows = bands.map((b, i) => {
+      const c = BAND_COLORS[i % BAND_COLORS.length];
+      return `<tr>
+        <td><span class="band-dot" style="background:${c}"></span>${b.label}</td>
+        <td>${b.avg_db.toFixed(1)}</td>
+        <td>${b.centroid.toFixed(0)}</td>
+      </tr>`;
+    }).join('');
+    el.innerHTML =
+      '<table class="band-table">' +
+        '<thead><tr><th>Band</th><th>Avg (dB)</th><th>Centroid (Hz)</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>';
   }
 
   /* ── File list rendering ─────────────────────────────────────────── */
@@ -225,5 +260,58 @@
     traces = [];
     renderFileList();
     render();
+  };
+
+  window.obieSetBands = function (bands) {
+    // bands: JS array of {label, f_lo, f_hi, avg_db, centroid}
+    bands = Array.from(bands);
+    bandShapes = [];
+    bandTraces = [];
+
+    bands.forEach((b, i) => {
+      const c = BAND_COLORS[i % BAND_COLORS.length];
+
+      // Shaded region
+      bandShapes.push({
+        type: 'rect', xref: 'x', yref: 'paper',
+        x0: b.f_lo, x1: b.f_hi, y0: 0, y1: 1,
+        fillcolor: c, opacity: 0.12, line: { width: 0 },
+      });
+
+      // Centroid vertical dashed line
+      bandShapes.push({
+        type: 'line', xref: 'x', yref: 'paper',
+        x0: b.centroid, x1: b.centroid, y0: 0, y1: 1,
+        line: { color: c, width: 1.5, dash: 'dot' },
+      });
+
+      // Average dB horizontal line across band
+      bandTraces.push({
+        x: [b.f_lo, b.f_hi], y: [b.avg_db, b.avg_db],
+        type: 'scatter', mode: 'lines',
+        line: { color: c, width: 2.5 },
+        showlegend: false,
+        hovertemplate: `<b>${b.label}</b><br>Avg: ${b.avg_db.toFixed(1)} dB<extra></extra>`,
+      });
+
+      // Centroid marker
+      bandTraces.push({
+        x: [b.centroid], y: [b.avg_db],
+        type: 'scatter', mode: 'markers',
+        marker: { color: c, size: 10, line: { color: 'white', width: 1.5 } },
+        showlegend: false,
+        hovertemplate: `<b>${b.label}</b><br>Centroid: ${b.centroid.toFixed(0)} Hz<extra></extra>`,
+      });
+    });
+
+    render();
+    _renderBandTable(bands);
+  };
+
+  window.obieClearBands = function () {
+    bandShapes = [];
+    bandTraces = [];
+    render();
+    _renderBandTable([]);
   };
 })();

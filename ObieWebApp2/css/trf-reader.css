@@ -204,6 +204,42 @@ section.plot-area {
   word-break: break-word;
 }
 
+/* ─── Band analysis table ─────────────────────────────────────────── */
+.band-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+.band-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 6px 5px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.band-table tbody td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: monospace;
+}
+.band-table tbody td:first-child {
+  font-family: inherit;
+  font-weight: 500;
+}
+.band-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 /* ─── Loading overlay (added with PyScript 2025 restructure) ──────────── */
 .loading-overlay {
   position: fixed; inset: 0;
