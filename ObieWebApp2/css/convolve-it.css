@@ -113,6 +113,26 @@
 .file-status.err { color: var(--red); }
 
 /* ── Controls ────────────────────────────────────────────────────────── */
+.ctrl-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ctrl-row > label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.ctrl-row > .toggle-group {
+  flex: 1;
+}
+.ctrl-row > select {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
 .range-row {
   display: flex;
   align-items: center;

@@ -150,24 +150,41 @@ def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js)
         raise
 
 
-# ── Spectrum ───────────────────────────────────────────────────────────────
+# ── Spectrogram ────────────────────────────────────────────────────────────
 
-def compute_spectrum(samples_js, sr_val):
-    _spectrum(samples_js, sr_val, 'onSpectrumResult')
+def compute_wav_spectrogram(samples_js, sr_val):
+    _spectrogram(samples_js, sr_val, 'onWavSpectrogramResult')
 
-def compute_wav_spectrum(samples_js, sr_val):
-    _spectrum(samples_js, sr_val, 'onWavSpectrumResult')
+def compute_out_spectrogram(samples_js, sr_val):
+    _spectrogram(samples_js, sr_val, 'onOutSpectrogramResult')
 
-def _spectrum(samples_js, sr_val, cb):
+def _spectrogram(samples_js, sr_val, cb):
     try:
-        sig   = np.asarray(samples_js.to_py(), dtype=np.float64)
-        sr    = int(sr_val)
-        if len(sig) < 64:
+        sig    = np.asarray(samples_js.to_py(), dtype=np.float64)
+        sr     = int(sr_val)
+        n_fft  = 2048
+        hop    = 512
+        if len(sig) < n_fft:
             return
-        win   = np.hanning(len(sig))
-        mag   = np.abs(np.fft.rfft(sig * win)) * 2.0 / win.sum()
-        freqs = np.fft.rfftfreq(len(sig), 1.0 / sr)
-        db    = 20.0 * np.log10(mag + 1e-12)
-        getattr(js.window, cb)(to_js(freqs), to_js(db))
+        win      = np.hanning(n_fft)
+        n_frames = max(1, (len(sig) - n_fft) // hop + 1)
+        # Build all frames at once: shape (n_frames, n_fft)
+        idx    = np.arange(n_frames)[:, None] * hop + np.arange(n_fft)[None, :]
+        frames = sig[np.minimum(idx, len(sig) - 1)] * win
+        # STFT → dB, transposed to (n_rfft, n_frames)
+        S_db = (20.0 * np.log10(
+            np.maximum(np.abs(np.fft.rfft(frames, axis=1)), 1e-10)
+        )).T.astype(np.float32)
+        freqs = np.fft.rfftfreq(n_fft, 1.0 / sr).astype(np.float32)
+        mask  = freqs <= 8000.0
+        S_db  = S_db[mask]
+        times = (np.arange(n_frames) * hop / sr).astype(np.float32)
+        getattr(js.window, cb)(
+            to_js(times),
+            to_js(freqs[mask]),
+            to_js(S_db.flatten()),
+            int(S_db.shape[0]),
+            int(S_db.shape[1]),
+        )
     except Exception as exc:
-        print(f'[dsp._spectrum → {cb}]', exc)
+        print(f'[dsp._spectrogram → {cb}] {type(exc).__name__}: {exc}')

@@ -15,8 +15,6 @@ let frfFreqs = null, frfDb = null;
 let wavSamples = null, wavSR = 44100;
 let outSamples = null, outSR = 44100;
 let phaseMode  = 'minphase';
-let wavSpecFreqs = null, wavSpecDb = null;
-let outSpecFreqs = null, outSpecDb = null;
 
 const DEFAULT_WAV_URL = '../../sample-data/1-Tchaikovsky-short.wav';
 const SPEC_FMIN = 200, SPEC_FMAX = 7000;
@@ -28,11 +26,11 @@ const player = new AudioPlayer({ wav: 'play-wav-btn', out: 'play-btn' });
 Plotly.newPlot('frf-plot', [],
   plotLayout('FRF · Magnitude', 'Frequency (Hz)', 'dB', { xaxis: { type: 'log' } }), pcfg);
 Plotly.newPlot('wav-plot', [],
-  plotLayout('Input Waveform',    'Time (s)',       'Amplitude'), pcfg);
+  plotLayout('Input · Spectrogram',  'Time (s)', 'Frequency (Hz)'), pcfg);
 Plotly.newPlot('out-plot', [],
-  plotLayout('Convolved Output',  'Time (s)',       'Amplitude'), pcfg);
+  plotLayout('Convolved Output',     'Time (s)', 'Amplitude'),      pcfg);
 Plotly.newPlot('spec-plot', [],
-  plotLayout('Spectrum 200–7000 Hz', 'Frequency (Hz)', 'dB'), pcfg);
+  plotLayout('Output · Spectrogram', 'Time (s)', 'Frequency (Hz)'), pcfg);
 
 // ── FRF loading — always goes to Python ───────────────────────────────
 function loadFRF(input) {
@@ -92,12 +90,39 @@ async function storeWAV(arrayBuffer, name) {
   const dur  = (samples.length / sr).toFixed(2);
   setSt('wav-status', `✓ ${name} · ${dur} s · ${(sr / 1000).toFixed(1)} kHz`, 'ok');
   document.getElementById('play-wav-btn').style.display = '';
-  plotWAV();
-  if (window.pyWavSpectrum) window.pyWavSpectrum(wavSamples, wavSR);
+  if (window.pyWavSpectrogram) window.pyWavSpectrogram(wavSamples, wavSR);
   checkReady();
 }
 
 // ── Plots ─────────────────────────────────────────────────────────────
+function plotSpectrogram(divId, times, freqs, flatZ, nFreqs, nTimes, title) {
+  const arr = Array.from(flatZ);
+  const z   = [];
+  for (let i = 0; i < nFreqs; i++)
+    z.push(arr.slice(i * nTimes, (i + 1) * nTimes));
+  Plotly.react(divId, [{
+    x: times, y: freqs, z,
+    type: 'heatmap',
+    colorscale: 'Plasma',
+    showscale: false,
+    zsmooth: 'fast',
+    hoverinfo: 'skip',
+  }], plotLayout(title, 'Time (s)', 'Frequency (Hz)', {
+    margin: { l: 50, r: 12, t: 28, b: 38 },
+  }), pcfg);
+}
+
+window.onWavSpectrogramResult = function(times, freqs, flatZ, nFreqs, nTimes) {
+  const nF = +nFreqs, nT = +nTimes;
+  plotSpectrogram('wav-plot', Array.from(times), Array.from(freqs),
+                  flatZ, nF, nT, 'Input · Spectrogram');
+};
+window.onOutSpectrogramResult = function(times, freqs, flatZ, nFreqs, nTimes) {
+  const nF = +nFreqs, nT = +nTimes;
+  plotSpectrogram('spec-plot', Array.from(times), Array.from(freqs),
+                  flatZ, nF, nT, 'Output · Spectrogram');
+};
+
 function plotFRF() {
   if (!frfFreqs) return;
   const fin  = frfDb.filter(isFinite);
@@ -110,17 +135,6 @@ function plotFRF() {
     { xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] } }), pcfg);
 }
 
-function plotWAV() {
-  if (!wavSamples) return;
-  const n = wavSamples.length, step = Math.max(1, Math.floor(n / 5000));
-  const x = [], y = [];
-  for (let i = 0; i < n; i += step) { x.push(i / wavSR); y.push(wavSamples[i]); }
-  Plotly.react('wav-plot', [{
-    x, y, type: 'scatter', mode: 'lines',
-    line: { color: COL.wav, width: 1 }, showlegend: false,
-  }], plotLayout('Input Waveform', 'Time (s)', 'Amplitude'), pcfg);
-}
-
 function plotWaveform(divId, samples, sr, color, title) {
   const n = samples.length, step = Math.max(1, Math.floor(n / 5000));
   const x = [], y = [];
@@ -129,29 +143,6 @@ function plotWaveform(divId, samples, sr, color, title) {
     x, y, type: 'scatter', mode: 'lines',
     line: { color, width: 1 }, showlegend: false,
   }], plotLayout(title, 'Time (s)', 'Amplitude'), pcfg);
-}
-
-window.onWavSpectrumResult = function(freqs, db) {
-  wavSpecFreqs = Array.from(freqs); wavSpecDb = Array.from(db); plotSpectra();
-};
-window.onSpectrumResult = function(freqs, db) {
-  outSpecFreqs = Array.from(freqs); outSpecDb = Array.from(db); plotSpectra();
-};
-function plotSpectra() {
-  const traces = [];
-  if (wavSpecFreqs) traces.push({
-    x: wavSpecFreqs, y: wavSpecDb, type: 'scatter', mode: 'lines',
-    name: 'Input', line: { color: COL.wav, width: 1.5 },
-  });
-  if (outSpecFreqs) traces.push({
-    x: outSpecFreqs, y: outSpecDb, type: 'scatter', mode: 'lines',
-    name: 'Convolved', line: { color: COL.out, width: 1.5 },
-  });
-  if (!traces.length) return;
-  Plotly.react('spec-plot', traces,
-    plotLayout('Spectrum 200–7000 Hz', 'Frequency (Hz)', 'dB', {
-      xaxis: { type: 'log', range: [Math.log10(SPEC_FMIN), Math.log10(SPEC_FMAX)] },
-    }), pcfg);
 }
 
 // ── Convolution ───────────────────────────────────────────────────────
@@ -203,7 +194,7 @@ window.onConvolveResult = function(samplesArr, sr) {
     `${(outSR / 1000).toFixed(1)} kHz · ` +
     `${outSamples.length.toLocaleString()} samples`;
   plotWaveform('out-plot', outSamples, outSR, COL.out, 'Convolved Output');
-  if (window.pySpectrum) window.pySpectrum(outSamples, outSR);
+  if (window.pyOutSpectrogram) window.pyOutSpectrogram(outSamples, outSR);
 };
 
 window.onConvolveError = function(msg) {
@@ -232,6 +223,33 @@ function saveWAV() {
   URL.revokeObjectURL(url);
 }
 
+// ── Output device selection ───────────────────────────────────────────
+async function enumerateOutputDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const sel = document.getElementById('out-device-sel');
+    if (!sel) return;
+    const savedId = window.ciSavedOutputDeviceId || '';
+    sel.innerHTML = '<option value="">Default output</option>';
+    devices
+      .filter(d => d.kind === 'audiooutput' && d.deviceId !== 'default')
+      .forEach(d => {
+        const o = document.createElement('option');
+        o.value       = d.deviceId;
+        o.textContent = d.label || `Speaker (${d.deviceId.slice(0, 8)}…)`;
+        if (d.deviceId === savedId) o.selected = true;
+        sel.appendChild(o);
+      });
+    if (savedId) await player.setSinkId(savedId);
+  } catch (e) {
+    console.warn('Output device enumeration failed:', e.message);
+  }
+}
+
+document.getElementById('out-device-sel')?.addEventListener('change', async function () {
+  await player.setSinkId(this.value);
+});
+
 // ── UI helpers ────────────────────────────────────────────────────────
 function setSt(id, txt, cls) {
   const el = document.getElementById(id);
@@ -244,8 +262,11 @@ function clearProgMsg() { document.getElementById('prog-msg').textContent = ''; 
 // Python signals ready after registering all proxies.
 // Re-trigger WAV spectrum if audio arrived before Python was ready.
 window.onPythonReady = function() {
-  if (wavSamples && window.pyWavSpectrum) window.pyWavSpectrum(wavSamples, wavSR);
+  if (wavSamples && window.pyWavSpectrogram) window.pyWavSpectrogram(wavSamples, wavSR);
 };
 
 // ── Boot ──────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', loadDefaultWAV);
+document.addEventListener('DOMContentLoaded', () => {
+  enumerateOutputDevices();
+  loadDefaultWAV();
+});

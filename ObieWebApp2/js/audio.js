@@ -67,6 +67,7 @@ class AudioPlayer {
     // btnIds: { key: elementId }
     this._tracks = {};
     this._ctx    = null;
+    this._sinkId = '';   // '' = browser default
 
     for (const [key, btnId] of Object.entries(btnIds)) {
       this._tracks[key] = { source: null, playing: false, btnId };
@@ -74,10 +75,21 @@ class AudioPlayer {
   }
 
   _getCtx() {
-    if (!this._ctx)
+    if (!this._ctx) {
       this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this._sinkId && typeof this._ctx.setSinkId === 'function')
+        this._ctx.setSinkId(this._sinkId).catch(() => {});
+    }
     if (this._ctx.state === 'suspended') this._ctx.resume();
     return this._ctx;
+  }
+
+  /** Route output to a specific device. Pass '' for the browser default. */
+  async setSinkId(deviceId) {
+    this._sinkId = deviceId || '';
+    if (this._ctx && typeof this._ctx.setSinkId === 'function')
+      await this._ctx.setSinkId(this._sinkId).catch(e =>
+        console.warn('AudioPlayer.setSinkId:', e.message));
   }
 
   /** Start playing key. Stops all other tracks first. */

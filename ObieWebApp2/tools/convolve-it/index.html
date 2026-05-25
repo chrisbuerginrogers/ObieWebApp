@@ -45,8 +45,8 @@
     <div class="card">
       <div class="section-title">📂 FRF File</div>
       <label class="file-btn">
-        Load FRF (CSV or TRF)
-        <input type="file" id="frf-input" accept=".csv,.trf,.trv"
+        Load FRF (TRF, AvC, AvR or CSV)
+        <input type="file" id="frf-input" accept=".trf,.trv,.avc,.avr,.csv"
                onchange="loadFRF(this)">
       </label>
       <div class="file-status" id="frf-status">no file loaded</div>
@@ -87,6 +87,13 @@
           <span class="range-val" id="gain-disp">0 dB</span>
         </div>
       </div>
+
+      <div class="ctrl-row">
+        <label>Output device</label>
+        <select id="out-device-sel" style="flex:1;font-size:0.85rem">
+          <option value="">Default output</option>
+        </select>
+      </div>
     </div>
 
     <button id="conv-btn" class="btn primary full"
@@ -118,7 +125,7 @@
       <div id="frf-plot" class="plot-div"></div>
     </div>
     <div class="plot-wrap">
-      <div class="plot-label">Input · Time Domain</div>
+      <div class="plot-label">Input · Spectrogram</div>
       <div id="wav-plot" class="plot-div"></div>
     </div>
     <div class="plot-wrap">
@@ -126,7 +133,7 @@
       <div id="out-plot" class="plot-div"></div>
     </div>
     <div class="plot-wrap">
-      <div class="plot-label">Output · Magnitude Spectrum</div>
+      <div class="plot-label">Output · Spectrogram</div>
       <div id="spec-plot" class="plot-div"></div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 packages = ["numpy"]
 
 [files]
+"../../py/config.py"     = "./config.py"
 "../../py/dom.py"        = "./dom.py"
 "../../py/files.py"      = "./files.py"
 "../../py/tsv_parser.py" = "./tsv_parser.py"
