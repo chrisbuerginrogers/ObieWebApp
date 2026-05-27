@@ -3,148 +3,141 @@ dsp.py — DSP core for ObieWebApp2 (Convolve It tool).
 
 Public functions
 ----------------
-  load_frf(filename_js, data_js)   — parse .trf/.csv FRF  → onFRFResult
-  convolve(frf_f, frf_db, wav, …)  — IR convolution        → onConvolveResult
-  compute_spectrum(samples, sr)    — Hann-windowed dB       → onSpectrumResult
-  compute_wav_spectrum(samples, sr)                         → onWavSpectrumResult
-
-convolution.py (fetched from GitHub) provides _frf_to_ir — it imports scipy
-at module level, so scipy must be listed in pyscript.toml packages.
+  load_frf(filename_js, data_js)   — parse FRF via files.load()  → onFRFResult
+  load_wav(filename_js, data_js)   — decode WAV bytes             → onWavResult
+  convolve(gain_db_js)             — IR convolution               → onConvolveResult
 """
 
+import io
+import json
 import js
 import numpy as np
-from math import isfinite
 from pyscript.ffi import to_js
-from trf_fileio import parse_trf
-from avc_fileio import parse_avc, parse_avr
-from convolution import _frf_to_ir
+from files import load as _load_file
+from bands import compute_bands
+
+# ── Band presets ──────────────────────────────────────────────────────────
+BAND_PRESETS = {
+    'violin': [
+        {'label': 'Low body',  'start':  200, 'end':  600},
+        {'label': 'Mid body',  'start':  600, 'end': 1200},
+        {'label': 'Upper mid', 'start': 1200, 'end': 2500},
+        {'label': 'Bridge',    'start': 2500, 'end': 4000},
+        {'label': 'Brilliant', 'start': 4000, 'end': 7000},
+    ],
+}
+
+# ── Module-level state ────────────────────────────────────────────────────
+_traces    = {}     # label → {'freq': list, 'mag': list}
+_preset    = ''     # active band preset key, '' = none
+_frf_freqs = None   # np.ndarray float64, Hz
+_frf_dbs   = None   # np.ndarray float64, dB magnitude
+_wav       = None   # np.ndarray float32, normalised mono
+_wav_sr    = None   # int
 
 
-# ── FRF CSV parser ────────────────────────────────────────────────────────
+# ── Band / trace helpers ──────────────────────────────────────────────────
 
-def _parse_csv(text: str):
-    """Parse two-column FRF CSV. Returns (freqs, dbs, info) or raises."""
-    freqs, dbs = [], []
-    for ln in text.strip().split('\n'):
-        ln = ln.strip()
-        if not ln or (ln[0].isalpha() and ln[0] not in 'eE'):
-            continue
-        parts = ln.split(',')
-        if len(parts) >= 2:
-            try:
-                f, d = float(parts[0]), float(parts[1])
-                if f > 0 and isfinite(f) and isfinite(d):
-                    freqs.append(f)
-                    dbs.append(d)
-            except ValueError:
-                pass
-    if len(freqs) < 4:
-        raise ValueError('Too few valid rows — check CSV format (Frequency,dB)')
-    info = f'✓ {len(freqs)} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
-    return freqs, dbs, info
+def add_trace(label, freq, mag):
+    _traces[label] = {'freq': freq, 'mag': mag}
+    _update_bands()
 
 
-# ── FRF loader — dispatches by extension ──────────────────────────────────
+def clear_traces():
+    global _traces
+    _traces = {}
 
-def _av_freqs_dbs(parsed, values):
-    """Shared converter for parse_avc / parse_avr output → (freqs, dbs, info)."""
-    freqs = parsed['freqs'].tolist()
-    dbs   = [round(20.0 * np.log10(max(abs(complex(v)), 1e-12)), 4) for v in values]
-    info  = f'✓ {len(freqs)} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
-    return freqs, dbs, info
 
+def _update_bands():
+    if not _preset or not _traces:
+        js.window.obieClearBands()
+        return
+    last = list(_traces.values())[-1]
+    results = compute_bands(last['freq'], last['mag'], BAND_PRESETS[_preset])
+    js.window.obieSetBands(js.JSON.parse(json.dumps(results)))
+
+
+def on_bands_change(preset_key):
+    global _preset
+    _preset = preset_key
+    _update_bands()
+
+
+# ── FRF loading ───────────────────────────────────────────────────────────
 
 def load_frf(filename_js, data_js):
-    """
-    Parse an FRF file from raw bytes.
-      .trf       → trf_fileio.parse_trf
-      .avc / avr → avc_fileio.parse_avc / parse_avr
-      .csv       → _parse_csv
-    Fires window.onFRFResult(freqs, dbs, info) or window.onFRFError(msg).
-    """
+    global _frf_freqs, _frf_dbs
     try:
-        filename = str(filename_js)
-        ext      = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
-        raw      = bytes(data_js.to_py())
-
-        if ext == 'trf':
-            result = parse_trf(raw)
-            if result['n_rows'] == 0:
-                warns = result.get('warnings') or []
-                js.window.onFRFError(warns[0] if warns else 'No data in TRF file')
-                return
-            freqs = result['freq']
-            dbs   = result['mag']
-            info  = f'✓ {result["n_rows"]} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
-        elif ext == 'avc':
-            p = parse_avc(raw)
-            freqs, dbs, info = _av_freqs_dbs(p, p['H_complex'])
-        elif ext == 'avr':
-            p = parse_avr(raw)
-            freqs, dbs, info = _av_freqs_dbs(p, p['data'])
-        elif ext == 'csv':
-            freqs, dbs, info = _parse_csv(raw.decode('utf-8', errors='replace'))
-        else:
-            js.window.onFRFError(f'Unsupported: .{ext} — use .trf, .avc, .avr, or .csv')
+        result = _load_file(str(filename_js), data_js)
+        if result['n_rows'] == 0:
+            warns = result.get('warnings') or []
+            js.window.onFRFError(warns[0] if warns else 'No data in file')
             return
-
+        freqs = result['freq']
+        dbs   = result['mag']
+        _frf_freqs = np.array(freqs, dtype=np.float64)
+        _frf_dbs   = np.array(dbs,   dtype=np.float64)
+        info = f'✓ {result["n_rows"]} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
         js.window.onFRFResult(to_js(freqs), to_js(dbs), info)
-
     except Exception as exc:
         js.window.onFRFError(str(exc)[:120])
 
 
-# ── Min-phase reconstruction ──────────────────────────────────────────────
+# ── WAV loading ───────────────────────────────────────────────────────────
 
-def _build_min_phase(H_mag: np.ndarray, N: int) -> np.ndarray:
-    eps   = 1e-12
-    log_m = np.log(np.maximum(H_mag, eps))
-    full  = (np.concatenate([log_m, log_m[-2:0:-1]]) if N % 2 == 0
-             else np.concatenate([log_m, log_m[:0:-1]]))
-    cep   = np.fft.ifft(full).real
-    win   = np.zeros(N)
-    win[0] = 1.0; win[1:N//2] = 2.0
-    if N % 2 == 0: win[N//2] = 1.0
-    return np.exp(np.fft.rfft(win * cep))
+def load_wav(filename_js, data_js):
+    import scipy.io.wavfile as _wavfile
+    global _wav, _wav_sr
+    try:
+        raw = bytes(data_js.to_py())
+        sr, data = _wavfile.read(io.BytesIO(raw))
+        if data.dtype == np.int16:
+            data = data.astype(np.float32) / 32768.0
+        elif data.dtype == np.int32:
+            data = data.astype(np.float32) / 2147483648.0
+        elif data.dtype == np.uint8:
+            data = (data.astype(np.float32) - 128.0) / 128.0
+        else:
+            data = data.astype(np.float32)
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        peak = np.max(np.abs(data))
+        if peak > 0:
+            data /= peak
+        _wav    = data
+        _wav_sr = int(sr)
+        name = str(filename_js).rsplit('/', 1)[-1].rsplit('\\', 1)[-1]
+        info = f'✓ {name} · {len(data) / sr:.2f} s · {sr / 1000:.1f} kHz'
+        js.window.onWavResult(to_js(data), _wav_sr, info)
+        _spectrogram(_wav, _wav_sr, 'onWavSpectrogramResult')
+    except Exception as exc:
+        js.window.onWavError(str(exc)[:120])
 
 
 # ── Convolution ────────────────────────────────────────────────────────────
 
-def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js):
-    """Build IR via convolution._frf_to_ir, then convolve with the WAV signal."""
+def convolve(gain_db_js):
+    from convolution import convolve_it
     try:
-        frf_f  = np.asarray(frf_freqs_js.to_py(), dtype=np.float64)
-        frf_db = np.asarray(frf_db_js.to_py(),    dtype=np.float64)
-        wav    = np.asarray(wav_js.to_py(),        dtype=np.float64)
-        sr     = int(sr_val)
-        mode   = str(phase_mode_js)
-        gain   = 10.0 ** (float(gain_db_js) / 20.0)
-        N      = len(wav)
+        if _wav is None or _frf_freqs is None:
+            js.window.onConvolveError('Load an FRF and a WAV file first')
+            return
+        gain = 10.0 ** (float(gain_db_js) / 20.0)
 
         js.window.setProgMsg('Building impulse response…')
-        frf_mag = np.power(10.0, frf_db / 20.0) * gain
-
-        H = (_build_min_phase(frf_mag, (len(frf_mag) - 1) * 2)
-             if mode == 'minphase'
-             else frf_mag.astype(np.complex128))
-
-        ir = _frf_to_ir(frf_f, H, sr, ir_length=8192)
+        frf_mag = np.power(10.0, _frf_dbs / 20.0) * gain
+        H = frf_mag.astype(np.complex128)
 
         js.window.setProgMsg('Convolving…')
-        n_fft = 1 << (N + len(ir) - 2).bit_length()
-        y = np.fft.irfft(
-            np.fft.rfft(wav, n_fft) * np.fft.rfft(ir.astype(np.float64), n_fft),
-            n_fft,
-        )[:N].real
+        y = convolve_it(_wav, _frf_freqs, H, _wav_sr).astype(np.float64)
 
         peak = np.max(np.abs(y))
         if peak > 1e-12:
             y = y / peak * 0.95
         y = np.clip(y, -1.0, 1.0)
 
-        js.window.onConvolveResult(to_js(y), sr)
-
+        js.window.onConvolveResult(to_js(y), _wav_sr)
+        _spectrogram(y.astype(np.float32), _wav_sr, 'onOutSpectrogramResult')
     except Exception as exc:
         js.window.onConvolveError(str(exc)[:120])
         raise
@@ -152,26 +145,17 @@ def convolve(frf_freqs_js, frf_db_js, wav_js, sr_val, phase_mode_js, gain_db_js)
 
 # ── Spectrogram ────────────────────────────────────────────────────────────
 
-def compute_wav_spectrogram(samples_js, sr_val):
-    _spectrogram(samples_js, sr_val, 'onWavSpectrogramResult')
-
-def compute_out_spectrogram(samples_js, sr_val):
-    _spectrogram(samples_js, sr_val, 'onOutSpectrogramResult')
-
-def _spectrogram(samples_js, sr_val, cb):
+def _spectrogram(sig, sr, cb):
     try:
-        sig    = np.asarray(samples_js.to_py(), dtype=np.float64)
-        sr     = int(sr_val)
+        sig    = np.asarray(sig, dtype=np.float64)
         n_fft  = 2048
         hop    = 512
         if len(sig) < n_fft:
             return
         win      = np.hanning(n_fft)
         n_frames = max(1, (len(sig) - n_fft) // hop + 1)
-        # Build all frames at once: shape (n_frames, n_fft)
         idx    = np.arange(n_frames)[:, None] * hop + np.arange(n_fft)[None, :]
         frames = sig[np.minimum(idx, len(sig) - 1)] * win
-        # STFT → dB, transposed to (n_rfft, n_frames)
         S_db = (20.0 * np.log10(
             np.maximum(np.abs(np.fft.rfft(frames, axis=1)), 1e-10)
         )).T.astype(np.float32)

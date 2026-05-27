@@ -69,23 +69,12 @@
     <div class="card">
       <div class="section-title">⚙️ Settings</div>
 
-      <div class="ctrl-row">
-        <label>Phase mode</label>
-        <div class="toggle-group" id="phase-toggle">
-          <button class="active" onclick="setPhaseMode('minphase',this)"
-            title="Causal min-phase response via real cepstrum.">Min-phase</button>
-          <button onclick="setPhaseMode('zerophase',this)"
-            title="Magnitude-only, no phase shift.">Zero-phase</button>
+      <div class="ctrl-row gain-ctrl">
+        <div class="gain-header">
+          <label>Output gain</label>
+          <span class="range-val" id="gain-disp">+0 dB</span>
         </div>
-      </div>
-
-      <div class="ctrl-row">
-        <label>Output gain</label>
-        <div class="range-row">
-          <!-- readout wired via @when('input','#gain-sl') in main.py -->
-          <input type="range" id="gain-sl" min="-24" max="24" value="0" step="1">
-          <span class="range-val" id="gain-disp">0 dB</span>
-        </div>
+        <input type="range" id="gain-sl" min="-24" max="24" value="0" step="1">
       </div>
 
       <div class="ctrl-row">

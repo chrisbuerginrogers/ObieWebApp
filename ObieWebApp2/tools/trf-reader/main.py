@@ -6,7 +6,8 @@ import js
 from pyscript.ffi import create_proxy
 from pyscript import when
 from config import configure, load, save
-from files import on_file_data, on_clear, on_bands_change
+from files import on_file_data, on_clear
+from dsp import on_bands_change
 from dom import set_status
 
 configure('obieWebApp_trfReader', {

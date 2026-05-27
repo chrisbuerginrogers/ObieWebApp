@@ -147,6 +147,21 @@
   text-align: right;
 }
 
+/* ── Gain control — stacked so slider uses full card width ───────────── */
+.gain-ctrl {
+  flex-direction: column;
+  gap: 3px;
+}
+.gain-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.gain-ctrl input[type=range] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 /* ── Progress message ────────────────────────────────────────────────── */
 .prog-msg {
   font-size: 11px;

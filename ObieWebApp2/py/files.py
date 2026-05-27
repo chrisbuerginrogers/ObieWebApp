@@ -13,44 +13,16 @@ Imports are flat (no 'py.' prefix) because the py-config maps all shared
 modules to the VFS root: "../../py/foo.py" → "./foo.py".
 """
 
-import json
 import math
 import js
 from pyscript.ffi import to_js
 from trf_fileio import parse_trf
 from avc_fileio import parse_avc, parse_avr
 from tsv_parser import parse_tsv
-from bands import compute_bands
 from dom import set_status, render_header, render_fileinfo
 
 _DATA_TYPE = ['Accel', 'Mobility', 'Receptance', 'Mic', 'Unknown']
 _AVG_TYPE  = ['RMS', 'Mean', 'Complex', 'Geometric', 'None']
-
-# ── Band presets ──────────────────────────────────────────────────────────
-# Each entry is a list of band dicts accepted by bands.compute_bands().
-BAND_PRESETS = {
-    'violin': [
-        {'label': 'Low body',  'start':  200, 'end':  600},
-        {'label': 'Mid body',  'start':  600, 'end': 1200},
-        {'label': 'Upper mid', 'start': 1200, 'end': 2500},
-        {'label': 'Bridge',    'start': 2500, 'end': 4000},
-        {'label': 'Brilliant', 'start': 4000, 'end': 7000},
-    ],
-}
-
-# ── Module-level state ────────────────────────────────────────────────────
-_traces = {}   # label → {'freq': list, 'mag': list}  (insertion order = load order)
-_preset = ''   # active band preset key, '' = none
-
-
-def _update_bands():
-    """Recompute and push band overlay to JS, or clear if no preset/data."""
-    if not _preset or not _traces:
-        js.window.obieClearBands()
-        return
-    last = list(_traces.values())[-1]
-    results = compute_bands(last['freq'], last['mag'], BAND_PRESETS[_preset])
-    js.window.obieSetBands(js.JSON.parse(json.dumps(results)))
 
 
 def _av_standard(parsed, values):
@@ -75,6 +47,34 @@ def _av_standard(parsed, values):
     }
 
 
+def _parse_csv(text):
+    """Parse two-column Frequency,dB CSV (comma-separated)."""
+    freqs, dbs = [], []
+    for ln in text.strip().split('\n'):
+        ln = ln.strip()
+        if not ln or (ln[0].isalpha() and ln[0] not in 'eE'):
+            continue
+        parts = ln.split(',')
+        if len(parts) >= 2:
+            try:
+                f, d = float(parts[0]), float(parts[1])
+                if f > 0 and math.isfinite(f) and math.isfinite(d):
+                    freqs.append(f)
+                    dbs.append(d)
+            except ValueError:
+                pass
+    if len(freqs) < 4:
+        raise ValueError('Too few valid rows — check CSV format (Frequency,dB)')
+    return {
+        'header':   {'Format': 'CSV', 'Columns': '2 (Frequency, Magnitude dB)'},
+        'columns':  ['Frequency [Hz]', 'Magnitude [dB]'],
+        'freq':     [round(f, 6) for f in freqs],
+        'mag':      [round(d, 4) for d in dbs],
+        'n_rows':   len(freqs),
+        'warnings': [],
+    }
+
+
 def load(filename, js_uint8array):
     """Parse a file from a JS Uint8Array. Returns standard result dict."""
     ext = filename.rsplit('.', 1)[-1].lower()
@@ -89,6 +89,8 @@ def load(filename, js_uint8array):
     if ext == 'avr':
         p = parse_avr(raw)
         return _av_standard(p, p['data'])
+    if ext == 'csv':
+        return _parse_csv(raw.decode('utf-8', errors='replace'))
     return parse_tsv(raw.decode('utf-8', errors='replace'))  # unknown: try text
 
 
@@ -117,24 +119,17 @@ def on_file_data(filename, size_bytes, js_uint8array):
         set_status(warns[0] if warns else 'No data: ' + filename, 'err')
         return
 
+    from dsp import add_trace
     label = trace_label(filename)
-    _traces[label] = {'freq': parsed['freq'], 'mag': parsed['mag']}
     js.window.obieAddTrace(to_js(parsed['freq']), to_js(parsed['mag']), label)
-    _update_bands()
+    add_trace(label, parsed['freq'], parsed['mag'])
     set_status('Loaded ' + label, 'ok')
-
-
-def on_bands_change(preset_key):
-    """Called when the band-preset dropdown changes."""
-    global _preset
-    _preset = preset_key
-    _update_bands()
 
 
 def on_clear(event):
     """Called when the Clear button is clicked."""
-    global _traces
-    _traces = {}
+    from dsp import clear_traces
+    clear_traces()
     js.window.obieClearPlot()
     js.window.obieClearBands()
     box = js.document.getElementById('hdr-box')
