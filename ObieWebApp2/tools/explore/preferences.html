@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preferences — Explore</title>
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/explore.css">
+  <style>
+    body { max-width: 520px; margin: 40px auto; padding: 0 20px; }
+    h2 { margin-bottom: 20px; font-size: 1.2rem; }
+    .pref-card { margin-bottom: 16px; }
+    .pref-card .section-title { font-size: 11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:10px; }
+    .pref-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+    .pref-row label { font-size:0.85rem; color:var(--muted); min-width:160px; }
+    .pref-row input, .pref-row select { flex:1; }
+    .pref-hint { font-size:10px; color:var(--muted); margin-top:2px; margin-left:172px; }
+    .save-row { margin-top:20px; display:flex; gap:10px; }
+    .status-msg { font-size:12px; color:var(--green,#2e7d32); font-style:italic; }
+  </style>
+</head>
+<body>
+
+<header class="obie-header" style="margin-bottom:24px;border-radius:10px">
+  <a class="brand" href="../../index.html">
+    <div class="logo-icon">🎻</div>
+    <h1>ObieWebApp 2</h1>
+  </a>
+  <span class="crumb">· Explore · Preferences</span>
+</header>
+
+<h2>Preferences</h2>
+
+<div class="card pref-card">
+  <div class="section-title">Audio</div>
+
+  <div class="pref-row">
+    <label for="pref-wav-url">Default WAV URL</label>
+    <input id="pref-wav-url" type="text" placeholder="../../sample-data/1-Tchaikovsky-short.wav">
+  </div>
+  <div class="pref-hint">URL to the WAV file used when the ▶ play button is pressed on a dataset.</div>
+
+  <div class="pref-row" style="margin-top:12px">
+    <label for="pref-device">Output device</label>
+    <select id="pref-device">
+      <option value="">Default output</option>
+    </select>
+  </div>
+</div>
+
+<div class="card pref-card">
+  <div class="section-title">Plot defaults</div>
+
+  <div class="pref-row">
+    <label for="pref-yrange">Y range (dB)</label>
+    <input id="pref-yrange" type="number" min="10" max="120" value="38" style="max-width:80px">
+  </div>
+  <div class="pref-hint">How many dB below the peak the Y axis shows when rescaling.</div>
+
+  <div class="pref-row" style="margin-top:8px">
+    <label for="pref-xmin">X min (Hz)</label>
+    <input id="pref-xmin" type="number" value="200" style="max-width:80px">
+  </div>
+  <div class="pref-row">
+    <label for="pref-xmax">X max (Hz)</label>
+    <input id="pref-xmax" type="number" value="7000" style="max-width:80px">
+  </div>
+</div>
+
+<div class="save-row">
+  <button class="btn primary" onclick="savePrefs()">Save preferences</button>
+  <button class="btn" onclick="resetPrefs()">Reset to defaults</button>
+  <span id="save-status" class="status-msg"></span>
+</div>
+
+<script>
+  const DEFAULTS = {
+    defaultWavUrl: '../../sample-data/1-Tchaikovsky-short.wav',
+    outputDeviceId: '',
+    yDbRange: 38,
+    xMin: 200,
+    xMax: 7000,
+  };
+
+  function loadPrefs() {
+    try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('obieExplore_prefs') || '{}') }; }
+    catch(_) { return { ...DEFAULTS }; }
+  }
+
+  function applyToForm(p) {
+    document.getElementById('pref-wav-url').value = p.defaultWavUrl || DEFAULTS.defaultWavUrl;
+    document.getElementById('pref-yrange').value  = p.yDbRange  ?? DEFAULTS.yDbRange;
+    document.getElementById('pref-xmin').value    = p.xMin      ?? DEFAULTS.xMin;
+    document.getElementById('pref-xmax').value    = p.xMax      ?? DEFAULTS.xMax;
+    const sel = document.getElementById('pref-device');
+    if (sel && p.outputDeviceId) sel.value = p.outputDeviceId;
+  }
+
+  function savePrefs() {
+    const p = {
+      defaultWavUrl: document.getElementById('pref-wav-url').value.trim() || DEFAULTS.defaultWavUrl,
+      outputDeviceId: document.getElementById('pref-device').value,
+      yDbRange: parseFloat(document.getElementById('pref-yrange').value) || DEFAULTS.yDbRange,
+      xMin: parseFloat(document.getElementById('pref-xmin').value) || DEFAULTS.xMin,
+      xMax: parseFloat(document.getElementById('pref-xmax').value) || DEFAULTS.xMax,
+    };
+    localStorage.setItem('obieExplore_prefs', JSON.stringify(p));
+    // Mirror the WAV URL key that explore.js reads
+    localStorage.setItem('obieExplore_defaultWavUrl', p.defaultWavUrl);
+    const st = document.getElementById('save-status');
+    st.textContent = '✓ Saved';
+    setTimeout(() => st.textContent = '', 2500);
+  }
+
+  function resetPrefs() {
+    localStorage.removeItem('obieExplore_prefs');
+    localStorage.removeItem('obieExplore_defaultWavUrl');
+    applyToForm(DEFAULTS);
+    const st = document.getElementById('save-status');
+    st.textContent = '✓ Reset to defaults';
+    setTimeout(() => st.textContent = '', 2500);
+  }
+
+  async function enumerateOutputs() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const sel = document.getElementById('pref-device');
+      const saved = loadPrefs().outputDeviceId;
+      devices.filter(d => d.kind === 'audiooutput' && d.deviceId !== 'default').forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.deviceId; o.textContent = d.label || `Speaker (${d.deviceId.slice(0,8)}…)`;
+        if (d.deviceId === saved) o.selected = true;
+        sel.appendChild(o);
+      });
+    } catch(e) { console.warn('Output device enumeration failed:', e.message); }
+  }
+
+  applyToForm(loadPrefs());
+  enumerateOutputs();
+</script>
+
+</body>
+</html>
