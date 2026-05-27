@@ -28,8 +28,11 @@ Usage:
     # Stereo
     audio, sr = convolve_with_frf('Tchaikovsky.wav', ('Left.AvC', 'Right.AvC'))
 
-    # Web version (data and H already loaded)
+    # Web version — mono (data and H already loaded)
     out = convolve_it(data, freqs, H, sample_rate)
+
+    # Web version — stereo (separate left/right FRFs)
+    out = convolve_it(data, (freqs_l, freqs_r), (H_l, H_r), sample_rate)
 """
 
 import numpy as np
@@ -125,29 +128,8 @@ def _read_wav(path):
     return data, sample_rate
 
 
-def convolve_it(data, freqs, H, sample_rate, ir_length=8192):
-    """
-    Convolve audio data with a single FRF.
-
-    If H has no meaningful imaginary content (magnitude-only), a minimum-phase
-    estimate is applied automatically so the result is causal.
-
-    For mono input (shape (N,)) the audio is convolved once.
-    For stereo input (shape (N, C)) each channel is convolved separately.
-
-    Parameters
-    ----------
-    data        : float32 ndarray, shape (N,) or (N, C)
-    freqs       : 1-D Hz array matching the length of H
-    H           : complex128 FRF — imaginary part zero for magnitude-only files
-    sample_rate : int
-    ir_length   : IR length in samples (default 8192 ≈ 170 ms @ 48 kHz)
-
-    Returns
-    -------
-    float32 ndarray, same shape as data
-    """
-    # Apply minimum-phase estimation when H carries no meaningful phase
+def _convolve_one(data, freqs, H, sample_rate, ir_length):
+    """Apply one FRF to mono or multi-channel data (same IR for every channel)."""
     imag_energy = np.max(np.abs(H.imag))
     real_energy = np.max(np.abs(H.real)) + 1e-30
     if imag_energy < 1e-8 * real_energy:
@@ -162,6 +144,37 @@ def convolve_it(data, freqs, H, sample_rate, ir_length=8192):
     channels = [fftconvolve(data[:, c], ir)[:n].astype(np.float32)
                 for c in range(data.shape[1])]
     return np.column_stack(channels)
+
+
+def convolve_it(data, freqs, H, sample_rate, ir_length=8192):
+    """
+    Convolve audio data with one or two FRFs.
+
+    If H has no meaningful imaginary content (magnitude-only), a minimum-phase
+    estimate is applied automatically so the result is causal.
+
+    Parameters
+    ----------
+    data        : float32 ndarray, shape (N,) or (N, C)
+    freqs       : 1-D Hz array  —or—  (freqs_l, freqs_r) when H is a pair
+    H           : complex128 FRF  —or—  (H_l, H_r) for stereo output
+                  When a pair is supplied, data is convolved once with H_l and
+                  once with H_r; the results are stacked into an (N, 2) array.
+    sample_rate : int
+    ir_length   : IR length in samples (default 8192 ≈ 170 ms @ 48 kHz)
+
+    Returns
+    -------
+    float32 ndarray — (N,) for a single H, (N, 2) for a pair
+    """
+    if isinstance(H, (tuple, list)):
+        H_l, H_r = H
+        freqs_l, freqs_r = freqs if isinstance(freqs, (tuple, list)) else (freqs, freqs)
+        ch_l = _convolve_one(data, freqs_l, H_l, sample_rate, ir_length)
+        ch_r = _convolve_one(data, freqs_r, H_r, sample_rate, ir_length)
+        return np.column_stack([ch_l, ch_r])
+
+    return _convolve_one(data, freqs, H, sample_rate, ir_length)
 
 
 def convolve_with_frf(wav_path, frf_paths, ir_length=8192):
@@ -189,9 +202,7 @@ def convolve_with_frf(wav_path, frf_paths, ir_length=8192):
         left_path, right_path = frf_paths
         freqs_l, H_l = _load_frf(left_path)
         freqs_r, H_r = _load_frf(right_path)
-        ch_l = convolve_it(audio, freqs_l, H_l, sample_rate, ir_length)
-        ch_r = convolve_it(audio, freqs_r, H_r, sample_rate, ir_length)
-        out  = np.column_stack([ch_l, ch_r])
+        out = convolve_it(audio, (freqs_l, freqs_r), (H_l, H_r), sample_rate, ir_length)
 
     peak = np.max(np.abs(out))
     if peak > 0:

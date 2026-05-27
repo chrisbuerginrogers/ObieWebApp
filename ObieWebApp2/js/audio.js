@@ -20,10 +20,11 @@ async function decodeWAV(arrayBuffer) {
 }
 
 /**
- * Encode a Float32Array as a 16-bit PCM mono WAV ArrayBuffer.
- * Suitable for Blob → download or AudioContext playback.
+ * Encode a Float32Array as a 16-bit PCM WAV ArrayBuffer.
+ * channels=1 (default): mono.
+ * channels=2: interleaved stereo (L0,R0,L1,R1,…).
  */
-function encodeWAV(samples, sr) {
+function encodeWAV(samples, sr, channels = 1) {
   const dataLen = samples.length * 2;           // 16-bit = 2 bytes/sample
   const buf = new ArrayBuffer(44 + dataLen);
   const v   = new DataView(buf);
@@ -32,16 +33,16 @@ function encodeWAV(samples, sr) {
     for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
   }
 
-  str(0,  'RIFF');  v.setUint32(4,  36 + dataLen, true);
+  str(0,  'RIFF');  v.setUint32(4,  36 + dataLen,       true);
   str(8,  'WAVE');
-  str(12, 'fmt ');  v.setUint32(16, 16,  true);
-                    v.setUint16(20, 1,   true);    // PCM
-                    v.setUint16(22, 1,   true);    // mono
-                    v.setUint32(24, sr,  true);    // sample rate
-                    v.setUint32(28, sr * 2, true); // byte rate
-                    v.setUint16(32, 2,   true);    // block align
-                    v.setUint16(34, 16,  true);    // bits/sample
-  str(36, 'data');  v.setUint32(40, dataLen, true);
+  str(12, 'fmt ');  v.setUint32(16, 16,                  true);
+                    v.setUint16(20, 1,                    true);  // PCM
+                    v.setUint16(22, channels,             true);  // numChannels
+                    v.setUint32(24, sr,                   true);  // sampleRate
+                    v.setUint32(28, sr * 2 * channels,    true);  // byteRate
+                    v.setUint16(32, 2 * channels,         true);  // blockAlign
+                    v.setUint16(34, 16,                   true);  // bitsPerSample
+  str(36, 'data');  v.setUint32(40, dataLen,             true);
 
   let off = 44;
   for (let i = 0; i < samples.length; i++) {
@@ -92,14 +93,24 @@ class AudioPlayer {
         console.warn('AudioPlayer.setSinkId:', e.message));
   }
 
-  /** Start playing key. Stops all other tracks first. */
-  start(key, samples, sr) {
+  /** Start playing key. Stops all other tracks first.
+   *  channels=1: mono; channels=2: interleaved stereo (L0,R0,L1,R1,…). */
+  start(key, samples, sr, channels = 1) {
     this.stopAll();
-    const ctx = this._getCtx();
-    const buf = ctx.createBuffer(1, samples.length, sr);
-    buf.copyToChannel(
-      samples instanceof Float32Array ? samples : new Float32Array(samples), 0
-    );
+    const ctx      = this._getCtx();
+    const nFrames  = Math.floor(samples.length / channels);
+    const buf      = ctx.createBuffer(channels, nFrames, sr);
+    if (channels === 1) {
+      buf.copyToChannel(
+        samples instanceof Float32Array ? samples : new Float32Array(samples), 0
+      );
+    } else {
+      for (let ch = 0; ch < channels; ch++) {
+        const chBuf = new Float32Array(nFrames);
+        for (let i = 0; i < nFrames; i++) chBuf[i] = samples[i * channels + ch];
+        buf.copyToChannel(chBuf, ch);
+      }
+    }
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
@@ -125,8 +136,8 @@ class AudioPlayer {
     for (const key of Object.keys(this._tracks)) this.stop(key);
   }
 
-  toggle(key, samples, sr) {
-    this._tracks[key]?.playing ? this.stop(key) : this.start(key, samples, sr);
+  toggle(key, samples, sr, channels = 1) {
+    this._tracks[key]?.playing ? this.stop(key) : this.start(key, samples, sr, channels);
   }
 
   isPlaying(key) { return !!this._tracks[key]?.playing; }

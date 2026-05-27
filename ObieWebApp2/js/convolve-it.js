@@ -11,8 +11,8 @@
 
 // ── Playback state (JS-only — needed by AudioPlayer) ─────────────────
 let wavSamples = null, wavSR = 44100;
-let outSamples = null, outSR = 44100;
-let frfLoaded  = false;
+let outSamples = null, outSR = 44100, outChannels = 1;
+let frfLLoaded = false, frfRLoaded = false;
 
 const DEFAULT_WAV_URL = '../../sample-data/1-Tchaikovsky-short.wav';
 
@@ -29,29 +29,31 @@ Plotly.newPlot('spec-plot', [],
   plotLayout('Output · Spectrogram', 'Time (s)', 'Frequency (Hz)'), pcfg);
 
 // ── FRF loading ───────────────────────────────────────────────────────
-function loadFRF(input) {
+function loadFRF(ch, input) {
   const file = input.files[0]; if (!file) return;
-  setSt('frf-status', 'reading…');
+  setSt(`frf-${ch.toLowerCase()}-status`, 'reading…');
   const reader = new FileReader();
-  reader.onerror = () => setSt('frf-status', 'read error', 'err');
+  reader.onerror = () => setSt(`frf-${ch.toLowerCase()}-status`, 'read error', 'err');
   reader.onload  = e => {
     if (!window.pyLoadFRF) {
-      setSt('frf-status', 'Python not ready — try again', 'err'); return;
+      setSt(`frf-${ch.toLowerCase()}-status`, 'Python not ready — try again', 'err'); return;
     }
-    window.pyLoadFRF(file.name, new Uint8Array(e.target.result));
+    window.pyLoadFRF(ch, file.name, new Uint8Array(e.target.result));
   };
   reader.readAsArrayBuffer(file);
 }
 
-window.onFRFResult = function(freqs, dbs, info) {
-  frfLoaded = true;
-  setSt('frf-status', info, 'ok');
-  plotFRF(Array.from(freqs), Array.from(dbs));
+window.onFRFResult = function(ch, freqs, dbs, info) {
+  const c = String(ch).toLowerCase();
+  setSt(`frf-${c}-status`, info, 'ok');
+  if (c === 'l') { frfLLoaded = true; plotFRF(Array.from(freqs), Array.from(dbs)); }
+  else             frfRLoaded = true;
   checkReady();
 };
-window.onFRFError = function(msg) {
-  frfLoaded = false;
-  setSt('frf-status', 'error: ' + msg, 'err');
+window.onFRFError = function(ch, msg) {
+  const c = String(ch).toLowerCase();
+  if (c === 'l') frfLLoaded = false; else frfRLoaded = false;
+  setSt(`frf-${c}-status`, 'error: ' + msg, 'err');
   checkReady();
 };
 
@@ -128,10 +130,12 @@ function plotFRF(freqs, dbs) {
     { xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] } }), pcfg);
 }
 
-function plotWaveform(divId, samples, sr, color, title) {
-  const n = samples.length, step = Math.max(1, Math.floor(n / 5000));
+// stride: 1 = mono, 2 = interleaved stereo (plots left channel)
+function plotWaveform(divId, samples, sr, color, title, stride = 1) {
+  const n = Math.floor(samples.length / stride);
+  const step = Math.max(1, Math.floor(n / 5000));
   const x = [], y = [];
-  for (let i = 0; i < n; i += step) { x.push(i / sr); y.push(samples[i]); }
+  for (let i = 0; i < n; i += step) { x.push(i / sr); y.push(samples[i * stride]); }
   Plotly.react(divId, [{
     x, y, type: 'scatter', mode: 'lines',
     line: { color, width: 1 }, showlegend: false,
@@ -140,7 +144,7 @@ function plotWaveform(divId, samples, sr, color, title) {
 
 // ── Convolution ───────────────────────────────────────────────────────
 function checkReady() {
-  document.getElementById('conv-btn').disabled = !(frfLoaded && wavSamples !== null);
+  document.getElementById('conv-btn').disabled = !(frfLLoaded && wavSamples !== null);
 }
 
 function runConvolution() {
@@ -168,18 +172,22 @@ function runConvolution() {
   }, 30);
 }
 
-window.onConvolveResult = function(samplesArr, sr) {
-  outSamples = new Float32Array(samplesArr); outSR = +sr;
+window.onConvolveResult = function(samplesArr, sr, nChannels) {
+  outSamples  = new Float32Array(samplesArr);
+  outSR       = +sr;
+  outChannels = +nChannels;
   clearProgMsg();
   document.getElementById('conv-btn').disabled = false;
   document.getElementById('result-card').style.display = '';
   document.getElementById('play-btn').disabled  = false;
   document.getElementById('save-btn').disabled  = false;
+  const nFrames = Math.floor(outSamples.length / outChannels);
   document.getElementById('out-info').textContent =
-    `${(outSamples.length / outSR).toFixed(2)} s · ` +
+    `${(nFrames / outSR).toFixed(2)} s · ` +
     `${(outSR / 1000).toFixed(1)} kHz · ` +
-    `${outSamples.length.toLocaleString()} samples`;
-  plotWaveform('out-plot', outSamples, outSR, COL.out, 'Convolved Output');
+    `${nFrames.toLocaleString()} samples · ` +
+    (outChannels === 2 ? 'stereo' : 'mono');
+  plotWaveform('out-plot', outSamples, outSR, COL.out, 'Convolved Output', outChannels);
 };
 
 window.onConvolveError = function(msg) {
@@ -192,12 +200,12 @@ window.setProgMsg = setProgMsg;
 
 // ── Audio playback & export ───────────────────────────────────────────
 function togglePlayWAV() { player.toggle('wav', wavSamples, wavSR); }
-function togglePlay()    { player.toggle('out', outSamples, outSR); }
+function togglePlay()    { player.toggle('out', outSamples, outSR, outChannels); }
 
 function saveWAV() {
   if (!outSamples) return;
   const url = URL.createObjectURL(
-    new Blob([encodeWAV(outSamples, outSR)], { type: 'audio/wav' })
+    new Blob([encodeWAV(outSamples, outSR, outChannels)], { type: 'audio/wav' })
   );
   const a = document.createElement('a');
   a.href = url;

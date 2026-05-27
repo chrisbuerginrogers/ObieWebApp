@@ -43,13 +43,19 @@
   <aside class="ci-sidebar">
 
     <div class="card">
-      <div class="section-title">📂 FRF File</div>
+      <div class="section-title">📂 FRF Files</div>
       <label class="file-btn">
-        Load FRF (TRF, AvC, AvR or CSV)
-        <input type="file" id="frf-input" accept=".trf,.trv,.avc,.avr,.csv"
-               onchange="loadFRF(this)">
+        Left / Mono FRF (TRF, AvC, AvR, CSV)
+        <input type="file" id="frf-l-input" accept=".trf,.trv,.avc,.avr,.csv"
+               onchange="loadFRF('L', this)">
       </label>
-      <div class="file-status" id="frf-status">no file loaded</div>
+      <div class="file-status" id="frf-l-status">no file loaded</div>
+      <label class="file-btn" style="margin-top:6px">
+        Right FRF — optional (enables stereo)
+        <input type="file" id="frf-r-input" accept=".trf,.trv,.avc,.avr,.csv"
+               onchange="loadFRF('R', this)">
+      </label>
+      <div class="file-status" id="frf-r-status">–</div>
     </div>
 
     <div class="card">

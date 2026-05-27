@@ -28,12 +28,14 @@ BAND_PRESETS = {
 }
 
 # ── Module-level state ────────────────────────────────────────────────────
-_traces    = {}     # label → {'freq': list, 'mag': list}
-_preset    = ''     # active band preset key, '' = none
-_frf_freqs = None   # np.ndarray float64, Hz
-_frf_dbs   = None   # np.ndarray float64, dB magnitude
-_wav       = None   # np.ndarray float32, normalised mono
-_wav_sr    = None   # int
+_traces      = {}     # label → {'freq': list, 'mag': list}
+_preset      = ''     # active band preset key, '' = none
+_frf_freqs   = None   # np.ndarray float64, Hz  (left / mono)
+_frf_dbs     = None   # np.ndarray float64, dB  (left / mono)
+_frf_freqs_r = None   # np.ndarray float64, Hz  (right — stereo only)
+_frf_dbs_r   = None   # np.ndarray float64, dB  (right — stereo only)
+_wav         = None   # np.ndarray float32, normalised mono
+_wav_sr      = None   # int
 
 
 # ── Band / trace helpers ──────────────────────────────────────────────────
@@ -65,22 +67,27 @@ def on_bands_change(preset_key):
 
 # ── FRF loading ───────────────────────────────────────────────────────────
 
-def load_frf(filename_js, data_js):
-    global _frf_freqs, _frf_dbs
+def load_frf(channel_js, filename_js, data_js):
+    global _frf_freqs, _frf_dbs, _frf_freqs_r, _frf_dbs_r
+    ch = str(channel_js).upper()
     try:
         result = _load_file(str(filename_js), data_js)
         if result['n_rows'] == 0:
             warns = result.get('warnings') or []
-            js.window.onFRFError(warns[0] if warns else 'No data in file')
+            js.window.onFRFError(ch, warns[0] if warns else 'No data in file')
             return
         freqs = result['freq']
         dbs   = result['mag']
-        _frf_freqs = np.array(freqs, dtype=np.float64)
-        _frf_dbs   = np.array(dbs,   dtype=np.float64)
+        if ch == 'R':
+            _frf_freqs_r = np.array(freqs, dtype=np.float64)
+            _frf_dbs_r   = np.array(dbs,   dtype=np.float64)
+        else:
+            _frf_freqs = np.array(freqs, dtype=np.float64)
+            _frf_dbs   = np.array(dbs,   dtype=np.float64)
         info = f'✓ {result["n_rows"]} pts · {freqs[0]:.0f}–{freqs[-1]:.0f} Hz'
-        js.window.onFRFResult(to_js(freqs), to_js(dbs), info)
+        js.window.onFRFResult(ch, to_js(freqs), to_js(dbs), info)
     except Exception as exc:
-        js.window.onFRFError(str(exc)[:120])
+        js.window.onFRFError(ch, str(exc)[:120])
 
 
 # ── WAV loading ───────────────────────────────────────────────────────────
@@ -125,19 +132,36 @@ def convolve(gain_db_js):
         gain = 10.0 ** (float(gain_db_js) / 20.0)
 
         js.window.setProgMsg('Building impulse response…')
-        frf_mag = np.power(10.0, _frf_dbs / 20.0) * gain
-        H = frf_mag.astype(np.complex128)
+        H_l = (np.power(10.0, _frf_dbs / 20.0) * gain).astype(np.complex128)
 
         js.window.setProgMsg('Convolving…')
-        y = convolve_it(_wav, _frf_freqs, H, _wav_sr).astype(np.float64)
+        y_l = convolve_it(_wav, _frf_freqs, H_l, _wav_sr).astype(np.float64)
 
-        peak = np.max(np.abs(y))
-        if peak > 1e-12:
-            y = y / peak * 0.95
-        y = np.clip(y, -1.0, 1.0)
+        if _frf_freqs_r is not None and _frf_dbs_r is not None:
+            H_r = (np.power(10.0, _frf_dbs_r / 20.0) * gain).astype(np.complex128)
+            y_r = convolve_it(_wav, _frf_freqs_r, H_r, _wav_sr).astype(np.float64)
 
-        js.window.onConvolveResult(to_js(y), _wav_sr)
-        _spectrogram(y.astype(np.float32), _wav_sr, 'onOutSpectrogramResult')
+            peak = max(np.max(np.abs(y_l)), np.max(np.abs(y_r)))
+            if peak > 1e-12:
+                y_l = y_l / peak * 0.95
+                y_r = y_r / peak * 0.95
+            y_l = np.clip(y_l, -1.0, 1.0).astype(np.float32)
+            y_r = np.clip(y_r, -1.0, 1.0).astype(np.float32)
+
+            interleaved = np.empty(len(y_l) * 2, dtype=np.float32)
+            interleaved[0::2] = y_l
+            interleaved[1::2] = y_r
+
+            js.window.onConvolveResult(to_js(interleaved), _wav_sr, 2)
+            _spectrogram(y_l, _wav_sr, 'onOutSpectrogramResult')
+        else:
+            peak = np.max(np.abs(y_l))
+            if peak > 1e-12:
+                y_l = y_l / peak * 0.95
+            y_l = np.clip(y_l, -1.0, 1.0).astype(np.float32)
+
+            js.window.onConvolveResult(to_js(y_l), _wav_sr, 1)
+            _spectrogram(y_l, _wav_sr, 'onOutSpectrogramResult')
     except Exception as exc:
         js.window.onConvolveError(str(exc)[:120])
         raise
