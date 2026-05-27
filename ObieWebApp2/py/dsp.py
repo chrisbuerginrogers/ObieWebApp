@@ -135,33 +135,27 @@ def convolve(gain_db_js):
         H_l = (np.power(10.0, _frf_dbs / 20.0) * gain).astype(np.complex128)
 
         js.window.setProgMsg('Convolving…')
-        y_l = convolve_it(_wav, _frf_freqs, H_l, _wav_sr).astype(np.float64)
-
         if _frf_freqs_r is not None and _frf_dbs_r is not None:
             H_r = (np.power(10.0, _frf_dbs_r / 20.0) * gain).astype(np.complex128)
-            y_r = convolve_it(_wav, _frf_freqs_r, H_r, _wav_sr).astype(np.float64)
-
-            peak = max(np.max(np.abs(y_l)), np.max(np.abs(y_r)))
+            y = convolve_it(_wav, (_frf_freqs, _frf_freqs_r), (H_l, H_r), _wav_sr)
+            # y is (N, 2); normalise jointly then interleave for JS
+            peak = np.max(np.abs(y))
             if peak > 1e-12:
-                y_l = y_l / peak * 0.95
-                y_r = y_r / peak * 0.95
-            y_l = np.clip(y_l, -1.0, 1.0).astype(np.float32)
-            y_r = np.clip(y_r, -1.0, 1.0).astype(np.float32)
-
-            interleaved = np.empty(len(y_l) * 2, dtype=np.float32)
-            interleaved[0::2] = y_l
-            interleaved[1::2] = y_r
-
+                y = y / peak * 0.95
+            y = np.clip(y, -1.0, 1.0).astype(np.float32)
+            interleaved = np.empty(y.shape[0] * 2, dtype=np.float32)
+            interleaved[0::2] = y[:, 0]
+            interleaved[1::2] = y[:, 1]
             js.window.onConvolveResult(to_js(interleaved), _wav_sr, 2)
-            _spectrogram(y_l, _wav_sr, 'onOutSpectrogramResult')
+            _spectrogram(y[:, 0], _wav_sr, 'onOutSpectrogramResult')
         else:
-            peak = np.max(np.abs(y_l))
+            y = convolve_it(_wav, _frf_freqs, H_l, _wav_sr)
+            peak = np.max(np.abs(y))
             if peak > 1e-12:
-                y_l = y_l / peak * 0.95
-            y_l = np.clip(y_l, -1.0, 1.0).astype(np.float32)
-
-            js.window.onConvolveResult(to_js(y_l), _wav_sr, 1)
-            _spectrogram(y_l, _wav_sr, 'onOutSpectrogramResult')
+                y = y / peak * 0.95
+            y = np.clip(y, -1.0, 1.0).astype(np.float32)
+            js.window.onConvolveResult(to_js(y), _wav_sr, 1)
+            _spectrogram(y, _wav_sr, 'onOutSpectrogramResult')
     except Exception as exc:
         js.window.onConvolveError(str(exc)[:120])
         raise
