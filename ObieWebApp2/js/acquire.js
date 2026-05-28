@@ -388,6 +388,42 @@ window.acqRescaleFFT = function() {
   });
 };
 
+window.acqApplyThreshold = function(val) {
+  const v = Math.max(0.001, parseFloat(val) || 0.05);
+  const el = document.getElementById('inp-thr-disp');
+  if (el) el.value = v.toFixed(3);
+  const pref = document.getElementById('inp-threshold');
+  if (pref) pref.value = v;
+  if (_lastTrigData) {
+    _lastTrigData.thr = v;
+    const { t, ham, mic } = _lastTrigData;
+    _drawTrigPlots(t, ham, mic, v);
+  }
+  acqSavePrefs();
+};
+
+window.acqApplyHamCutoff = function(val) {
+  const v = Math.max(0.01, parseFloat(val) || 0.30);
+  const el = document.getElementById('inp-ham-cut-disp');
+  if (el) el.value = v.toFixed(3);
+  const pref = document.getElementById('inp-time-cutoff');
+  if (pref) pref.value = v;
+  _hamTimeCutoffS = v;
+  if (_lastTrigData) { const { t, ham, mic, thr } = _lastTrigData; _drawTrigPlots(t, ham, mic, thr); }
+  acqSavePrefs();
+};
+
+window.acqApplyMicCutoff = function(val) {
+  const v = Math.max(0.01, parseFloat(val) || 0.30);
+  const el = document.getElementById('inp-mic-cut-disp');
+  if (el) el.value = v.toFixed(3);
+  const pref = document.getElementById('inp-mic-time-cutoff');
+  if (pref) pref.value = v;
+  _micTimeCutoffS = v;
+  if (_lastTrigData) { const { t, ham, mic, thr } = _lastTrigData; _drawTrigPlots(t, ham, mic, thr); }
+  acqSavePrefs();
+};
+
 function _updateSoundcardDisplay() {
   const el = document.getElementById('soundcard-ind');
   if (!el) return;
@@ -467,12 +503,15 @@ function _populatePrefsForm() {
   };
   const prefs = _loadPrefs();
   set('inp-threshold',   prefs.threshold);
+  set('inp-thr-disp',    Number(prefs.threshold ?? 0.05).toFixed(3));
   set('inp-frf-x-min',   prefs.frf_x_min);
   set('inp-frf-x-max',   prefs.frf_x_max);
   set('inp-pre',         prefs.pre_trig_s);
   set('inp-post',        prefs.post_trig_s);
   set('inp-time-cutoff',     prefs.time_cutoff_s);
   set('inp-mic-time-cutoff', prefs.mic_time_cutoff_s);
+  set('inp-ham-cut-disp',    Number(prefs.time_cutoff_s     ?? 0.30).toFixed(3));
+  set('inp-mic-cut-disp',    Number(prefs.mic_time_cutoff_s ?? 0.30).toFixed(3));
   set('inp-taps',        prefs.taps);
   set('inp-positions',   prefs.positions);
   set('inp-prefix',      prefs.prefix);
