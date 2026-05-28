@@ -46,7 +46,7 @@ let batchFill = 0;
 // ── UI state ──────────────────────────────────────────────────────────────────
 let appState      = 'idle';
 let currentPos    = 0;
-let frfCache      = {};     // pos → { freq[], H1db[], nHits }
+let frfCache      = {};     // pos → { freq[], H1db[], coh[], nHits }
 let _hamTimeCutoffS = 0.30;  // green line on hammer plot (s after trigger)
 let _micTimeCutoffS = 0.30;  // green line on mic plot (s after trigger)
 let _lineWidth    = 0.5;    // FRF trace width in px
@@ -174,11 +174,12 @@ window.onHammerFFT = function(freq_js, db_js) {
 };
 
 /** FRF updated for one position — cache and re-render main plot */
-window.onFRFUpdate = function(freq_js, H1db_js, pos, nHits) {
+window.onFRFUpdate = function(freq_js, H1db_js, coh_js, pos, nHits) {
   const freq = Array.from(freq_js), H1db = Array.from(H1db_js);
+  const coh  = Array.from(coh_js);
   const p = Number(pos);
   if (freq.length > 0) {
-    frfCache[p] = { freq, H1db, nHits: Number(nHits) };
+    frfCache[p] = { freq, H1db, coh, nHits: Number(nHits) };
   } else {
     delete frfCache[p];
   }
@@ -272,22 +273,34 @@ function renderFRF() {
   const traces = [];
   const positions = Object.keys(frfCache).map(Number).sort((a,b)=>a-b);
 
+  const pfx = document.getElementById('inp-prefix')?.value || 'H';
   positions.forEach((pos, idx) => {
     const d = frfCache[pos];
     if (!d || !d.freq.length) return;
     const mags  = d.H1db;
     const valid = mags.filter(v => isFinite(v) && v > -200);
     if (!valid.length) return;
+    const color = PALETTE[pos % PALETTE.length];
+    const label = `${pfx}${String(pos+1).padStart(2,'0')} (${d.nHits} hits)`;
     traces.push({
       x: d.freq, y: mags,
       type: 'scatter', mode: 'lines',
-      name: `${document.getElementById('inp-prefix')?.value || 'H'}${String(pos+1).padStart(2,'0')} (${d.nHits} hits)`,
-      line: {
-        color: PALETTE[pos % PALETTE.length],
-        width: _lineWidth,
-      },
+      name: label,
+      yaxis: 'y',
+      line: { color, width: _lineWidth },
       showlegend: true,
     });
+    if (d.coh?.length) {
+      traces.push({
+        x: d.freq, y: d.coh,
+        type: 'scatter', mode: 'lines',
+        name: label,
+        yaxis: 'y2',
+        line: { color: '#1565c0', width: _lineWidth },
+        showlegend: false,
+        hoverinfo: 'skip',
+      });
+    }
   });
 
   if (!traces.length) {
@@ -317,7 +330,7 @@ function renderFRF() {
 
   Plotly.react('acq-plot', traces, {
     paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    margin: { l: 58, r: 16, t: 12, b: 50 },
+    margin: { l: 58, r: 52, t: 12, b: 50 },
     font: { size: 11, family: 'inherit' },
     showlegend: traces.length > 1,
     legend: { font: { size: 9 }, x: 1, xanchor: 'right', y: 1 },
@@ -331,6 +344,15 @@ function renderFRF() {
       title: { text: 'Intensity (dB)', font: { size: 11 } },
       range: yRange,
       gridcolor: '#c0c4cc', tickfont: { size: 10 },
+    },
+    yaxis2: {
+      title: { text: 'Coherence', font: { size: 11 } },
+      range: [-0.5, 1.5],
+      overlaying: 'y',
+      side: 'right',
+      showgrid: false,
+      tickfont: { size: 10 },
+      tickvals: [0, 0.5, 1],
     },
     autosize: true,
   }, { ...PCFG, displayModeBar: true, displaylogo: false,

@@ -282,7 +282,7 @@ def _h1_from_st(st):
     """Compute H1 FRF from stored raw hits, applying both time and freq cutoffs.
     Returns (H1_complex, freq_array) or (None, None) if no data."""
     if not st.get("hits_ham"):
-        return None, None, None
+        return None, None, None, None
     pre_n   = int(_pre_trig_s * _sr)
     ham_cut = int(_ham_time_cutoff_s * _sr)
     mic_cut = int(_mic_time_cutoff_s * _sr)
@@ -296,8 +296,8 @@ def _h1_from_st(st):
         add_hit(acc, np.column_stack([h, m]))
     # H2 = S_pp/S_fp = P/F = mic/hammer = standard FRF (correct phase for TRF export)
     # H_dB is 20·log10|H1| from the library (same magnitude as H2)
-    freq, _, H2, H_dB, _ = compute_frf(acc)
-    return H2, H_dB, freq
+    freq, _, H2, H_dB, coh = compute_frf(acc)
+    return H2, H_dB, coh, freq
 
 
 def _do_capture():
@@ -360,18 +360,18 @@ def _add_to_frf(pos, hammer, mic):
 
 def _recompute_frf(pos):
     st = _frf.get(pos, {})
-    H1, H_dB, freq = _h1_from_st(st)
+    H1, H_dB, coh, freq = _h1_from_st(st)
     if H1 is None:
-        js.window.onFRFUpdate(to_js([]), to_js([]), pos, 0)
+        js.window.onFRFUpdate(to_js([]), to_js([]), to_js([]), pos, 0)
         return
     js.window.onFRFUpdate(to_js(freq.tolist()), to_js(H_dB.tolist()),
-                          pos, len(st["hits_ham"]))
+                          to_js(coh.tolist()), pos, len(st["hits_ham"]))
 
 
 def _complete_position():
     global _cur_pos, _state
     st = _frf.get(_cur_pos, {})
-    H1, H_dB, freq = _h1_from_st(st)
+    H1, H_dB, _, freq = _h1_from_st(st)
     if H1 is not None:
         label = f"{_prefix}{_cur_pos+1:02d} ({_n_taps} hits)"
         js.window.onHistoryAdd(to_js(freq.tolist()), to_js(H_dB.tolist()), label)
@@ -417,7 +417,7 @@ def _emit_banner():
 
 
 def _build_trf_b64(st):
-    H1, _, freq = _h1_from_st(st)
+    _r = _h1_from_st(st); H1, freq = _r[0], _r[3]
     if H1 is None:
         return None
     raw = build_trf(freq.tolist(), H1.tolist())
