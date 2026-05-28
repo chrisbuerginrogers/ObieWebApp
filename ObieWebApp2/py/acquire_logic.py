@@ -7,6 +7,8 @@ import numpy as np
 from numpy.fft import rfft, rfftfreq
 import js
 from pyscript.ffi import to_js
+from frf import FRFAccumulator, add_hit
+from trf_fileio import build_trf
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 _sr             = 0
@@ -14,12 +16,15 @@ _threshold      = 0.05
 _cutoff_hz      = 10000.0
 _pre_trig_s     = 0.01
 _post_trig_s    = 0.30
-_time_cutoff_s  = 0.30   # seconds after trigger; signal zeroed past this
+_ham_time_cutoff_s = 0.30   # hammer signal zeroed past this time post-trigger
+_mic_time_cutoff_s = 0.30   # mic signal zeroed past this time post-trigger
 _n_taps         = 5
 _n_positions    = 12
 _prefix         = "H"
 _mic_cal        = 1.0
 _ham_cal        = 1.0
+_swap_channels  = False   # True → hammer on left input, mic on right
+_last_ham_win   = None    # last hammer window stored for FFT re-rendering
 
 # ── Ring buffer ───────────────────────────────────────────────────────────────
 _RING_SECS = 6
@@ -51,19 +56,23 @@ _LIVE_EVERY   = 6
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def apply_settings(thr_js, cutoff_js, pre_js, post_js, time_cutoff_js,
-                   taps_js, npos_js, prefix_js, mic_cal_js, ham_cal_js, sr_js):
-    global _threshold, _cutoff_hz, _pre_trig_s, _post_trig_s, _time_cutoff_s
-    global _n_taps, _prefix, _mic_cal, _ham_cal, _sr
+def apply_settings(thr_js, cutoff_js, pre_js, post_js, ham_time_cutoff_js,
+                   taps_js, npos_js, prefix_js, mic_cal_js, ham_cal_js, sr_js,
+                   swap_js=False, mic_time_cutoff_js=None):
+    global _threshold, _cutoff_hz, _pre_trig_s, _post_trig_s
+    global _ham_time_cutoff_s, _mic_time_cutoff_s
+    global _n_taps, _prefix, _mic_cal, _ham_cal, _sr, _swap_channels
     _threshold      = max(0.001, float(thr_js))
     _cutoff_hz      = max(100.0, float(cutoff_js))
-    _pre_trig_s     = max(0.001, float(pre_js))
-    _post_trig_s    = max(0.05,  float(post_js))
-    _time_cutoff_s  = max(0.01,  float(time_cutoff_js))
+    _pre_trig_s        = max(0.001, float(pre_js))
+    _post_trig_s       = max(0.05,  float(post_js))
+    _ham_time_cutoff_s = max(0.01,  float(ham_time_cutoff_js))
+    _mic_time_cutoff_s = max(0.01,  float(mic_time_cutoff_js)) if mic_time_cutoff_js is not None else _mic_time_cutoff_s
     _n_taps         = max(1,     int(taps_js))
     _prefix         = str(prefix_js).strip()[:3].upper() or "H"
     _mic_cal        = float(mic_cal_js) if float(mic_cal_js) else 1.0
     _ham_cal        = float(ham_cal_js) if float(ham_cal_js) else 1.0
+    _swap_channels  = bool(swap_js)
     new_sr          = int(sr_js)
     if new_sr != _sr:
         _reallocate_ring(new_sr)
@@ -112,7 +121,8 @@ def process_audio(left_js, right_js):
     n = len(R)
 
     if _state == "armed":
-        mask = np.abs(R) > _threshold
+        trig = L if _swap_channels else R
+        mask = np.abs(trig) > _threshold
         if np.any(mask):
             trig_idx = int(np.argmax(mask))
             _push_ring(L[:trig_idx + 1], R[:trig_idx + 1])
@@ -141,20 +151,14 @@ def process_audio(left_js, right_js):
 
 
 def update_cutoff(cutoff_js):
-    """Update frequency cutoff (called when preferences are saved)."""
+    """Update frequency cutoff; recomputes FRFs and refreshes Hammer FFT display."""
     global _cutoff_hz
     _cutoff_hz = max(100.0, float(cutoff_js))
     for i in range(_n_positions):
         _recompute_frf(i)
+    if _last_ham_win is not None:
+        _send_hammer_fft(_last_ham_win)
 
-
-def update_time_cutoff(cutoff_js):
-    """Update time cutoff from interactive green-line move; recomputes all FRFs."""
-    global _time_cutoff_s
-    _time_cutoff_s = max(0.01, float(cutoff_js))
-    for i in range(_n_positions):
-        _recompute_frf(i)
-    js.window.onTimeCutoffChanged(float(_time_cutoff_s))
 
 
 def delete_last_hit():
@@ -290,23 +294,21 @@ def _h1_from_st(st):
     Returns (H1_complex, freq_array) or (None, None) if no data."""
     if not st.get("hits_ham"):
         return None, None
-    pre_n = int(_pre_trig_s * _sr)
-    cut_n = int(_time_cutoff_s * _sr)
-    gxx = None; gxy = None
+    pre_n   = int(_pre_trig_s * _sr)
+    ham_cut = int(_ham_time_cutoff_s * _sr)
+    mic_cut = int(_mic_time_cutoff_s * _sr)
+    acc = FRFAccumulator(sample_rate=st["sr"])
     for ham, mic in zip(st["hits_ham"], st["hits_mic"]):
         h = ham.copy(); m = mic.copy()
-        if pre_n + cut_n < len(h):
-            h[pre_n + cut_n:] = 0.0
-            m[pre_n + cut_n:] = 0.0
-        win = np.hanning(len(h)); sc = 2.0 / win.sum()
-        H = rfft(h * win) * sc; M = rfft(m * win) * sc
-        Gxx_ = np.abs(H)**2; Gxy_ = M * np.conj(H)
-        if gxx is None:
-            gxx = Gxx_; gxy = Gxy_
-        else:
-            gxx += Gxx_; gxy += Gxy_
-    H1   = gxy / (gxx + 1e-30)
+        if pre_n + ham_cut < len(h):
+            h[pre_n + ham_cut:] = 0.0
+        if pre_n + mic_cut < len(m):
+            m[pre_n + mic_cut:] = 0.0
+        add_hit(acc, np.column_stack([h, m]))
     freq = rfftfreq(st["n_fft"], d=1.0 / st["sr"])
+    eps  = np.finfo(float).eps
+    # frf.py stores S_fp = F·conj(P) = ham·conj(mic); conj gives standard H1 = mic/ham
+    H1   = np.conj(acc.S_fp) / np.where(acc.S_ff > eps, acc.S_ff, eps)
     H1[freq > _cutoff_hz] = 0.0
     return H1, freq
 
@@ -316,7 +318,11 @@ def _do_capture():
     global _state
     pre  = int(_pre_trig_s  * _sr)
     post = int(_post_trig_s * _sr)
-    mic_win, ham_win = _ring_window_at(_trig_ring_pos, pre, post)
+    L_win, R_win = _ring_window_at(_trig_ring_pos, pre, post)
+    if _swap_channels:
+        ham_win, mic_win = L_win, R_win
+    else:
+        mic_win, ham_win = L_win, R_win
 
     ham_win = ham_win * _ham_cal
     mic_win = mic_win * _mic_cal
@@ -342,6 +348,20 @@ def _do_capture():
         _emit_state()
 
 
+def _send_hammer_fft(hammer):
+    """Compute and send hammer FFT mini plot using current cutoffs."""
+    global _last_ham_win
+    _last_ham_win = hammer
+    # No window needed: hammer is a short impulse that naturally decays to zero.
+    # Hanning would suppress the spike (which is near the start of the window)
+    # and make noise dominate the spectrum.
+    H    = rfft(hammer)
+    freq = rfftfreq(len(hammer), d=1.0 / _sr)
+    Hdb  = 20.0 * np.log10(np.abs(H) + 1e-12)
+    js.window.onHammerFFT(to_js(freq.tolist()), to_js(Hdb.tolist()),
+                          float(_cutoff_hz))
+
+
 def _add_to_frf(pos, hammer, mic):
     st = _frf[pos]
     st["hits_ham"].append(hammer.copy())
@@ -349,14 +369,7 @@ def _add_to_frf(pos, hammer, mic):
     st["n_fft"] = len(hammer)
     st["sr"]    = _sr
     _recompute_frf(pos)
-
-    # Send unwindowed FFT of this hit for the FFT mini plot
-    win = np.hanning(len(hammer)); sc = 2.0 / win.sum()
-    H    = rfft(hammer * win) * sc
-    freq = rfftfreq(len(hammer), d=1.0 / _sr)
-    Hdb  = 20.0 * np.log10(np.abs(H) + 1e-12)
-    js.window.onHammerFFT(to_js(freq.tolist()), to_js(Hdb.tolist()),
-                          float(_cutoff_hz))
+    _send_hammer_fft(hammer)
 
 
 def _recompute_frf(pos):
@@ -423,21 +436,8 @@ def _build_trf_b64(st):
     H1, freq = _h1_from_st(st)
     if H1 is None:
         return None
-    N      = st["n_fft"]
-    n_pts  = len(freq)
-    hz_res = float(freq[1] - freq[0]) if n_pts > 1 else 1.0
-    hdr = bytearray(110)
-    struct.pack_into("<I", hdr,  0, 1)
-    struct.pack_into("<d", hdr, 38, hz_res)
-    struct.pack_into("<d", hdr, 46, float(freq[0]))
-    struct.pack_into("<d", hdr, 54, float(freq[-1]))
-    struct.pack_into("<f", hdr, 62, 1.0)
-    struct.pack_into("<f", hdr, 66, float(n_pts))
-    data = bytearray(n_pts * 16)
-    for i in range(n_pts):
-        struct.pack_into("<d", data, i*16,   float(H1.real[i]))
-        struct.pack_into("<d", data, i*16+8, float(H1.imag[i]))
-    return base64.b64encode(bytes(hdr) + bytes(data)).decode("ascii")
+    raw = build_trf(freq.tolist(), H1.tolist())
+    return base64.b64encode(raw).decode("ascii")
 
 
 def _encode_wav_b64(L, R, sr):

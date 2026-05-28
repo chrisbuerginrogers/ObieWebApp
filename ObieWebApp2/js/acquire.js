@@ -47,7 +47,8 @@ let batchFill = 0;
 let appState      = 'idle';
 let currentPos    = 0;
 let frfCache      = {};     // pos → { freq[], H1db[], nHits }
-let _timeCutoffS  = 0.30;   // green line position on time plots (s after trigger)
+let _hamTimeCutoffS = 0.30;  // green line on hammer plot (s after trigger)
+let _micTimeCutoffS = 0.30;  // green line on mic plot (s after trigger)
 let _lineWidth    = 0.5;    // FRF trace width in px
 let _S = {
   xLog: true, xMin: 100, xMax: 12000,
@@ -119,40 +120,30 @@ window.onTriggered = function(t_js, ham_js, mic_js, thr) {
 function _drawTrigPlots(t, ham, mic, thrF) {
   const pkH = Math.max(...ham.map(Math.abs), 0.05);
   const pkM = Math.max(...mic.map(Math.abs), 0.05);
-  const shapes = [hDot(thrF, '#7c2bc8'), vLine(_timeCutoffS, '#2e7d32')];
+  const hamShapes = [hDot(thrF, '#7c2bc8'), vLine(_hamTimeCutoffS, '#2e7d32')];
+  const micShapes = [vLine(_micTimeCutoffS, '#2e7d32')];
 
   Plotly.react('plot-hammer',
     [{ x: t, y: ham, type: 'scatter', mode: 'lines', line: { color: '#c62828', width: 1 } }],
     miniLayout('Hammer', 'Time (s)', 'V', {},
       _hamYRange ? { range: _hamYRange } : { range: [-pkH*1.2, pkH*1.2] },
-      shapes),
+      hamShapes),
     PCFG);
 
   Plotly.react('plot-mic',
     [{ x: t, y: mic, type: 'scatter', mode: 'lines', line: { color: '#1565c0', width: 1 } }],
     miniLayout('Microphone', 'Time (s)', 'V', {},
       _micYRange ? { range: _micYRange } : { range: [-pkM*1.2, pkM*1.2] },
-      shapes),
+      micShapes),
     PCFG);
 }
 
-/** Python notifies us that time cutoff changed — redraw green line immediately */
-window.onTimeCutoffChanged = function(s) {
-  _timeCutoffS = Number(s);
-  // Sync the preferences input if it's open
-  const el = document.getElementById('inp-time-cutoff');
-  if (el) el.value = _timeCutoffS.toFixed(3);
-  // Redraw current hit plots with new green line
-  if (_lastTrigData) {
-    const { t, ham, mic, thr } = _lastTrigData;
-    _drawTrigPlots(t, ham, mic, thr);
-  }
-};
 
-/** Hammer FFT — normalized to 0 dB peak within the 200–10k display window */
-window.onHammerFFT = function(freq_js, db_js, _cutoff_hz) {
-  const freqAll = Array.from(freq_js).map(Number);
-  const dbAll   = Array.from(db_js).map(Number);
+/** Hammer FFT — normalized to 0 dB peak within the display window */
+window.onHammerFFT = function(freq_js, db_js, cutoff_hz) {
+  const freqAll  = Array.from(freq_js).map(Number);
+  const dbAll    = Array.from(db_js).map(Number);
+  const fMax     = Math.min(Number(cutoff_hz) || 10000, freqAll[freqAll.length - 1] || 10000);
 
   // Build arrays, skip DC bin (freq=0 breaks log axis)
   const freq = [], db = [];
@@ -161,14 +152,12 @@ window.onHammerFFT = function(freq_js, db_js, _cutoff_hz) {
   }
   if (!freq.length) return;
 
-  // Normalize by the peak within the DISPLAYED 200–10 kHz band so data
-  // always fills the window (global peak is often below 200 Hz for an impulse)
+  // Normalize by the peak within the displayed band
   let peak = -1e9;
   for (let i = 0; i < freq.length; i++) {
-    if (freq[i] >= 200 && freq[i] <= 10000 && isFinite(db[i]) && db[i] > peak)
+    if (freq[i] >= 200 && freq[i] <= fMax && isFinite(db[i]) && db[i] > peak)
       peak = db[i];
   }
-  // Fall back to global peak if no data in band (shouldn't happen in practice)
   if (!isFinite(peak)) {
     for (let i = 0; i < db.length; i++) if (isFinite(db[i]) && db[i] > peak) peak = db[i];
   }
@@ -179,7 +168,7 @@ window.onHammerFFT = function(freq_js, db_js, _cutoff_hz) {
   Plotly.react('plot-fft',
     [{ x: freq, y: dbNorm, type: 'scatter', mode: 'lines', line: { color: '#7c4dbe', width: 1 } }],
     miniLayout('Hammer FFT', 'Hz', 'dB',
-      { type: 'log', range: [Math.log10(200), Math.log10(10000)] },
+      { type: 'log', range: [Math.log10(200), Math.log10(fMax)] },
       { range: [-25, 0] }),
     PCFG);
 };
@@ -305,18 +294,21 @@ function renderFRF() {
     traces.push({ x: [], y: [], type: 'scatter', mode: 'lines', showlegend: false });
   }
 
-  // Y range
+  // Y range — use 99th-percentile max so a few noisy outlier bins don't
+  // push the real data to the bottom of the plot.
   let yRange;
   if (_S.yMin != null && _S.yMax != null) {
     yRange = [_S.yMin, _S.yMax];
   } else {
-    let maxY = -Infinity;
-    for (const t of traces) {
-      for (const v of t.y) {
-        if (isFinite(v) && v > -200 && v > maxY) maxY = v;
-      }
+    const allY = [];
+    for (const t of traces)
+      for (const v of t.y)
+        if (isFinite(v) && v > -200) allY.push(v);
+    if (allY.length) {
+      allY.sort((a, b) => a - b);
+      const maxY = allY[Math.floor(allY.length * 0.99)];
+      yRange = [maxY - _S.yDbRange, maxY + 2];
     }
-    if (isFinite(maxY)) yRange = [maxY - _S.yDbRange, maxY + 2];
   }
 
   const xRange = _S.xLog
@@ -450,12 +442,15 @@ function _populatePrefsForm() {
   set('inp-cutoff',      prefs.cutoff_hz);
   set('inp-pre',         prefs.pre_trig_s);
   set('inp-post',        prefs.post_trig_s);
-  set('inp-time-cutoff', prefs.time_cutoff_s);
+  set('inp-time-cutoff',     prefs.time_cutoff_s);
+  set('inp-mic-time-cutoff', prefs.mic_time_cutoff_s);
   set('inp-taps',        prefs.taps);
   set('inp-positions',   prefs.positions);
   set('inp-prefix',      prefs.prefix);
   set('inp-mic-cal',     prefs.mic_cal);
   set('inp-ham-cal',     prefs.ham_cal);
+  const swapEl = document.getElementById('inp-swap-channels');
+  if (swapEl) swapEl.checked = prefs.swap_channels ?? false;
   set('inp-soundcard',   prefs.soundcard);
   set('inp-instrument',  prefs.instrument);
   set('inp-line-width',  prefs.line_width);
@@ -467,17 +462,17 @@ function _loadPrefs() {
   try {
     return {
       threshold: 0.05, cutoff_hz: 10000, pre_trig_s: 0.01, post_trig_s: 0.30,
-      time_cutoff_s: 0.30,
+      time_cutoff_s: 0.30, mic_time_cutoff_s: 0.30,
       taps: 5, positions: 12, prefix: 'H',
-      mic_cal: 1.0, ham_cal: 1.0, soundcard: '', instrument: '',
+      mic_cal: 1.0, ham_cal: 1.0, swap_channels: false, soundcard: '', instrument: '',
       deviceId: '', line_width: 0.5,
       ...JSON.parse(localStorage.getItem('obieAcquire_prefs') || '{}'),
     };
   } catch (_) {
     return { threshold: 0.05, cutoff_hz: 10000, pre_trig_s: 0.01, post_trig_s: 0.30,
-             time_cutoff_s: 0.30,
+             time_cutoff_s: 0.30, mic_time_cutoff_s: 0.30,
              taps: 5, positions: 12, prefix: 'H', mic_cal: 1.0, ham_cal: 1.0,
-             soundcard: '', instrument: '', deviceId: '', line_width: 0.5 };
+             swap_channels: false, soundcard: '', instrument: '', deviceId: '', line_width: 0.5 };
   }
 }
 
@@ -488,12 +483,14 @@ window.acqSavePrefs = function() {
     cutoff_hz:     parseFloat(g('inp-cutoff'))      || 10000,
     pre_trig_s:    parseFloat(g('inp-pre'))         || 0.01,
     post_trig_s:   parseFloat(g('inp-post'))        || 0.30,
-    time_cutoff_s: parseFloat(g('inp-time-cutoff')) || 0.30,
+    time_cutoff_s:     parseFloat(g('inp-time-cutoff'))     || 0.30,
+    mic_time_cutoff_s: parseFloat(g('inp-mic-time-cutoff')) || 0.30,
     taps:          parseInt(g('inp-taps'))          || 5,
     positions:     parseInt(g('inp-positions'))     || 12,
     prefix:        g('inp-prefix')                  || 'H',
     mic_cal:       parseFloat(g('inp-mic-cal'))     || 1.0,
     ham_cal:       parseFloat(g('inp-ham-cal'))     || 1.0,
+    swap_channels: document.getElementById('inp-swap-channels')?.checked ?? false,
     soundcard:     g('inp-soundcard'),
     instrument:    g('inp-instrument'),
     deviceId:      g('prefs-device'),
@@ -514,16 +511,24 @@ window.acqResetPrefs = function() {
 };
 
 function _pushSettingsFromPrefs(prefs) {
-  _timeCutoffS = prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
-  _lineWidth   = prefs.line_width   ?? 0.5;
+  _hamTimeCutoffS = prefs.time_cutoff_s     ?? prefs.post_trig_s ?? 0.30;
+  _micTimeCutoffS = prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
+  _lineWidth      = prefs.line_width        ?? 0.5;
   if (!window.pyApplySettings) return;
   const sr = audioCtx?.sampleRate || 44100;
   window.pyApplySettings(
     prefs.threshold, prefs.cutoff_hz, prefs.pre_trig_s, prefs.post_trig_s,
     prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30,
     prefs.taps, prefs.positions, prefs.prefix,
-    prefs.mic_cal, prefs.ham_cal, sr
+    prefs.mic_cal, prefs.ham_cal, sr,
+    prefs.swap_channels ?? false,
+    prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30
   );
+  // Redraw green lines immediately if a hit is already displayed
+  if (_lastTrigData) {
+    const { t, ham, mic, thr } = _lastTrigData;
+    _drawTrigPlots(t, ham, mic, thr);
+  }
 }
 
 async function _enumeratePrefsDevices() {
@@ -721,27 +726,6 @@ window.acqLiveView = function() {
 // Time-cutoff interaction (click on hammer or mic mini plot)
 // ════════════════════════════════════════════════════════════════════════════
 
-function _initTimeCutoffInteraction() {
-  ['plot-hammer', 'plot-mic'].forEach(id => {
-    const plotDiv = document.getElementById(id);
-    if (!plotDiv) return;
-    plotDiv.style.cursor = 'crosshair';
-    plotDiv.addEventListener('click', e => {
-      if (!window.pyUpdateTimeCutoff) return;
-      const rect = plotDiv.querySelector('.nsewdrag') || plotDiv.querySelector('.xy');
-      if (!rect) return;
-      const rbb  = rect.getBoundingClientRect();
-      const frac = (e.clientX - rbb.left) / rbb.width;
-      if (frac < 0 || frac > 1) return;
-      const layout = plotDiv._fullLayout;
-      if (!layout) return;
-      const xa   = layout.xaxis;
-      const xVal = xa.range[0] + frac * (xa.range[1] - xa.range[0]);
-      if (xVal <= 0) return;  // cutoff must be after trigger
-      window.pyUpdateTimeCutoff(xVal);
-    });
-  });
-}
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -802,7 +786,13 @@ async function _startAudio() {
     sourceNode.connect(workletNode);
     window.pyArm();
   } catch (err) {
-    if (err.name !== 'NotAllowedError') alert('Audio error: ' + err.message);
+    if (err.name === 'NotAllowedError') return;
+    const sc = _loadPrefs().soundcard || '';
+    if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+      alert(`Cannot find soundcard${sc ? ' "' + sc + '"' : ''} — turn it on or reset in Preferences.`);
+    } else {
+      alert('Audio error: ' + err.message);
+    }
   }
 }
 
@@ -890,11 +880,11 @@ window.onPyReady = function() {
 
 window.addEventListener('load', () => {
   const prefs = _loadPrefs();
-  _timeCutoffS = prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
-  _lineWidth   = prefs.line_width   ?? 0.5;
+  _hamTimeCutoffS = prefs.time_cutoff_s     ?? prefs.post_trig_s ?? 0.30;
+  _micTimeCutoffS = prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
+  _lineWidth      = prefs.line_width        ?? 0.5;
   _initPlots();
   _initResizer();
-  _initTimeCutoffInteraction();
   _updateStopBtn();
   _updateEditBtns({ hit_n: 0 });
   _updateSoundcardDisplay();
