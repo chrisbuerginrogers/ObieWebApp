@@ -201,15 +201,15 @@ header.obie-header .logo-icon { width: 26px; height: 26px; font-size: 14px; }
 
 /* ── Plot area ───────────────────────────────────────────────────────── */
 .ex-plot-wrap {
-  flex: 1; position: relative; overflow: hidden;
-  transition: background 0.1s;
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; transition: background 0.1s;
 }
 .ex-plot-wrap.dragging {
   background: rgba(179,92,0,0.04);
   outline: 2px dashed var(--accent);
   outline-offset: -3px;
 }
-#explore-plot { width: 100%; height: 100%; }
+#explore-plot { flex: 1; min-height: 0; width: 100%; }
 
 /* ── Modals ──────────────────────────────────────────────────────────── */
 .modal-overlay {
@@ -267,6 +267,96 @@ header.obie-header .logo-icon { width: 26px; height: 26px; font-size: 14px; }
 .palette-name { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
 .palette-swatches { display: flex; gap: 3px; }
 .palette-sw { width: 14px; height: 14px; border-radius: 2px; }
+
+/* ── Search modal ────────────────────────────────────────────────────── */
+.search-modal-box { width: min(90vw,720px); height: min(88vh,560px); }
+.search-modal-body {
+  flex: 1; overflow: hidden; padding: 0;
+  display: flex; min-height: 0;
+}
+
+.search-filters {
+  width: 180px; flex-shrink: 0;
+  padding: 12px 10px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--bg-deep);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.sf-section {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); margin-top: 2px; margin-bottom: 4px;
+}
+.sf-hint { font-size: 9px; color: var(--muted); font-style: italic; }
+.sf-chk {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; cursor: pointer; padding: 1px 0;
+}
+.sf-chk input[type=checkbox] { margin: 0; cursor: pointer; }
+
+.search-results-panel {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+.sr-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  background: var(--bg-deep);
+}
+.sr-count-lbl { font-size: 11px; color: var(--muted); }
+
+.search-results-list {
+  flex: 1; overflow-y: auto; padding: 4px 4px;
+}
+.search-results-list::-webkit-scrollbar { width: 4px; }
+.search-results-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sr-item {
+  padding: 4px 8px; border-radius: 3px; font-size: 11px;
+  cursor: pointer; user-select: none;
+  color: var(--text); margin-bottom: 1px;
+  font-family: monospace;
+}
+.sr-item:hover:not(.selected) { background: var(--bg-deep); }
+.sr-item.selected { background: #1a3c6e; color: #e8eef8; }
+.sr-item.selected:hover { background: #1e4a8a; }
+.sr-empty { padding: 20px 12px; font-size: 11px; color: var(--muted); text-align: center; font-style: italic; }
+
+.sr-footer {
+  display: flex; gap: 6px; padding: 8px 10px;
+  border-top: 1px solid var(--border); flex-shrink: 0;
+  background: var(--bg-deep);
+}
+
+/* ── File operations group (no box — just flat buttons) ─────────────── */
+.files-box { display: flex; align-items: center; gap: 2px; }
+
+/* ── Folder path display (read-only, grey) ───────────────────────────── */
+.folder-name-disp {
+  font-size: 11px; font-style: italic;
+  color: #aaa; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  max-width: 340px; flex-shrink: 1;
+}
+
+/* ── Plot controls strip (top of plot area) ──────────────────────────── */
+.plot-toolbar {
+  display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+  padding: 2px 6px; min-height: 26px;
+  background: var(--bg-deep); border-bottom: 1px solid var(--border);
+}
+
+/* ── Sidebar resize handle ───────────────────────────────────────────── */
+.ex-resizer {
+  width: 5px; flex-shrink: 0; cursor: col-resize;
+  background: var(--border); transition: background 0.15s;
+}
+.ex-resizer:hover, .ex-resizer.dragging { background: var(--accent); }
+
+/* Prevent text selection and plot interference while resizing */
+body.resizing { cursor: col-resize !important; user-select: none !important; }
+body.resizing * { cursor: col-resize !important; }
+body.resizing .ex-plot-wrap { pointer-events: none; }
 
 /* ── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 760px) {

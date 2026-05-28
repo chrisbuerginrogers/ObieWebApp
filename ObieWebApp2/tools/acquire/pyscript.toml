@@ -1,0 +1,5 @@
+packages = ["numpy"]
+
+[files]
+"../../py/config.py"        = "./config.py"
+"../../py/acquire_logic.py" = "./acquire_logic.py"

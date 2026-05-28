@@ -72,6 +72,10 @@
   let _nextId    = 0;
   let _palette   = PALETTES.default;
   let _templates = [];
+  let _dataDir   = null;   // FileSystemDirectoryHandle
+  let _dirFiles  = [];     // [{name, ext, path, handle}] — scanned from data folder
+  let _searchResults  = []; // current filtered list
+  let _pendingPaths   = {}; // filename → full relative path, populated just before pyExploreLoadFile
   let _lists     = [];
   let _customBands = null;
 
@@ -82,7 +86,7 @@
     smoothing: 0,
     normalize: false,
     bandPreset: '',
-    lineWidth: 1.5,
+    lineWidth: 1.0,
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────
@@ -91,6 +95,39 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // ── IndexedDB wrapper (stores FileSystemDirectoryHandle across reloads) ─
+  const _IDB = (() => {
+    let _db = null;
+    function open() {
+      if (_db) return Promise.resolve(_db);
+      return new Promise((res, rej) => {
+        const req = indexedDB.open('obieExplore', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('kv');
+        req.onsuccess  = e => { _db = e.target.result; res(_db); };
+        req.onerror    = e => rej(e.target.error);
+      });
+    }
+    return {
+      async put(key, val) {
+        const db = await open();
+        return new Promise((res, rej) => {
+          const tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').put(val, key);
+          tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+        });
+      },
+      async get(key) {
+        const db = await open();
+        return new Promise((res, rej) => {
+          const tx = db.transaction('kv', 'readonly');
+          const req = tx.objectStore('kv').get(key);
+          req.onsuccess = () => res(req.result ?? null);
+          req.onerror   = e => rej(e.target.error);
+        });
+      },
+    };
+  })();
 
   // ── Undo ───────────────────────────────────────────────────────────────
   function _saveUndo() {
@@ -123,7 +160,8 @@
 
   // ── Normalize (shift max to 0 dB) ─────────────────────────────────────
   function _norm(mags) {
-    const maxV = Math.max(...mags.filter(isFinite));
+    let maxV = -Infinity;
+    for (let i = 0; i < mags.length; i++) { if (isFinite(mags[i]) && mags[i] > maxV) maxV = mags[i]; }
     if (!isFinite(maxV)) return mags;
     return mags.map(v => v - maxV);
   }
@@ -179,14 +217,14 @@
       _renderBandTable(null);
     }
 
-    // Y range
-    const allMags = plotTraces.flatMap(t => t.y.filter(isFinite));
+    // Y range — avoid Math.max(...largeArray) which overflows the call stack
     let yRange;
     if (_S.yMin != null && _S.yMax != null) {
       yRange = [_S.yMin, _S.yMax];
-    } else if (allMags.length) {
-      const maxY = Math.max(...allMags);
-      yRange = [maxY - _S.yDbRange, maxY + 2];
+    } else {
+      let maxY = -Infinity;
+      for (const t of plotTraces) { for (const v of t.y) { if (isFinite(v) && v > maxY) maxY = v; } }
+      if (isFinite(maxY)) yRange = [maxY - _S.yDbRange, maxY + 2];
     }
 
     const border = cssVar('--border'), text = cssVar('--text');
@@ -227,10 +265,10 @@
       return;
     }
     box.innerHTML = _datasets.map(d =>
-      `<div class="ds-row${d.visible?'':' ds-hidden'}" data-id="${d.id}">
+      `<div class="ds-row${d.visible?'':' ds-hidden'}" data-id="${d.id}" title="${_esc(d.path || d.name)}">
         <input type="checkbox" class="ds-vis" data-id="${d.id}"${d.visible?' checked':''}>
         <span class="ds-swatch" data-id="${d.id}" style="background:${d.color}" title="Change colour"></span>
-        <span class="ds-label" title="${_esc(d.name)}">${_esc(d.name)}</span>
+        <span class="ds-label">${_esc(d.name)}</span>
         <button class="ds-play-btn" data-id="${d.id}" title="Convolve and play">▶</button>
       </div>`
     ).join('');
@@ -248,6 +286,21 @@
     box.querySelectorAll('.ds-play-btn').forEach(btn => btn.addEventListener('click', e => {
       _playDataset(+e.target.dataset.id);
     }));
+
+    // Hover: thicken the corresponding Plotly trace and show path tooltip
+    box.querySelectorAll('.ds-row').forEach(row => {
+      const id = +row.dataset.id;
+      row.addEventListener('mouseenter', () => {
+        const vis = _datasets.filter(d => d.visible);
+        const idx = vis.findIndex(d => d.id === id);
+        if (idx >= 0) Plotly.restyle('explore-plot', {'line.width': _S.lineWidth * 3}, [idx]);
+      });
+      row.addEventListener('mouseleave', () => {
+        const vis = _datasets.filter(d => d.visible);
+        const idx = vis.findIndex(d => d.id === id);
+        if (idx >= 0) Plotly.restyle('explore-plot', {'line.width': _S.lineWidth}, [idx]);
+      });
+    });
   }
 
   // ── Play dataset ───────────────────────────────────────────────────────
@@ -336,31 +389,168 @@
   window.expHelp           = () => alert('You pressed: Help');
   window.expGettingStarted = () => alert('You pressed: Getting Started');
 
-  // ── File ops ──────────────────────────────────────────────────────────
-  window.expSearch = async function() {
+  // ── Data Folder helpers ───────────────────────────────────────────────
+  const _SCAN_EXTS = new Set(['.trf','.trv','.avc','.avr','.csv','.wav']);
+
+  async function _countTopDirs(dh) {
+    let n = 0;
+    for await (const [, h] of dh.entries()) { if (h.kind === 'directory') n++; }
+    return n;
+  }
+
+  async function _scanDir(dh, relPath) {
+    const out = [];
+    for await (const [name, h] of dh.entries()) {
+      if (h.kind === 'file') {
+        const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
+        if (_SCAN_EXTS.has(ext))
+          out.push({ name, ext, path: relPath ? relPath + '/' + name : name, handle: h });
+      } else if (h.kind === 'directory') {
+        const sub = await _scanDir(h, relPath ? relPath + '/' + name : name);
+        for (const f of sub) out.push(f);
+      }
+    }
+    return out;
+  }
+
+  async function _applyFolder(dir) {
+    const st = $('explore-status');
+    if (st) st.textContent = 'Scanning folder…';
+    _dataDir  = dir;
+    _dirFiles = await _scanDir(dir, '');
+
+    const nDirs = await _countTopDirs(dir);
+    const btn = $('data-folder-btn');
+    if (btn) btn.textContent = '📁 ' + dir.name;
+    const ind = $('folder-name-ind');
+    if (ind) ind.textContent = dir.name + (nDirs > 0 ? '  (' + nDirs + ' instruments)' : '');
+    if (st) { st.textContent = `Folder: ${dir.name} — ${_dirFiles.length} files`; setTimeout(() => st.textContent = '', 4000); }
+  }
+
+  // ── Data Folder ───────────────────────────────────────────────────────
+  window.expSetDataFolder = async function() {
     if (!window.showDirectoryPicker) {
-      alert('Folder picker not supported in this browser.\nUse Browse to open individual files.');
+      alert('Directory picker not supported in this browser.\nUse Browse to open individual files.');
       return;
     }
     try {
-      const dir  = await window.showDirectoryPicker();
-      const exts = new Set(['.trf','.trv','.avc','.avr','.csv']);
-      const found = [];
-      async function walk(dh) {
-        for await (const [name, h] of dh.entries()) {
-          if (h.kind === 'file') {
-            const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
-            if (exts.has(ext)) found.push({handle:h, name});
-          } else await walk(h);
-        }
-      }
-      await walk(dir);
-      if (!found.length) { alert('No TRF / AvC / AvR / CSV files found in that folder.'); return; }
-      if (!window.pyExploreLoadFile) { alert('Python not ready — try again.'); return; }
-      for (const f of found)
-        window.pyExploreLoadFile(f.name, new Uint8Array(await (await f.handle.getFile()).arrayBuffer()));
-    } catch(e) { if (e.name !== 'AbortError') console.warn('expSearch:', e); }
+      // Always show picker — Chrome defaults to the last-used location naturally.
+      // (requestPermission() before showDirectoryPicker() consumes the user gesture
+      //  and causes the picker to silently fail, so we skip that step here.)
+      const dir = await window.showDirectoryPicker({ mode: 'read' });
+      // Clear saved path when switching to a different folder
+      if (localStorage.getItem('obieExplore_folderName') !== dir.name)
+        localStorage.removeItem('obieExplore_folderPath');
+      await _applyFolder(dir);
+      _IDB.put('dataFolderHandle', dir).catch(() => {});
+      localStorage.setItem('obieExplore_folderName', dir.name);
+    } catch(e) { if (e.name !== 'AbortError') console.warn('expSetDataFolder:', e); }
   };
+
+  // ── Search modal ──────────────────────────────────────────────────────
+  window.expSearch = function() {
+    if (!_dataDir) {
+      alert('Set a Data Folder first (use the 📁 Data Folder button).');
+      return;
+    }
+    $('search-modal')?.classList.add('open');
+    _runSearch();
+  };
+  window.expCloseSearch = () => $('search-modal')?.classList.remove('open');
+
+  function _runSearch() {
+    const pattern = ($('search-pattern')?.value || '').trim();
+    const kw1 = ($('search-kw1')?.value || '').trim().toLowerCase();
+    const kw2 = ($('search-kw2')?.value || '').trim().toLowerCase();
+    const kw3 = ($('search-kw3')?.value || '').trim().toLowerCase();
+
+    const ftAll = $('ft-all')?.checked;
+    const ftAvR = $('ft-avr')?.checked;
+    const ftAvC = $('ft-avc')?.checked;
+    const ftTrf = $('ft-trf')?.checked;
+    const ftWav = $('ft-wav')?.checked;
+
+    const patterns = pattern ? pattern.split(',').map(p => p.trim()).filter(Boolean) : [];
+    const keywords = [kw1, kw2, kw3].filter(Boolean);
+
+    _searchResults = _dirFiles.filter(f => {
+      const n = f.name.toLowerCase();
+
+      // File type filter
+      if (!ftAll) {
+        const ok = (ftAvR && f.ext === '.avr') ||
+                   (ftAvC && f.ext === '.avc') ||
+                   (ftTrf && (f.ext === '.trf' || f.ext === '.trv')) ||
+                   (ftWav && f.ext === '.wav');
+        if (!ok) return false;
+      }
+
+      // Pattern: filename must contain at least one (case-insensitive)
+      if (patterns.length && !patterns.some(p => n.includes(p.toLowerCase()))) return false;
+
+      // Keywords: OR — at least one must match (if any specified)
+      if (keywords.length && !keywords.some(k => n.includes(k))) return false;
+
+      return true;
+    });
+
+    const countEl = $('search-count');
+    if (countEl) countEl.textContent = _searchResults.length;
+
+    const list = $('search-results-list');
+    if (!list) return;
+    if (!_searchResults.length) {
+      list.innerHTML = '<div class="sr-empty">No matching files</div>';
+      return;
+    }
+    // All results start selected (blue) — user deselects what they don't want
+    list.innerHTML = _searchResults.map((f, i) =>
+      `<div class="sr-item selected" data-idx="${i}" onclick="expToggleSearchItem(this)">${_esc(f.name)}</div>`
+    ).join('');
+  }
+
+  window.expToggleSearchItem = function(el) { el.classList.toggle('selected'); };
+
+  window.expSelectAllSearch  = function() {
+    document.querySelectorAll('#search-results-list .sr-item').forEach(el => el.classList.add('selected'));
+  };
+  window.expSelectNoneSearch = function() {
+    document.querySelectorAll('#search-results-list .sr-item').forEach(el => el.classList.remove('selected'));
+  };
+
+  window.expLoadSelected = async function() {
+    const selected = [...document.querySelectorAll('#search-results-list .sr-item.selected')];
+    if (!selected.length) { alert('No files selected.'); return; }
+    if (!window.pyExploreLoadFile) { alert('Python not ready — try again.'); return; }
+    $('search-modal')?.classList.remove('open');
+    for (const el of selected) {
+      const f = _searchResults[+el.dataset.idx]; if (!f) continue;
+      try {
+        const file = await f.handle.getFile();
+        _pendingPaths[f.name] = f.path;  // store path so obieExploreAddDataset can attach it
+        window.pyExploreLoadFile(f.name, new Uint8Array(await file.arrayBuffer()));
+      } catch(e) { console.warn('load error', f.name, e); }
+    }
+  };
+
+  function _wireSearchFilters() {
+    ['search-pattern','search-kw1','search-kw2','search-kw3'].forEach(id => {
+      const el = $(id); if (el) el.addEventListener('input', _runSearch);
+    });
+    ['ft-avr','ft-avc','ft-trf','ft-wav','ft-all'].forEach(id => {
+      const el = $(id); if (!el) return;
+      el.addEventListener('change', e => {
+        if (id === 'ft-all' && e.target.checked)
+          ['ft-avr','ft-avc','ft-trf','ft-wav'].forEach(o => { const x=$(o); if(x) x.checked=false; });
+        else if (id !== 'ft-all' && e.target.checked) {
+          const a=$('ft-all'); if(a) a.checked=false;
+        }
+        _runSearch();
+      });
+    });
+  }
+
+  // ── File ops ──────────────────────────────────────────────────────────
 
   window.expBrowse = function() {
     const inp = document.createElement('input');
@@ -549,13 +739,48 @@
     });
   }
 
+  // ── Resizable sidebar splitter ────────────────────────────────────────
+  function _setupResizer() {
+    const resizer = $('ex-resizer');
+    const sidebar = document.querySelector('.ex-sidebar');
+    if (!resizer || !sidebar) return;
+
+    // Restore saved width
+    const saved = parseInt(localStorage.getItem('obieExplore_sidebarW'));
+    if (saved >= 80) sidebar.style.width = saved + 'px';
+
+    resizer.addEventListener('mousedown', e => {
+      const startX = e.clientX;
+      const startW = sidebar.offsetWidth;
+      resizer.classList.add('dragging');
+      document.body.classList.add('resizing');
+
+      function onMove(e) {
+        const w = Math.max(80, Math.min(500, startW + e.clientX - startX));
+        sidebar.style.width = w + 'px';
+        Plotly.Plots.resize('explore-plot');
+      }
+      function onUp() {
+        resizer.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        localStorage.setItem('obieExplore_sidebarW', sidebar.offsetWidth);
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      }
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+
   // ── Python-side callbacks ─────────────────────────────────────────────
   window.obieExploreAddDataset = function(name, freqsJs, magsJs) {
     const n = String(name).split('/').pop().split('\\').pop();
     _saveUndo();
     const id = _nextId++;
     const color = _palette[_datasets.length % _palette.length];
-    _datasets.push({id, name:n, color, visible:true, freqs:Array.from(freqsJs), mags:Array.from(magsJs)});
+    const path  = _pendingPaths[n] || n;
+    delete _pendingPaths[n];
+    _datasets.push({id, name:n, path, color, visible:true, freqs:Array.from(freqsJs), mags:Array.from(magsJs)});
     _renderList(); render();
     const st = $('explore-status');
     if (st) { st.textContent = `✓ ${n}`; setTimeout(()=>st.textContent='', 3000); }
@@ -576,15 +801,32 @@
 
   window.obieExploreReady = function() {
     $('loading')?.classList.add('gone');
-    // Load default WAV
-    const url = localStorage.getItem('obieExplore_defaultWavUrl')
-      || '../../sample-data/1-Tchaikovsky-short.wav';
-    fetch(url)
-      .then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status))
-      .then(ab => window.pyExploreSetWav && window.pyExploreSetWav(new Uint8Array(ab), url.split('/').pop()))
-      .catch(e => console.warn('Default WAV fetch failed:', e));
+    // Load default WAV — try IDB-stored file first, then fall back to URL
+    (async () => {
+      try {
+        const wavData = await _IDB.get('wavData');
+        if (wavData) {
+          const name = localStorage.getItem('obieExplore_wavName') || 'snippet.wav';
+          if (window.pyExploreSetWav) window.pyExploreSetWav(new Uint8Array(wavData), name);
+          return;
+        }
+      } catch(_) {}
+      const url = localStorage.getItem('obieExplore_defaultWavUrl')
+        || '../../sample-data/1-Tchaikovsky-short.wav';
+      fetch(url)
+        .then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status))
+        .then(ab => window.pyExploreSetWav && window.pyExploreSetWav(new Uint8Array(ab), url.split('/').pop()))
+        .catch(e => console.warn('Default WAV fetch failed:', e));
+    })();
 
-    // Restore saved settings
+    // Restore saved settings — prefs first (baseline), then session state on top
+    try {
+      const prefs = JSON.parse(localStorage.getItem('obieExplore_prefs') || '{}');
+      if (prefs.lineWidth != null) _S.lineWidth = prefs.lineWidth;
+      if (prefs.yDbRange  != null) _S.yDbRange  = prefs.yDbRange;
+      if (prefs.xMin      != null) _S.xMin      = prefs.xMin;
+      if (prefs.xMax      != null) _S.xMax      = prefs.xMax;
+    } catch(_) {}
     try {
       const saved = JSON.parse(localStorage.getItem('obieExplore_plotState') || '{}');
       Object.assign(_S, saved);
@@ -596,11 +838,38 @@
     _syncUndoBtn();
     _renderList();
     window.addEventListener('resize', () => Plotly.Plots.resize('explore-plot'));
+
+    // Restore last data folder display, auto-rescan if permission already granted
+    const savedName = localStorage.getItem('obieExplore_folderName');
+    const _pathInd  = $('folder-name-ind');
+    if (_pathInd && savedName) _pathInd.textContent = savedName + '  (click 📁 to reconnect)';
+    if (savedName) {
+      _IDB.get('dataFolderHandle').then(async h => {
+        if (!h) return;
+        const perm = await h.queryPermission({ mode: 'read' }).catch(() => 'denied');
+        if (perm !== 'granted') return;
+        await _applyFolder(h);
+      }).catch(() => {});
+    }
   };
 
   // Save plot state on page hide
   window.addEventListener('pagehide', () => {
     try { localStorage.setItem('obieExplore_plotState', JSON.stringify(_S)); } catch(_) {}
+  });
+
+  // Live-apply preferences saved from the preferences tab (storage event fires in other tabs)
+  window.addEventListener('storage', e => {
+    if (e.key !== 'obieExplore_prefs') return;
+    try {
+      const prefs = JSON.parse(e.newValue || '{}');
+      if (prefs.lineWidth != null) _S.lineWidth = prefs.lineWidth;
+      if (prefs.yDbRange  != null) _S.yDbRange  = prefs.yDbRange;
+      if (prefs.xMin      != null) _S.xMin      = prefs.xMin;
+      if (prefs.xMax      != null) _S.xMax      = prefs.xMax;
+    } catch(_) {}
+    _syncControls();
+    render();
   });
 
   // ── Load templates + lists ────────────────────────────────────────────
@@ -625,6 +894,8 @@
     _syncUndoBtn();
     _renderList();
     _syncAxisBtns();
+    _wireSearchFilters();
+    _setupResizer();
   });
 
 })();
