@@ -375,12 +375,18 @@ function _updateSoundcardDisplay() {
 
 window.acqRescaleHammer = function() {
   _hamYRange = null;
-  Plotly.relayout('plot-hammer', { 'yaxis.autorange': true });
+  if (_lastTrigData) {
+    const { t, ham, mic, thr } = _lastTrigData;
+    _drawTrigPlots(t, ham, mic, thr);
+  }
 };
 
 window.acqRescaleMic = function() {
   _micYRange = null;
-  Plotly.relayout('plot-mic', { 'yaxis.autorange': true });
+  if (_lastTrigData) {
+    const { t, ham, mic, thr } = _lastTrigData;
+    _drawTrigPlots(t, ham, mic, thr);
+  }
 };
 
 window.acqDeleteLastHit = function() {
@@ -873,6 +879,18 @@ function _initPlots() {
     [{ ...empty, line: { color: micColor, width: 1 } }],
     miniLayout('Microphone', 'Time (s)', 'V'),
     PCFG);
+
+  // Persist user zoom/pan so new hits don't reset the scale.
+  // Programmatic Plotly.react calls also fire relayout, but only with
+  // 'yaxis.range[0]' when the user explicitly drags — we capture those only.
+  document.getElementById('plot-hammer').on('plotly_relayout', e => {
+    if (e['yaxis.range[0]'] != null) _hamYRange = [e['yaxis.range[0]'], e['yaxis.range[1]']];
+    else if (e['yaxis.autorange'])   _hamYRange = null;
+  });
+  document.getElementById('plot-mic').on('plotly_relayout', e => {
+    if (e['yaxis.range[0]'] != null) _micYRange = [e['yaxis.range[0]'], e['yaxis.range[1]']];
+    else if (e['yaxis.autorange'])   _micYRange = null;
+  });
 
   renderFRF();
 }
