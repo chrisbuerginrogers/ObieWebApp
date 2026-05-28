@@ -80,11 +80,7 @@ def save_position_trf(cfg: dict, position: int, acc) -> None:
     stem = f"{run['instrument']} {run['folder']} {run['designation']}_{position:03d}"
     trf_dir = run_dir(cfg) / "trf"
 
-    _, _, coherence = compute_frf(acc)
-
-    eps       = np.finfo(float).eps
-    H_complex = acc.S_fp / np.where(acc.S_ff > eps, acc.S_ff, eps)
-    freqs     = np.fft.rfftfreq(acc.n_samples, d=1.0 / acc.sample_rate)
+    freqs, H_complex, _, _, coherence = compute_frf(acc)
 
     (trf_dir / f"{stem}.trf").write_bytes(
         build_trf(freqs.tolist(), H_complex.tolist())

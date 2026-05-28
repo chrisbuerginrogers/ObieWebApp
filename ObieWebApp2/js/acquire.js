@@ -140,10 +140,10 @@ function _drawTrigPlots(t, ham, mic, thrF) {
 
 
 /** Hammer FFT — normalized to 0 dB peak within the display window */
-window.onHammerFFT = function(freq_js, db_js, cutoff_hz) {
+window.onHammerFFT = function(freq_js, db_js) {
   const freqAll  = Array.from(freq_js).map(Number);
   const dbAll    = Array.from(db_js).map(Number);
-  const fMax     = Math.min(Number(cutoff_hz) || 10000, freqAll[freqAll.length - 1] || 10000);
+  const fMax     = Math.min(_S.xMax, freqAll[freqAll.length - 1] || _S.xMax);
 
   // Build arrays, skip DC bin (freq=0 breaks log axis)
   const freq = [], db = [];
@@ -439,7 +439,8 @@ function _populatePrefsForm() {
   };
   const prefs = _loadPrefs();
   set('inp-threshold',   prefs.threshold);
-  set('inp-cutoff',      prefs.cutoff_hz);
+  set('inp-frf-x-min',   prefs.frf_x_min);
+  set('inp-frf-x-max',   prefs.frf_x_max);
   set('inp-pre',         prefs.pre_trig_s);
   set('inp-post',        prefs.post_trig_s);
   set('inp-time-cutoff',     prefs.time_cutoff_s);
@@ -461,18 +462,20 @@ function _populatePrefsForm() {
 function _loadPrefs() {
   try {
     return {
-      threshold: 0.05, cutoff_hz: 10000, pre_trig_s: 0.01, post_trig_s: 0.30,
+      threshold: 0.05, pre_trig_s: 0.01, post_trig_s: 0.30,
       time_cutoff_s: 0.30, mic_time_cutoff_s: 0.30,
       taps: 5, positions: 12, prefix: 'H',
-      mic_cal: 1.0, ham_cal: 1.0, swap_channels: false, soundcard: '', instrument: '',
-      deviceId: '', line_width: 0.5,
+      mic_cal: 1.0, ham_cal: 1.0, swap_channels: false,
+      frf_x_min: 100, frf_x_max: 12000,
+      soundcard: '', instrument: '', deviceId: '', line_width: 0.5,
       ...JSON.parse(localStorage.getItem('obieAcquire_prefs') || '{}'),
     };
   } catch (_) {
-    return { threshold: 0.05, cutoff_hz: 10000, pre_trig_s: 0.01, post_trig_s: 0.30,
+    return { threshold: 0.05, pre_trig_s: 0.01, post_trig_s: 0.30,
              time_cutoff_s: 0.30, mic_time_cutoff_s: 0.30,
              taps: 5, positions: 12, prefix: 'H', mic_cal: 1.0, ham_cal: 1.0,
-             swap_channels: false, soundcard: '', instrument: '', deviceId: '', line_width: 0.5 };
+             swap_channels: false, frf_x_min: 100, frf_x_max: 12000,
+             soundcard: '', instrument: '', deviceId: '', line_width: 0.5 };
   }
 }
 
@@ -480,7 +483,8 @@ window.acqSavePrefs = function() {
   const g = id => document.getElementById(id)?.value ?? '';
   const prefs = {
     threshold:     parseFloat(g('inp-threshold'))   || 0.05,
-    cutoff_hz:     parseFloat(g('inp-cutoff'))      || 10000,
+    frf_x_min:     parseFloat(g('inp-frf-x-min'))   || 100,
+    frf_x_max:     parseFloat(g('inp-frf-x-max'))   || 12000,
     pre_trig_s:    parseFloat(g('inp-pre'))         || 0.01,
     post_trig_s:   parseFloat(g('inp-post'))        || 0.30,
     time_cutoff_s:     parseFloat(g('inp-time-cutoff'))     || 0.30,
@@ -511,13 +515,16 @@ window.acqResetPrefs = function() {
 };
 
 function _pushSettingsFromPrefs(prefs) {
-  _hamTimeCutoffS = prefs.time_cutoff_s     ?? prefs.post_trig_s ?? 0.30;
-  _micTimeCutoffS = prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
-  _lineWidth      = prefs.line_width        ?? 0.5;
+  _hamTimeCutoffS  = prefs.time_cutoff_s     ?? prefs.post_trig_s ?? 0.30;
+  _micTimeCutoffS  = prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
+  _lineWidth       = prefs.line_width        ?? 0.5;
+  _S.xMin          = prefs.frf_x_min        ?? 100;
+  _S.xMax          = prefs.frf_x_max        ?? 12000;
+  renderFRF();
   if (!window.pyApplySettings) return;
   const sr = audioCtx?.sampleRate || 44100;
   window.pyApplySettings(
-    prefs.threshold, prefs.cutoff_hz, prefs.pre_trig_s, prefs.post_trig_s,
+    prefs.threshold, prefs.pre_trig_s, prefs.post_trig_s,
     prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30,
     prefs.taps, prefs.positions, prefs.prefix,
     prefs.mic_cal, prefs.ham_cal, sr,
@@ -641,7 +648,8 @@ window.acqApplyTemplate = function() {
     if (el && val != null) el.value = val;
   };
   if (s.threshold   != null) set('inp-threshold',  s.threshold);
-  if (s.cutoff_hz   != null) set('inp-cutoff',     s.cutoff_hz);
+  if (s.frf_x_min   != null) set('inp-frf-x-min',  s.frf_x_min);
+  if (s.frf_x_max   != null) set('inp-frf-x-max',  s.frf_x_max);
   if (s.pre_trig_s  != null) set('inp-pre',        s.pre_trig_s);
   if (s.post_trig_s != null) set('inp-post',       s.post_trig_s);
   if (s.taps        != null) set('inp-taps',       s.taps);
@@ -883,6 +891,8 @@ window.addEventListener('load', () => {
   _hamTimeCutoffS = prefs.time_cutoff_s     ?? prefs.post_trig_s ?? 0.30;
   _micTimeCutoffS = prefs.mic_time_cutoff_s ?? prefs.time_cutoff_s ?? prefs.post_trig_s ?? 0.30;
   _lineWidth      = prefs.line_width        ?? 0.5;
+  _S.xMin         = prefs.frf_x_min        ?? 100;
+  _S.xMax         = prefs.frf_x_max        ?? 12000;
   _initPlots();
   _initResizer();
   _updateStopBtn();

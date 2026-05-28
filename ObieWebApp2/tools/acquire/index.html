@@ -189,13 +189,17 @@
       </div>
       <p class="pref-hint">Signal is zeroed after this time post-trigger.</p>
 
-      <div class="pref-section">Frequency Cutoff Filter</div>
+      <div class="pref-section">FRF Plot Range</div>
       <div class="pref-row">
-        <label for="inp-cutoff">Cutoff frequency</label>
-        <input id="inp-cutoff" type="number" value="10000" step="500" min="100" max="22000" style="max-width:80px">
+        <label for="inp-frf-x-min">Frequency min</label>
+        <input id="inp-frf-x-min" type="number" value="100" step="50" min="1" max="22000" style="max-width:80px">
         <span class="pref-unit">Hz</span>
       </div>
-      <p class="pref-hint">FRF is zeroed above this frequency.</p>
+      <div class="pref-row">
+        <label for="inp-frf-x-max">Frequency max</label>
+        <input id="inp-frf-x-max" type="number" value="12000" step="500" min="100" max="22000" style="max-width:80px">
+        <span class="pref-unit">Hz</span>
+      </div>
 
       <div class="pref-section">Calibration</div>
       <div class="pref-row">
@@ -298,7 +302,7 @@
   "settings": {
     "soundcard":   "Scarlett 2i2",
     "threshold":   0.05,
-    "cutoff_hz":   10000,
+    "frf_x_max":   12000,
     "ham_cal":     22.5,
     "mic_cal":     12.4,
     "pre_trig_s":  0.01,

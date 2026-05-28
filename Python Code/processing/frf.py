@@ -12,7 +12,7 @@ Usage:
     acc = FRFAccumulator(sample_rate=48000)
     for hit_data in hits:
         add_hit(acc, hit_data)
-    freqs, H_dB, coherence = compute_frf(acc)
+    freqs, H1, H2, H_dB, coherence = compute_frf(acc)
     reset_frf(acc)
 """
 
@@ -62,12 +62,14 @@ def add_hit(acc: FRFAccumulator, data: np.ndarray) -> None:
     acc.n_hits += 1
 
 
-def compute_frf(acc: FRFAccumulator) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def compute_frf(acc: FRFAccumulator) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Returns (freqs, H_dB, coherence) from the accumulated spectral densities.
+    Returns (freqs, H1, H2, H_dB, coherence) from the accumulated spectral densities.
 
     freqs:     frequency axis in Hz
-    H_dB:      FRF magnitude in dB  (20 * log10 |H1|)
+    H1:        H1 estimator (complex)
+    H2:        H2 estimator (complex)
+    H_dB:      H1 magnitude in dB  (20 * log10 |H1|)
     coherence: ordinary coherence 0–1
     """
     freqs = np.fft.rfftfreq(acc.n_samples, d=1.0 / acc.sample_rate)
@@ -87,7 +89,7 @@ def compute_frf(acc: FRFAccumulator) -> tuple[np.ndarray, np.ndarray, np.ndarray
     coh   = np.abs(acc.S_fp) ** 2 / np.where(denom > eps, denom, eps)
     coh   = np.clip(coh, 0.0, 1.0)
 
-    return freqs, H_dB, coh
+    return freqs, H, H2, H_dB, coh
 
 
 def reset_frf(acc: FRFAccumulator) -> None:

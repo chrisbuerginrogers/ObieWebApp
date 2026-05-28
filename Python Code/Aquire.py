@@ -53,7 +53,7 @@ with AudioStream(device_index=device_id, sample_rate=SAMPLE_RATE, channels=2, fm
                 data = wait_for_trigger(stream, threshold=THRESHOLD, pre_samples=PRE_SAMPLES, post_samples=POST_SAMPLES)
                 save_wav(make_wav_path(cfg, position=position, hit=hit), data, SAMPLE_RATE)
                 add_hit(acc, data)
-                freqs, H_dB, coherence = compute_frf(acc)
+                freqs, _, _, H_dB, coherence = compute_frf(acc)
                 update_capture_plot(capture_plot, data, hit=hit,
                                     freqs=freqs, H_dB=H_dB, coherence=coherence)
 

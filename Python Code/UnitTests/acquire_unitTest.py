@@ -44,11 +44,11 @@ for pos, files in sorted(positions.items()):
         data = data.astype(np.float32) if data.dtype != np.float32 else data
         add_hit(acc, data)
         print(f"  pos {pos:03d}  hit {len(files)}  {wav_path.name}")
-    freqs, H_dB, coh = compute_frf(acc)
+    freqs, _, _, H_dB, coh = compute_frf(acc)
     per_position[pos] = (freqs, H_dB, coh)
     merge_accumulator(acc_global, acc)
 
-freqs_g, H_dB_g, _ = compute_frf(acc_global)
+freqs_g, _, _, H_dB_g, _ = compute_frf(acc_global)
 avg_mag_dB = 20 * np.log10(np.maximum(
     acc_global.sum_H_mag / acc_global.n_hits, np.finfo(float).eps
 ))

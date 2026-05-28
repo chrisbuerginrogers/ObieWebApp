@@ -13,7 +13,6 @@ from trf_fileio import build_trf
 # ── Settings ──────────────────────────────────────────────────────────────────
 _sr             = 0
 _threshold      = 0.05
-_cutoff_hz      = 10000.0
 _pre_trig_s     = 0.01
 _post_trig_s    = 0.30
 _ham_time_cutoff_s = 0.30   # hammer signal zeroed past this time post-trigger
@@ -56,14 +55,13 @@ _LIVE_EVERY   = 6
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def apply_settings(thr_js, cutoff_js, pre_js, post_js, ham_time_cutoff_js,
+def apply_settings(thr_js, pre_js, post_js, ham_time_cutoff_js,
                    taps_js, npos_js, prefix_js, mic_cal_js, ham_cal_js, sr_js,
                    swap_js=False, mic_time_cutoff_js=None):
-    global _threshold, _cutoff_hz, _pre_trig_s, _post_trig_s
+    global _threshold, _pre_trig_s, _post_trig_s
     global _ham_time_cutoff_s, _mic_time_cutoff_s
     global _n_taps, _prefix, _mic_cal, _ham_cal, _sr, _swap_channels
     _threshold      = max(0.001, float(thr_js))
-    _cutoff_hz      = max(100.0, float(cutoff_js))
     _pre_trig_s        = max(0.001, float(pre_js))
     _post_trig_s       = max(0.05,  float(post_js))
     _ham_time_cutoff_s = max(0.01,  float(ham_time_cutoff_js))
@@ -149,15 +147,6 @@ def process_audio(left_js, right_js):
         _live_counter = 0
         _emit_live()
 
-
-def update_cutoff(cutoff_js):
-    """Update frequency cutoff; recomputes FRFs and refreshes Hammer FFT display."""
-    global _cutoff_hz
-    _cutoff_hz = max(100.0, float(cutoff_js))
-    for i in range(_n_positions):
-        _recompute_frf(i)
-    if _last_ham_win is not None:
-        _send_hammer_fft(_last_ham_win)
 
 
 
@@ -309,7 +298,6 @@ def _h1_from_st(st):
     eps  = np.finfo(float).eps
     # frf.py stores S_fp = F·conj(P) = ham·conj(mic); conj gives standard H1 = mic/ham
     H1   = np.conj(acc.S_fp) / np.where(acc.S_ff > eps, acc.S_ff, eps)
-    H1[freq > _cutoff_hz] = 0.0
     return H1, freq
 
 
@@ -358,8 +346,7 @@ def _send_hammer_fft(hammer):
     H    = rfft(hammer)
     freq = rfftfreq(len(hammer), d=1.0 / _sr)
     Hdb  = 20.0 * np.log10(np.abs(H) + 1e-12)
-    js.window.onHammerFFT(to_js(freq.tolist()), to_js(Hdb.tolist()),
-                          float(_cutoff_hz))
+    js.window.onHammerFFT(to_js(freq.tolist()), to_js(Hdb.tolist()))
 
 
 def _add_to_frf(pos, hammer, mic):
