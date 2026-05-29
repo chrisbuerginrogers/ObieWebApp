@@ -106,7 +106,13 @@ def load_wav(filename_js, data_js):
             data = (data.astype(np.float32) - 128.0) / 128.0
         else:
             data = data.astype(np.float32)
-        if data.ndim > 1:
+
+        # Compute per-channel input spectrograms before mixing down
+        stereo = data.ndim > 1
+        if stereo:
+            peak = np.max(np.abs(data))
+            l_norm = (data[:, 0] / peak if peak > 0 else data[:, 0]).astype(np.float64)
+            r_norm = (data[:, 1] / peak if peak > 0 else data[:, 1]).astype(np.float64)
             data = data.mean(axis=1)
         peak = np.max(np.abs(data))
         if peak > 0:
@@ -116,7 +122,11 @@ def load_wav(filename_js, data_js):
         name = str(filename_js).rsplit('/', 1)[-1].rsplit('\\', 1)[-1]
         info = f'✓ {name} · {len(data) / sr:.2f} s · {sr / 1000:.1f} kHz'
         js.window.onWavResult(to_js(data), _wav_sr, info)
-        _spectrogram(_wav, _wav_sr, 'onWavSpectrogramResult')
+        if stereo:
+            _spectrogram(l_norm, int(sr), 'onInLSpectrogramResult')
+            _spectrogram(r_norm, int(sr), 'onInRSpectrogramResult')
+        else:
+            _spectrogram(_wav, _wav_sr, 'onInLSpectrogramResult')
     except Exception as exc:
         js.window.onWavError(str(exc)[:120])
 
@@ -147,7 +157,8 @@ def convolve(gain_db_js):
             interleaved[0::2] = y[:, 0]
             interleaved[1::2] = y[:, 1]
             js.window.onConvolveResult(to_js(interleaved), _wav_sr, 2)
-            _spectrogram(y[:, 0], _wav_sr, 'onOutSpectrogramResult')
+            _spectrogram(y[:, 0], _wav_sr, 'onOutLSpectrogramResult')
+            _spectrogram(y[:, 1], _wav_sr, 'onOutRSpectrogramResult')
         else:
             y = convolve_it(_wav, _frf_freqs, H_l, _wav_sr)
             peak = np.max(np.abs(y))
@@ -155,7 +166,7 @@ def convolve(gain_db_js):
                 y = y / peak * 0.95
             y = np.clip(y, -1.0, 1.0).astype(np.float32)
             js.window.onConvolveResult(to_js(y), _wav_sr, 1)
-            _spectrogram(y, _wav_sr, 'onOutSpectrogramResult')
+            _spectrogram(y, _wav_sr, 'onOutLSpectrogramResult')
     except Exception as exc:
         js.window.onConvolveError(str(exc)[:120])
         raise

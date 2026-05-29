@@ -13,6 +13,7 @@
 let wavSamples = null, wavSR = 44100;
 let outSamples = null, outSR = 44100, outChannels = 1;
 let frfLLoaded = false, frfRLoaded = false;
+let _frfData = { l: null, r: null };
 
 const DEFAULT_WAV_URL = '../../sample-data/1-Tchaikovsky-short.wav';
 
@@ -24,20 +25,22 @@ const _wl = (title, xl, yl, extra) => ({
   ...plotLayout(title, xl, yl, extra), paper_bgcolor: '#fff', plot_bgcolor: '#fff'
 });
 
-Plotly.newPlot('frf-plot', [], _wl('FRF · Magnitude', 'Frequency (Hz)', 'dB', { xaxis: { type: 'log' } }), _pcfg);
-Plotly.newPlot('wav-plot', [], _wl('Input · Spectrogram',  'Time (s)', 'Frequency (Hz)'), _pcfg);
-Plotly.newPlot('out-plot', [], _wl('Convolved Output',     'Time (s)', 'Amplitude'),      _pcfg);
-Plotly.newPlot('spec-plot', [], _wl('Output · Spectrogram', 'Time (s)', 'Frequency (Hz)'), _pcfg);
+Plotly.newPlot('frf-plot',  [], _wl('FRF · Magnitude',       'Frequency (Hz)', 'dB', { xaxis: { type: 'log' } }), _pcfg);
+Plotly.newPlot('wav-plot',  [], _wl('Input · Spectrogram',   'Time (s)', 'Frequency (Hz)'), _pcfg);
+Plotly.newPlot('out-plot',  [], _wl('Convolved Output',       'Time (s)', 'Amplitude'),      _pcfg);
+Plotly.newPlot('spec-plot', [], _wl('Output · Spectrogram',  'Time (s)', 'Frequency (Hz)'), _pcfg);
 
 // ── FRF loading ───────────────────────────────────────────────────────
 function loadFRF(ch, input) {
   const file = input.files[0]; if (!file) return;
-  setSt(`frf-${ch.toLowerCase()}-status`, 'reading…');
+  const c = ch.toLowerCase();
+  document.getElementById(`frf-${c}-btn-text`).textContent = file.name;
+  setSt(`frf-${c}-status`, 'reading…');
   const reader = new FileReader();
-  reader.onerror = () => setSt(`frf-${ch.toLowerCase()}-status`, 'read error', 'err');
+  reader.onerror = () => setSt(`frf-${c}-status`, 'read error', 'err');
   reader.onload  = e => {
     if (!window.pyLoadFRF) {
-      setSt(`frf-${ch.toLowerCase()}-status`, 'Python not ready — try again', 'err'); return;
+      setSt(`frf-${c}-status`, 'Python not ready — try again', 'err'); return;
     }
     window.pyLoadFRF(ch, file.name, new Uint8Array(e.target.result));
   };
@@ -47,8 +50,9 @@ function loadFRF(ch, input) {
 window.onFRFResult = function(ch, freqs, dbs, info) {
   const c = String(ch).toLowerCase();
   setSt(`frf-${c}-status`, info, 'ok');
-  if (c === 'l') { frfLLoaded = true; plotFRF(Array.from(freqs), Array.from(dbs)); }
-  else             frfRLoaded = true;
+  _frfData[c] = { freqs: Array.from(freqs), dbs: Array.from(dbs) };
+  if (c === 'l') frfLLoaded = true; else frfRLoaded = true;
+  plotFRF();
   checkReady();
 };
 window.onFRFError = function(ch, msg) {
@@ -64,6 +68,7 @@ async function loadDefaultWAV() {
   try {
     const resp = await fetch(DEFAULT_WAV_URL);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    _wavFileName = '1-Tchaikovsky-short.wav';
     window.pyLoadWAV('1-Tchaikovsky-short.wav', new Uint8Array(await resp.arrayBuffer()));
   } catch (e) {
     setSt('wav-status', 'default fetch failed — load manually (' + e.message + ')');
@@ -72,6 +77,7 @@ async function loadDefaultWAV() {
 
 async function loadWAV(input) {
   const file = input.files[0]; if (!file) return;
+  _wavFileName = file.name;
   setSt('wav-status', 'loading…');
   try {
     window.pyLoadWAV(file.name, new Uint8Array(await file.arrayBuffer()));
@@ -94,76 +100,110 @@ window.onWavError = function(msg) {
 };
 
 // ── Spectrogram state ─────────────────────────────────────────────────
-let _specDb = true;   // true = dB (as received from Python), false = linear amplitude
-let _wavSpecCache = null;   // { times, freqs, zDb[][], nFreqs, nTimes }
-let _outSpecCache = null;
+let _specLogFreq   = false;
+let _botShowL      = true;   // output spectrogram: L or R channel
+let _wavFileName   = '';
+let _inLSpecCache  = null;
+let _outLSpecCache = null, _outRSpecCache = null;
+
+function _unpackSpec(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  const times = Array.from(times_js), freqs = Array.from(freqs_js);
+  const arr = Array.from(flatZ_js);
+  const nF = +nFreqs, nT = +nTimes;
+  const zDb = [];
+  for (let i = 0; i < nF; i++) zDb.push(arr.slice(i * nT, (i + 1) * nT));
+  return { times, freqs, zDb };
+}
 
 function _renderSpectrogram(divId, cache, title) {
   if (!cache) return;
   const { times, freqs, zDb } = cache;
-
-  let z, colorbarTitle;
-  if (_specDb) {
-    z = zDb;
-    colorbarTitle = 'dB';
-  } else {
-    z = zDb.map(row => row.map(v => Math.pow(10, v / 20)));
-    colorbarTitle = 'Amplitude';
-  }
-
   Plotly.react(divId, [{
-    x: times, y: freqs, z,
-    type: 'heatmap',
-    colorscale: 'Plasma',
-    showscale: true,
-    colorbar: { title: colorbarTitle, titleside: 'right', thickness: 10,
+    x: times, y: freqs, z: zDb,
+    type: 'heatmap', colorscale: 'Plasma', showscale: true,
+    colorbar: { title: 'dB', titleside: 'right', thickness: 10,
                 len: 0.9, tickfont: { size: 9 } },
-    zsmooth: 'fast',
-    hoverinfo: 'skip',
+    zsmooth: 'fast', hoverinfo: 'skip',
   }], { ...plotLayout(title, 'Time (s)', 'Frequency (Hz)', {
     margin: { l: 50, r: 52, t: 28, b: 38 },
+    yaxis: { type: _specLogFreq ? 'log' : 'linear' },
   }), paper_bgcolor: '#fff', plot_bgcolor: '#fff' }, _pcfg);
 }
 
-window.onWavSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
-  const times = Array.from(times_js), freqs = Array.from(freqs_js);
-  const arr   = Array.from(flatZ_js);
-  const nF = +nFreqs, nT = +nTimes;
-  const zDb = [];
-  for (let i = 0; i < nF; i++) zDb.push(arr.slice(i * nT, (i + 1) * nT));
-  _wavSpecCache = { times, freqs, zDb };
-  _renderSpectrogram('wav-plot', _wavSpecCache, 'Input · Spectrogram');
+function _renderTopSpec() {
+  _renderSpectrogram('wav-plot', _inLSpecCache, 'Input · ' + _wavFileName);
+}
+function _renderBotSpec() {
+  _renderSpectrogram('spec-plot',
+    _botShowL ? _outLSpecCache : _outRSpecCache,
+    _botShowL ? 'Output · L Channel' : 'Output · R Channel');
+}
+
+// ── Input spectrogram callbacks (from Python load_wav) ────────────────
+window.onWavSpectrogramResult = function() {};
+window.onInRSpectrogramResult = function() {};  // input is always mono
+
+window.onInLSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  _inLSpecCache = _unpackSpec(times_js, freqs_js, flatZ_js, nFreqs, nTimes);
+  document.getElementById('in-spec-label').textContent = 'Input · ' + _wavFileName;
+  _renderTopSpec();
 };
-window.onOutSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
-  const times = Array.from(times_js), freqs = Array.from(freqs_js);
-  const arr   = Array.from(flatZ_js);
-  const nF = +nFreqs, nT = +nTimes;
-  const zDb = [];
-  for (let i = 0; i < nF; i++) zDb.push(arr.slice(i * nT, (i + 1) * nT));
-  _outSpecCache = { times, freqs, zDb };
-  _renderSpectrogram('spec-plot', _outSpecCache, 'Output · Spectrogram');
+
+// ── Output spectrogram callbacks (from Python convolve) ───────────────
+window.onOutLSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  _outLSpecCache = _unpackSpec(times_js, freqs_js, flatZ_js, nFreqs, nTimes);
+  _outRSpecCache = null;
+  _botShowL = true;
+  document.getElementById('out-spec-label').textContent = 'Output · L Channel';
+  document.getElementById('out-spec-btn').style.display = 'none';
+  _renderBotSpec();
+};
+window.onOutRSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  _outRSpecCache = _unpackSpec(times_js, freqs_js, flatZ_js, nFreqs, nTimes);
+  document.getElementById('out-spec-btn').style.display = '';
+  if (!_botShowL) _renderBotSpec();
+};
+
+window.onOutSpectrogramResult = function() {};  // no longer used
+
+// ── Toggle handlers ───────────────────────────────────────────────────
+window.ciToggleBotSpec = function() {
+  _botShowL = !_botShowL;
+  document.getElementById('out-spec-label').textContent =
+    _botShowL ? 'Output · L Channel' : 'Output · R Channel';
+  document.getElementById('out-spec-btn').textContent =
+    _botShowL ? 'Show R ▶' : '◀ Show L';
+  _renderBotSpec();
 };
 
 window.ciToggleSpecScale = function() {
-  _specDb = !_specDb;
+  _specLogFreq = !_specLogFreq;
   const btn = document.getElementById('spec-scale-btn');
   if (btn) {
-    btn.textContent = _specDb ? 'Spec: dB' : 'Spec: Lin';
-    btn.classList.toggle('active', _specDb);
+    btn.textContent = _specLogFreq ? 'Freq: Log' : 'Freq: Lin';
+    btn.classList.toggle('active', _specLogFreq);
   }
-  _renderSpectrogram('wav-plot', _wavSpecCache,  'Input · Spectrogram');
-  _renderSpectrogram('spec-plot', _outSpecCache, 'Output · Spectrogram');
+  _renderTopSpec();
+  _renderBotSpec();
 };
 
-function plotFRF(freqs, dbs) {
-  const fin  = dbs.filter(isFinite);
-  const yMax = Math.max(6,  Math.ceil( (Math.max(...fin) + 3) / 6) * 6);
-  const yMin = Math.min(-6, Math.floor((Math.min(...fin) - 3) / 6) * 6);
-  Plotly.react('frf-plot', [{
+function plotFRF() {
+  const colors = { l: COL.frf, r: '#1565C0' };
+  const names  = { l: 'Left',  r: 'Right'  };
+  const loaded = Object.entries(_frfData).filter(([, d]) => d);
+  const traces = loaded.map(([ch, { freqs, dbs }]) => ({
     x: freqs, y: dbs, type: 'scatter', mode: 'lines',
-    line: { color: COL.frf, width: 1.5 }, showlegend: false,
-  }], _wl('FRF · Magnitude', 'Frequency (Hz)', 'dB',
-    { xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] } }), _pcfg);
+    name: names[ch], line: { color: colors[ch], width: 1.5 },
+    showlegend: loaded.length > 1,
+  }));
+  const allDbs = loaded.flatMap(([, { dbs }]) => dbs.filter(isFinite));
+  const yMax = allDbs.length ? Math.max(6,  Math.ceil( (Math.max(...allDbs) + 3) / 6) * 6) : 6;
+  const yMin = allDbs.length ? Math.min(-6, Math.floor((Math.min(...allDbs) - 3) / 6) * 6) : -6;
+  Plotly.react('frf-plot', traces, _wl('FRF · Magnitude', 'Frequency (Hz)', 'dB', {
+    xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] },
+    showlegend: loaded.length > 1,
+    legend: { x: 0.98, xanchor: 'right', y: 0.98, font: { size: 9 } },
+  }), _pcfg);
 }
 
 // stride: 1 = mono, 2 = interleaved stereo (plots left channel)
