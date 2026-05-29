@@ -305,8 +305,11 @@
     </div>
     <div class="modal-body">
       <p style="font-size:11px;color:var(--muted);margin-bottom:10px">
-        A template is a JSON file containing settings for your measurement setup
-        (soundcard, threshold, cutoff, calibration factors). Browse to import one.
+        Templates store your measurement setup (soundcard, threshold, calibration
+        factors, etc.). When a Data Folder is set, templates load automatically from
+        <code>ObieAppSettings/Templates/</code> inside it. Use Browse to import a
+        standalone file, or Save as Template to write the current settings back to
+        the folder.
       </p>
       <div id="tpl-list" class="tpl-list">
         <div style="font-size:11px;color:var(--muted)">No templates loaded.</div>
@@ -333,7 +336,8 @@
 
       <div class="save-row">
         <button class="btn" onclick="acqBrowseTemplate()">Browse…</button>
-        <button class="btn primary" onclick="acqApplyTemplate()">Apply Template</button>
+        <button class="btn primary" onclick="acqApplyTemplate()">Apply</button>
+        <button class="btn" onclick="acqSaveAsTemplate()">Save as Template</button>
         <button class="btn" onclick="acqCloseTemplate()">Cancel</button>
       </div>
     </div>

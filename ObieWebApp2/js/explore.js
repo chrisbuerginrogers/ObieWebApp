@@ -72,7 +72,8 @@
   let _nextId    = 0;
   let _palette   = PALETTES.default;
   let _templates = [];
-  let _dataDir   = null;   // FileSystemDirectoryHandle
+  let _dataDir              = null;  // FileSystemDirectoryHandle
+  let _exploreSettingsHandle = null;  // ObieAppSettings/ dir
   let _dirFiles  = [];     // [{name, ext, path, handle}] — scanned from data folder
   let _searchResults  = []; // current filtered list
   let _pendingPaths   = {}; // filename → full relative path, populated just before pyExploreLoadFile
@@ -406,6 +407,7 @@
         if (_SCAN_EXTS.has(ext))
           out.push({ name, ext, path: relPath ? relPath + '/' + name : name, handle: h });
       } else if (h.kind === 'directory') {
+        if (name === 'ObieAppSettings') continue;
         const sub = await _scanDir(h, relPath ? relPath + '/' + name : name);
         for (const f of sub) out.push(f);
       }
@@ -418,6 +420,39 @@
     if (st) st.textContent = 'Scanning folder…';
     _dataDir  = dir;
     _dirFiles = await _scanDir(dir, '');
+
+    // Load settings and templates from ObieAppSettings/
+    try {
+      _exploreSettingsHandle = await dir.getDirectoryHandle('ObieAppSettings', { create: true });
+
+      // Load explore prefs
+      try {
+        const file  = await (await _exploreSettingsHandle.getFileHandle('explore.json')).getFile();
+        const prefs = JSON.parse(await file.text());
+        if (prefs.lineWidth != null) _S.lineWidth = prefs.lineWidth;
+        if (prefs.yDbRange  != null) _S.yDbRange  = prefs.yDbRange;
+        if (prefs.xMin      != null) _S.xMin      = prefs.xMin;
+        if (prefs.xMax      != null) _S.xMax      = prefs.xMax;
+        _syncControls();
+        render();
+      } catch (_) {}
+
+      // Load templates from ObieAppSettings/Templates/
+      try {
+        const tplDir = await _exploreSettingsHandle.getDirectoryHandle('Templates', { create: true });
+        for await (const [name, h] of tplDir.entries()) {
+          if (h.kind !== 'file' || !name.toLowerCase().endsWith('.json')) continue;
+          try {
+            const tpl = JSON.parse(await (await h.getFile()).text());
+            _templates.push(...(Array.isArray(tpl) ? tpl : [tpl]));
+          } catch (_) {}
+        }
+        const menu = $('new-test-menu');
+        if (menu) menu.innerHTML = _templates.map((t, i) =>
+          `<button class="menu-item" onclick="expPickTemplate(${i})">${_esc(t.name)}</button>`
+        ).join('');
+      } catch (_) {}
+    } catch (_) {}
 
     const nDirs = await _countTopDirs(dir);
     const btn = $('data-folder-btn');
@@ -867,6 +902,16 @@
       if (prefs.yDbRange  != null) _S.yDbRange  = prefs.yDbRange;
       if (prefs.xMin      != null) _S.xMin      = prefs.xMin;
       if (prefs.xMax      != null) _S.xMax      = prefs.xMax;
+      if (_exploreSettingsHandle) {
+        (async () => {
+          try {
+            const fh = await _exploreSettingsHandle.getFileHandle('explore.json', { create: true });
+            const w  = await fh.createWritable();
+            await w.write(JSON.stringify(prefs, null, 2));
+            await w.close();
+          } catch (_) {}
+        })();
+      }
     } catch(_) {}
     _syncControls();
     render();

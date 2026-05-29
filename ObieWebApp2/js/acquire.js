@@ -496,12 +496,12 @@ window.acqClosePrefs = function() {
   document.getElementById('prefs-modal')?.classList.remove('open');
 };
 
-function _populatePrefsForm() {
+function _populatePrefsForm(overridePrefs) {
   const set = (id, val) => {
     const el = document.getElementById(id);
     if (el && val != null) el.value = val;
   };
-  const prefs = _loadPrefs();
+  const prefs = overridePrefs || _loadPrefs();
   set('inp-threshold',   prefs.threshold);
   set('inp-thr-disp',    Number(prefs.threshold ?? 0.05).toFixed(3));
   set('inp-frf-x-min',   prefs.frf_x_min);
@@ -568,6 +568,7 @@ window.acqSavePrefs = function() {
     line_width:    parseFloat(g('inp-line-width'))  || 0.5,
   };
   localStorage.setItem('obieAcquire_prefs', JSON.stringify(prefs));
+  _saveAcqSettings();
   _pushSettingsFromPrefs(prefs);
   _updateSoundcardDisplay();
   const st = document.getElementById('prefs-save-msg');
@@ -730,15 +731,41 @@ window.acqApplyTemplate = function() {
   document.getElementById('prefs-modal')?.classList.add('open');
 };
 
+window.acqSaveAsTemplate = async function() {
+  if (!_templatesHandle) {
+    alert('Set a Data Folder first — templates are saved to ObieAppSettings/Templates/ inside it.');
+    return;
+  }
+  const name = prompt('Template name:');
+  if (!name?.trim()) return;
+  const prefs = _loadPrefs();
+  const tpl = {
+    name:        name.trim(),
+    description: `${prefs.instrument || ''}  ${new Date().toISOString().slice(0, 10)}`.trim(),
+    settings:    prefs,
+  };
+  const safeName = name.trim().replace(/[\\/:*?"<>|]/g, '_') + '.json';
+  try {
+    const fh = await _templatesHandle.getFileHandle(safeName, { create: true });
+    const w  = await fh.createWritable();
+    await w.write(JSON.stringify(tpl, null, 2));
+    await w.close();
+    _templates.push(tpl);
+    _renderTemplateList();
+  } catch (e) { alert('Failed to save template: ' + e.message); }
+};
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // Data folder management (File System Access API)
 // ════════════════════════════════════════════════════════════════════════════
 
 const HAS_FS = typeof window.showDirectoryPicker === 'function';
-let _rawHandle = null;
-let _trfHandle = null;
-let _runName   = '';
+let _rawHandle       = null;
+let _trfHandle       = null;
+let _runName         = '';
+let _settingsHandle  = null;  // ObieAppSettings/ dir inside the data folder
+let _templatesHandle = null;  // ObieAppSettings/Templates/ dir
 
 window.acqSetDataFolder = async function() {
   if (!HAS_FS) {
@@ -772,6 +799,22 @@ window.acqSetDataFolder = async function() {
   _rawHandle = await runHandle.getDirectoryHandle('raw', { create: true });
   _trfHandle = await runHandle.getDirectoryHandle('TRF', { create: true });
 
+  // ObieAppSettings — shared settings + templates folder
+  _settingsHandle  = await dirHandle.getDirectoryHandle('ObieAppSettings', { create: true });
+  _templatesHandle = await _settingsHandle.getDirectoryHandle('Templates',  { create: true });
+
+  // Load saved prefs from ObieAppSettings/acquire.json
+  try {
+    const file  = await (await _settingsHandle.getFileHandle('acquire.json')).getFile();
+    const prefs = JSON.parse(await file.text());
+    _populatePrefsForm(prefs);
+    _pushSettingsFromPrefs(prefs);
+  } catch (_) {}
+
+  // Load all templates from ObieAppSettings/Templates/
+  _templates = [];
+  await _loadTemplatesFromFolder(_templatesHandle);
+
   const btn = document.getElementById('data-folder-btn');
   if (btn) btn.textContent = '📁 ' + dirHandle.name;
   const ind = document.getElementById('folder-name-ind');
@@ -785,6 +828,30 @@ async function _writeFile(folderHandle, filename, b64) {
   const fh = await folderHandle.getFileHandle(filename, { create: true });
   const w  = await fh.createWritable();
   await w.write(bytes); await w.close();
+}
+
+async function _saveAcqSettings() {
+  if (!_settingsHandle) return;
+  try {
+    const json = JSON.stringify(_loadPrefs(), null, 2);
+    const fh   = await _settingsHandle.getFileHandle('acquire.json', { create: true });
+    const w    = await fh.createWritable();
+    await w.write(json);
+    await w.close();
+  } catch (e) { console.warn('_saveAcqSettings:', e); }
+}
+
+async function _loadTemplatesFromFolder(dir) {
+  try {
+    for await (const [name, h] of dir.entries()) {
+      if (h.kind !== 'file' || !name.toLowerCase().endsWith('.json')) continue;
+      try {
+        const tpl = JSON.parse(await (await h.getFile()).text());
+        _templates.push(...(Array.isArray(tpl) ? tpl : [tpl]));
+      } catch (_) {}
+    }
+  } catch (_) {}
+  _renderTemplateList();
 }
 
 
