@@ -1,0 +1,27 @@
+{
+  "id": "bark",
+  "name": "Bark Scale",
+  "description": "Psychoacoustic critical bands from 200–9500 Hz (Bark bands 3–22)",
+  "bands": [
+    { "label": "Bark 3",  "start": 200,  "end": 300  },
+    { "label": "Bark 4",  "start": 300,  "end": 400  },
+    { "label": "Bark 5",  "start": 400,  "end": 510  },
+    { "label": "Bark 6",  "start": 510,  "end": 630  },
+    { "label": "Bark 7",  "start": 630,  "end": 770  },
+    { "label": "Bark 8",  "start": 770,  "end": 920  },
+    { "label": "Bark 9",  "start": 920,  "end": 1080 },
+    { "label": "Bark 10", "start": 1080, "end": 1270 },
+    { "label": "Bark 11", "start": 1270, "end": 1480 },
+    { "label": "Bark 12", "start": 1480, "end": 1720 },
+    { "label": "Bark 13", "start": 1720, "end": 2000 },
+    { "label": "Bark 14", "start": 2000, "end": 2320 },
+    { "label": "Bark 15", "start": 2320, "end": 2700 },
+    { "label": "Bark 16", "start": 2700, "end": 3150 },
+    { "label": "Bark 17", "start": 3150, "end": 3700 },
+    { "label": "Bark 18", "start": 3700, "end": 4400 },
+    { "label": "Bark 19", "start": 4400, "end": 5300 },
+    { "label": "Bark 20", "start": 5300, "end": 6400 },
+    { "label": "Bark 21", "start": 6400, "end": 7700 },
+    { "label": "Bark 22", "start": 7700, "end": 9500 }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "vln_5band",
+  "name": "Violin 5-Band",
+  "description": "JC 5-band violin filter (200–7000 Hz)",
+  "bands": [
+    { "label": "Low body",      "start": 200,  "end": 780  },
+    { "label": "Mid body",      "start": 780,  "end": 1740 },
+    { "label": "Bridge region", "start": 1740, "end": 3000 },
+    { "label": "Bridge hill",   "start": 3000, "end": 5200 },
+    { "label": "High",          "start": 5200, "end": 7000 }
+  ]
+}
