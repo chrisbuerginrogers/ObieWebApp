@@ -19,14 +19,15 @@ const DEFAULT_WAV_URL = '../../sample-data/1-Tchaikovsky-short.wav';
 const player = new AudioPlayer({ wav: 'play-wav-btn', out: 'play-btn' });
 
 // ── Plot initialisation ───────────────────────────────────────────────
-Plotly.newPlot('frf-plot', [],
-  plotLayout('FRF · Magnitude', 'Frequency (Hz)', 'dB', { xaxis: { type: 'log' } }), pcfg);
-Plotly.newPlot('wav-plot', [],
-  plotLayout('Input · Spectrogram',  'Time (s)', 'Frequency (Hz)'), pcfg);
-Plotly.newPlot('out-plot', [],
-  plotLayout('Convolved Output',     'Time (s)', 'Amplitude'),      pcfg);
-Plotly.newPlot('spec-plot', [],
-  plotLayout('Output · Spectrogram', 'Time (s)', 'Frequency (Hz)'), pcfg);
+const _pcfg = { ...pcfg, toImageButtonOptions: { format: 'png', scale: 2, filename: 'convolve' } };
+const _wl = (title, xl, yl, extra) => ({
+  ...plotLayout(title, xl, yl, extra), paper_bgcolor: '#fff', plot_bgcolor: '#fff'
+});
+
+Plotly.newPlot('frf-plot', [], _wl('FRF · Magnitude', 'Frequency (Hz)', 'dB', { xaxis: { type: 'log' } }), _pcfg);
+Plotly.newPlot('wav-plot', [], _wl('Input · Spectrogram',  'Time (s)', 'Frequency (Hz)'), _pcfg);
+Plotly.newPlot('out-plot', [], _wl('Convolved Output',     'Time (s)', 'Amplitude'),      _pcfg);
+Plotly.newPlot('spec-plot', [], _wl('Output · Spectrogram', 'Time (s)', 'Frequency (Hz)'), _pcfg);
 
 // ── FRF loading ───────────────────────────────────────────────────────
 function loadFRF(ch, input) {
@@ -92,31 +93,66 @@ window.onWavError = function(msg) {
   checkReady();
 };
 
-// ── Plots ─────────────────────────────────────────────────────────────
-function plotSpectrogram(divId, times, freqs, flatZ, nFreqs, nTimes, title) {
-  const arr = Array.from(flatZ);
-  const z   = [];
-  for (let i = 0; i < nFreqs; i++)
-    z.push(arr.slice(i * nTimes, (i + 1) * nTimes));
+// ── Spectrogram state ─────────────────────────────────────────────────
+let _specDb = true;   // true = dB (as received from Python), false = linear amplitude
+let _wavSpecCache = null;   // { times, freqs, zDb[][], nFreqs, nTimes }
+let _outSpecCache = null;
+
+function _renderSpectrogram(divId, cache, title) {
+  if (!cache) return;
+  const { times, freqs, zDb } = cache;
+
+  let z, colorbarTitle;
+  if (_specDb) {
+    z = zDb;
+    colorbarTitle = 'dB';
+  } else {
+    z = zDb.map(row => row.map(v => Math.pow(10, v / 20)));
+    colorbarTitle = 'Amplitude';
+  }
+
   Plotly.react(divId, [{
     x: times, y: freqs, z,
     type: 'heatmap',
     colorscale: 'Plasma',
-    showscale: false,
+    showscale: true,
+    colorbar: { title: colorbarTitle, titleside: 'right', thickness: 10,
+                len: 0.9, tickfont: { size: 9 } },
     zsmooth: 'fast',
     hoverinfo: 'skip',
-  }], plotLayout(title, 'Time (s)', 'Frequency (Hz)', {
-    margin: { l: 50, r: 12, t: 28, b: 38 },
-  }), pcfg);
+  }], { ...plotLayout(title, 'Time (s)', 'Frequency (Hz)', {
+    margin: { l: 50, r: 52, t: 28, b: 38 },
+  }), paper_bgcolor: '#fff', plot_bgcolor: '#fff' }, _pcfg);
 }
 
-window.onWavSpectrogramResult = function(times, freqs, flatZ, nFreqs, nTimes) {
-  plotSpectrogram('wav-plot', Array.from(times), Array.from(freqs),
-                  flatZ, +nFreqs, +nTimes, 'Input · Spectrogram');
+window.onWavSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  const times = Array.from(times_js), freqs = Array.from(freqs_js);
+  const arr   = Array.from(flatZ_js);
+  const nF = +nFreqs, nT = +nTimes;
+  const zDb = [];
+  for (let i = 0; i < nF; i++) zDb.push(arr.slice(i * nT, (i + 1) * nT));
+  _wavSpecCache = { times, freqs, zDb };
+  _renderSpectrogram('wav-plot', _wavSpecCache, 'Input · Spectrogram');
 };
-window.onOutSpectrogramResult = function(times, freqs, flatZ, nFreqs, nTimes) {
-  plotSpectrogram('spec-plot', Array.from(times), Array.from(freqs),
-                  flatZ, +nFreqs, +nTimes, 'Output · Spectrogram');
+window.onOutSpectrogramResult = function(times_js, freqs_js, flatZ_js, nFreqs, nTimes) {
+  const times = Array.from(times_js), freqs = Array.from(freqs_js);
+  const arr   = Array.from(flatZ_js);
+  const nF = +nFreqs, nT = +nTimes;
+  const zDb = [];
+  for (let i = 0; i < nF; i++) zDb.push(arr.slice(i * nT, (i + 1) * nT));
+  _outSpecCache = { times, freqs, zDb };
+  _renderSpectrogram('spec-plot', _outSpecCache, 'Output · Spectrogram');
+};
+
+window.ciToggleSpecScale = function() {
+  _specDb = !_specDb;
+  const btn = document.getElementById('spec-scale-btn');
+  if (btn) {
+    btn.textContent = _specDb ? 'Spec: dB' : 'Spec: Lin';
+    btn.classList.toggle('active', _specDb);
+  }
+  _renderSpectrogram('wav-plot', _wavSpecCache,  'Input · Spectrogram');
+  _renderSpectrogram('spec-plot', _outSpecCache, 'Output · Spectrogram');
 };
 
 function plotFRF(freqs, dbs) {
@@ -126,8 +162,8 @@ function plotFRF(freqs, dbs) {
   Plotly.react('frf-plot', [{
     x: freqs, y: dbs, type: 'scatter', mode: 'lines',
     line: { color: COL.frf, width: 1.5 }, showlegend: false,
-  }], plotLayout('FRF · Magnitude', 'Frequency (Hz)', 'dB',
-    { xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] } }), pcfg);
+  }], _wl('FRF · Magnitude', 'Frequency (Hz)', 'dB',
+    { xaxis: { type: 'log' }, yaxis: { range: [yMin, yMax] } }), _pcfg);
 }
 
 // stride: 1 = mono, 2 = interleaved stereo (plots left channel)
@@ -139,7 +175,7 @@ function plotWaveform(divId, samples, sr, color, title, stride = 1) {
   Plotly.react(divId, [{
     x, y, type: 'scatter', mode: 'lines',
     line: { color, width: 1 }, showlegend: false,
-  }], plotLayout(title, 'Time (s)', 'Amplitude'), pcfg);
+  }], _wl(title, 'Time (s)', 'Amplitude'), _pcfg);
 }
 
 // ── Convolution ───────────────────────────────────────────────────────
@@ -274,7 +310,52 @@ window.ciSetDataFolder = async function() {
   }
 };
 
+// ── Sidebar resize (matches Acquire pattern) ──────────────────────────
+function _initResizer() {
+  const resizer = document.getElementById('ci-resizer');
+  const sidebar = document.querySelector('.ci-sidebar');
+  if (!resizer || !sidebar) return;
+  let dragging = false, startX = 0, startW = 0;
+  resizer.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = sidebar.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(160, Math.min(360, startW + (e.clientX - startX)));
+    sidebar.style.width = w + 'px';
+    ['frf-plot','wav-plot','out-plot','spec-plot'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) Plotly.Plots.resize(el);
+    });
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ── Gain slider live display ──────────────────────────────────────────
+function _initGainSlider() {
+  const sl = document.getElementById('gain-sl');
+  const disp = document.getElementById('gain-disp');
+  if (!sl || !disp) return;
+  const update = () => {
+    const v = parseInt(sl.value, 10);
+    disp.textContent = (v >= 0 ? '+' : '') + v + ' dB';
+  };
+  sl.addEventListener('input', update);
+  update();
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   enumerateOutputDevices();
+  _initResizer();
+  _initGainSlider();
 });

@@ -29,113 +29,140 @@
   <div class="load-sub">First load may take 15–30 s</div>
 </div>
 
-<header class="obie-header">
-  <a class="brand" href="../../index.html">
-    <div class="logo-icon">🎻</div>
-    <h1>ObieWebApp 2</h1>
-  </a>
-  <span class="crumb">· Convolve It</span>
-  <div class="gap"></div>
-  <button id="ci-folder-btn" class="btn" onclick="ciSetDataFolder()">📁 Data Folder</button>
-  <a class="btn" href="../../index.html">← All tools</a>
-</header>
+<div class="ci-page">
 
-<main class="ci-layout">
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <header class="obie-header">
+    <a class="brand" href="../../index.html">
+      <div class="logo-icon">🎻</div>
+      <h1>ObieWebApp 2</h1>
+    </a>
+    <span class="crumb">· Convolve It</span>
+    <div class="gap"></div>
+    <a class="btn" href="../../index.html" style="font-size:0.75rem;padding:3px 9px">← All tools</a>
+  </header>
 
-  <aside class="ci-sidebar">
-
-    <div class="card">
-      <div class="section-title">📂 FRF Files</div>
-      <label class="file-btn">
-        Left / Mono FRF (TRF, AvC, AvR, CSV)
-        <input type="file" id="frf-l-input" accept=".trf,.trv,.avc,.avr,.csv"
-               onchange="loadFRF('L', this)">
-      </label>
-      <div class="file-status" id="frf-l-status">no file loaded</div>
-      <label class="file-btn" style="margin-top:6px">
-        Right FRF — optional (enables stereo)
-        <input type="file" id="frf-r-input" accept=".trf,.trv,.avc,.avr,.csv"
-               onchange="loadFRF('R', this)">
-      </label>
-      <div class="file-status" id="frf-r-status">–</div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">🎵 Signal (WAV)</div>
-      <label class="file-btn">
-        Load WAV
-        <input type="file" id="wav-input" accept=".wav,audio/wav,audio/*"
-               onchange="loadWAV(this)">
-      </label>
-      <div class="file-status" id="wav-status">no file loaded</div>
-      <button id="play-wav-btn" class="btn full" data-label="WAV"
-              onclick="togglePlayWAV()" style="display:none;margin-top:8px">
-        ▶ Play WAV
-      </button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">⚙️ Settings</div>
-
-      <div class="ctrl-row gain-ctrl">
-        <div class="gain-header">
-          <label>Output gain</label>
-          <span class="range-val" id="gain-disp">+0 dB</span>
-        </div>
-        <input type="range" id="gain-sl" min="-24" max="24" value="0" step="1">
-      </div>
-
-      <div class="ctrl-row">
-        <label>Output device</label>
-        <select id="out-device-sel" style="flex:1;font-size:0.85rem">
-          <option value="">Default output</option>
-        </select>
-      </div>
-    </div>
-
-    <button id="conv-btn" class="btn primary full"
-            onclick="runConvolution()" disabled>⚡ Convolve</button>
-    <div class="prog-msg" id="prog-msg"></div>
-
-    <div class="card" id="result-card" style="display:none">
-      <div class="section-title">▶ Result</div>
-      <div class="fileinfo" id="out-info"></div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button id="play-btn" class="btn primary" data-label="Result"
-                onclick="togglePlay()" style="flex:1">▶ Play Result</button>
-        <button id="save-btn" class="btn" onclick="saveWAV()">💾 Save</button>
-      </div>
-    </div>
-
-    <div class="card info-card">
-      <div class="section-title">ℹ Info</div>
-      <p>Y(f) = H(f) · X(f)</p>
-      <p>Log-space FRF interpolation</p>
-      <p>Hann-windowed FFT</p>
-    </div>
-
-  </aside>
-
-  <div class="ci-plots">
-    <div class="plot-wrap">
-      <div class="plot-label">FRF · Magnitude (dB)</div>
-      <div id="frf-plot" class="plot-div"></div>
-    </div>
-    <div class="plot-wrap">
-      <div class="plot-label">Input · Spectrogram</div>
-      <div id="wav-plot" class="plot-div"></div>
-    </div>
-    <div class="plot-wrap">
-      <div class="plot-label">Output · Convolved Waveform</div>
-      <div id="out-plot" class="plot-div"></div>
-    </div>
-    <div class="plot-wrap">
-      <div class="plot-label">Output · Spectrogram</div>
-      <div id="spec-plot" class="plot-div"></div>
-    </div>
+  <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+  <div class="ci-toolbar">
+    <button id="ci-folder-btn" class="tb-btn" onclick="ciSetDataFolder()">📁 Data Folder</button>
+    <div class="tb-flex"></div>
+    <button id="spec-scale-btn" class="tb-btn active" onclick="ciToggleSpecScale()"
+            title="Toggle spectrogram between dB and linear amplitude">Spec: dB</button>
   </div>
 
-</main>
+  <!-- ── Main body ───────────────────────────────────────────────────── -->
+  <div class="ci-body">
+
+    <!-- ── Sidebar ───────────────────────────────────────────────────── -->
+    <aside class="ci-sidebar">
+
+      <!-- FRF Files -->
+      <div class="ci-sect">📂 FRF Files</div>
+      <div class="ci-content">
+        <label class="file-btn">
+          Left / Mono FRF (TRF, AvC, AvR, CSV)
+          <input type="file" id="frf-l-input" accept=".trf,.trv,.avc,.avr,.csv"
+                 onchange="loadFRF('L', this)">
+        </label>
+        <div class="file-status" id="frf-l-status">no file loaded</div>
+        <label class="file-btn" style="margin-top:6px">
+          Right FRF — optional (enables stereo)
+          <input type="file" id="frf-r-input" accept=".trf,.trv,.avc,.avr,.csv"
+                 onchange="loadFRF('R', this)">
+        </label>
+        <div class="file-status" id="frf-r-status">–</div>
+      </div>
+
+      <!-- WAV Signal -->
+      <div class="ci-sect">🎵 Signal (WAV)</div>
+      <div class="ci-content">
+        <label class="file-btn">
+          Load WAV
+          <input type="file" id="wav-input" accept=".wav,audio/wav,audio/*"
+                 onchange="loadWAV(this)">
+        </label>
+        <div class="file-status" id="wav-status">no file loaded</div>
+        <button id="play-wav-btn" class="tb-btn accent" data-label="WAV"
+                onclick="togglePlayWAV()" style="display:none;width:100%;margin-top:6px">
+          ▶ Play WAV
+        </button>
+      </div>
+
+      <!-- Settings -->
+      <div class="ci-sect">⚙️ Settings</div>
+      <div class="ci-content">
+        <div class="ci-gain-hdr">
+          <label>Output gain</label>
+          <span class="ci-gain-val" id="gain-disp">+0 dB</span>
+        </div>
+        <input type="range" id="gain-sl" class="ci-gain-slider"
+               min="-24" max="24" value="0" step="1">
+        <div class="ci-row" style="margin-top:8px">
+          <label>Output device</label>
+          <select id="out-device-sel">
+            <option value="">Default output</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Convolve action -->
+      <div class="ci-action">
+        <button id="conv-btn" class="tb-btn start"
+                onclick="runConvolution()" disabled>⚡ Convolve</button>
+        <div class="prog-msg" id="prog-msg"></div>
+      </div>
+
+      <!-- Result (hidden until convolution completes) -->
+      <div id="result-card" style="display:none">
+        <div class="ci-sect">▶ Result</div>
+        <div class="ci-content">
+          <div class="fileinfo" id="out-info"></div>
+          <div class="ci-result-btns">
+            <button id="play-btn" class="tb-btn accent" data-label="Result"
+                    onclick="togglePlay()" style="flex:1">▶ Play Result</button>
+            <button id="save-btn" class="tb-btn" onclick="saveWAV()">💾 Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="ci-sect">ℹ Info</div>
+      <div class="ci-content">
+        <div class="ci-info-body">
+          <span>Y(f) = H(f) · X(f)</span>
+          <span>Log-space FRF interpolation</span>
+          <span>Hann-windowed FFT</span>
+        </div>
+      </div>
+
+    </aside><!-- ci-sidebar -->
+
+    <!-- Drag resize handle -->
+    <div id="ci-resizer" class="ci-resizer"></div>
+
+    <!-- ── 2 × 2 plot grid ─────────────────────────────────────────── -->
+    <div class="ci-plots">
+      <div class="plot-wrap">
+        <div class="plot-label">FRF · Magnitude (dB)</div>
+        <div id="frf-plot" class="plot-div"></div>
+      </div>
+      <div class="plot-wrap">
+        <div class="plot-label">Input · Spectrogram</div>
+        <div id="wav-plot" class="plot-div"></div>
+      </div>
+      <div class="plot-wrap">
+        <div class="plot-label">Output · Convolved Waveform</div>
+        <div id="out-plot" class="plot-div"></div>
+      </div>
+      <div class="plot-wrap">
+        <div class="plot-label">Output · Spectrogram</div>
+        <div id="spec-plot" class="plot-div"></div>
+      </div>
+    </div>
+
+  </div><!-- ci-body -->
+
+</div><!-- ci-page -->
 
 <script type="py" src="./main.py" config="./pyscript.toml" async></script>
 

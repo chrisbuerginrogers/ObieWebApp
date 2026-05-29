@@ -1,8 +1,0 @@
-{
-  "id": "flat",
-  "name": "Full Range",
-  "description": "Single band spanning the full analysis range",
-  "bands": [
-    { "label": "Full range", "start": 200, "end": 7000 }
-  ]
-}

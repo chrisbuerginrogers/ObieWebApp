@@ -236,6 +236,21 @@ header.obie-header .logo-icon { width: 26px; height: 26px; font-size: 14px; }
 .modal-close:hover { color: var(--text); }
 .modal-body { padding: 14px; overflow-y: auto; }
 
+/* Preferences modal rows */
+.pref-section {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+  margin: 14px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px;
+}
+.pref-section:first-child { margin-top: 0; }
+.pref-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pref-row label { font-size: 11px; color: var(--muted); min-width: 150px; }
+.pref-row input, .pref-row select { flex: 1; max-width: 160px; }
+.pref-unit { font-size: 10px; color: var(--muted); }
+.pref-hint { font-size: 10px; color: var(--muted); font-style: italic; margin: -4px 0 8px 160px; }
+.save-row { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+.save-msg  { font-size: 11px; color: var(--green); font-style: italic; }
+
 /* Interpret modal */
 .interpret-modal .modal-box { width: min(96vw,920px); height: min(92vh,720px); }
 .interpret-layout { display: flex; gap: 14px; height: 100%; }

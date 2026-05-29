@@ -18,30 +18,9 @@
   };
   const BAND_COLORS = ['#e74c3c','#e67e22','#2ecc71','#3498db','#9b59b6','#1abc9c','#f39c12'];
 
-  const BAND_PRESETS = {
-    violin: {
-      label: 'Violin Modes',
-      bands: [
-        {label:'A0',     f_lo:264,  f_hi:290 },
-        {label:'CBR',    f_lo:380,  f_hi:420 },
-        {label:'B1-',    f_lo:393,  f_hi:470 },
-        {label:'B1+',    f_lo:473,  f_hi:593 },
-        {label:'Transition Hill', f_lo:800, f_hi:1300},
-        {label:'Bridge Hill',     f_lo:1750, f_hi:3000},
-        {label:'Upper Hill',      f_lo:3000, f_hi:7000},
-      ],
-    },
-    claude: {
-      label: 'Claude Bands',
-      bands: [
-        {label:'Low',     f_lo:200,  f_hi:400 },
-        {label:'Low-Mid', f_lo:400,  f_hi:900 },
-        {label:'Mid',     f_lo:900,  f_hi:1600},
-        {label:'Hi-Mid',  f_lo:1600, f_hi:3300},
-        {label:'High',    f_lo:3300, f_hi:7000},
-      ],
-    },
-  };
+  // Band presets — loaded from ObieAppSettings/bands/ when a data folder is set.
+  // Empty until a folder is selected; the dropdown shows only "No bands" + "Custom…".
+  let _dynamicBandPresets = {};  // key → { label, bands: [{label,f_lo,f_hi}] }
 
   const INTERPRET_REGIONS = [
     {label:'A0',               f_lo:264,  f_hi:290,  color:'#e74c3c'},
@@ -74,6 +53,7 @@
   let _templates = [];
   let _dataDir              = null;  // FileSystemDirectoryHandle
   let _exploreSettingsHandle = null;  // ObieAppSettings/ dir
+  let _bandsHandle          = null;  // ObieAppSettings/bands/ dir
   let _dirFiles  = [];     // [{name, ext, path, handle}] — scanned from data folder
   let _searchResults  = []; // current filtered list
   let _pendingPaths   = {}; // filename → full relative path, populated just before pyExploreLoadFile
@@ -201,6 +181,77 @@
     });
   }
 
+  // ── Band loading from ObieAppSettings/bands/ ─────────────────────────
+  async function _loadBandsFromFolder(dir) {
+    _dynamicBandPresets = {};
+    try {
+      for await (const [name, h] of dir.entries()) {
+        if (h.kind !== 'file' || !name.toLowerCase().endsWith('.txt')) continue;
+        try {
+          const text  = await (await h.getFile()).text();
+          // Strip _filter.txt, _filter, or plain .txt — whichever applies
+          const label = name
+            .replace(/_filter\.txt$/i, '')
+            .replace(/_filter$/i,      '')
+            .replace(/\.txt$/i,        '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          // Parse tab-separated edge values (one line)
+          const edges = text.trim().split(/\t/).map(s => parseFloat(s.trim())).filter(isFinite);
+          if (edges.length < 2) continue;
+          const bands = [];
+          for (let i = 0; i < edges.length - 1; i++)
+            bands.push({ label: `${Math.round(edges[i])}–${Math.round(edges[i+1])}`,
+                         f_lo: edges[i], f_hi: edges[i+1] });
+          _dynamicBandPresets[label] = { label, bands };
+        } catch(_) {}
+      }
+    } catch(_) {}
+    _populateBandSel();
+  }
+
+  function _shortBandLabel(full) {
+    const cut = full.indexOf('(');
+    const s = (cut > 0 ? full.slice(0, cut) : full).trim();
+    return s.length > 12 ? s.slice(0, 11) + '…' : s;
+  }
+
+  function _populateBandSel() {
+    const sel = $('band-sel'); if (!sel) return;
+    const cur = _S.bandPreset;
+
+    sel.innerHTML = '<option value="">No bands</option>';
+    Object.keys(_dynamicBandPresets).sort().forEach(k => {
+      const o = document.createElement('option');
+      const full = _dynamicBandPresets[k].label;
+      o.value = k;
+      o.dataset.full = full;
+      o.textContent = _shortBandLabel(full);
+      sel.appendChild(o);
+    });
+    const oCustom = document.createElement('option');
+    oCustom.value = 'custom'; oCustom.textContent = 'Custom…';
+    sel.appendChild(oCustom);
+
+    sel.value = (cur === 'custom' || _dynamicBandPresets[cur]) ? cur : '';
+    if (sel.value !== cur) _S.bandPreset = sel.value;
+
+    // Attach expand/collapse behaviour once per element
+    if (!sel.dataset.bandEventsAttached) {
+      sel.dataset.bandEventsAttached = '1';
+      const showFull  = () => Array.from(sel.options).forEach(o => {
+        if (o.dataset.full) o.textContent = o.dataset.full;
+      });
+      const showShort = () => Array.from(sel.options).forEach(o => {
+        if (o.dataset.full) o.textContent = _shortBandLabel(o.dataset.full);
+      });
+      sel.addEventListener('mousedown', showFull);
+      sel.addEventListener('keydown',   showFull);
+      sel.addEventListener('blur',      showShort);
+      sel.addEventListener('change',    showShort);
+    }
+  }
+
   // ── Render main plot ──────────────────────────────────────────────────
   function render() {
     const plotTraces = [];
@@ -220,7 +271,9 @@
     // Bands
     const activeBands = _S.bandPreset === 'custom' && _customBands
       ? _customBands
-      : (_S.bandPreset && BAND_PRESETS[_S.bandPreset]) ? BAND_PRESETS[_S.bandPreset].bands : null;
+      : (_S.bandPreset && _dynamicBandPresets[_S.bandPreset])
+        ? _dynamicBandPresets[_S.bandPreset].bands
+        : null;
 
     if (activeBands && plotTraces[0].x.length > 0) {
       const ref = plotTraces[0];
@@ -400,14 +453,113 @@
     m.classList.toggle('open');
     document.body.addEventListener('click', () => m.classList.remove('open'), {once:true});
   };
+  // ── Preferences modal ─────────────────────────────────────────────────
+  const _PREF_DEFAULTS = {
+    defaultWavUrl: '../../sample-data/1-Tchaikovsky-short.wav',
+    outputDeviceId: '',
+    yDbRange: 38, xMin: 200, xMax: 7000, lineWidth: 1.0,
+  };
+
+  function _loadPrefs() {
+    try { return { ..._PREF_DEFAULTS, ...JSON.parse(localStorage.getItem('obieExplore_prefs') || '{}') }; }
+    catch(_) { return { ..._PREF_DEFAULTS }; }
+  }
+
+  function _applyPrefsToForm(p) {
+    const storedName = localStorage.getItem('obieExplore_wavName');
+    const set = (id, val) => { const el = $('pref-' + id); if (el && val != null) el.value = val; };
+    set('wav-url',   storedName || p.defaultWavUrl || _PREF_DEFAULTS.defaultWavUrl);
+    set('yrange',    p.yDbRange  ?? _PREF_DEFAULTS.yDbRange);
+    set('xmin',      p.xMin      ?? _PREF_DEFAULTS.xMin);
+    set('xmax',      p.xMax      ?? _PREF_DEFAULTS.xMax);
+    set('linewidth', p.lineWidth ?? _PREF_DEFAULTS.lineWidth);
+    const sel = $('pref-device');
+    if (sel && p.outputDeviceId) sel.value = p.outputDeviceId;
+  }
+
+  async function _enumeratePrefsOutputs() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const sel = $('pref-device'); if (!sel) return;
+      const saved = _loadPrefs().outputDeviceId;
+      sel.innerHTML = '<option value="">Default output</option>';
+      devices.filter(d => d.kind === 'audiooutput' && d.deviceId !== 'default').forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.deviceId;
+        o.textContent = d.label || `Speaker (${d.deviceId.slice(0,8)}…)`;
+        if (d.deviceId === saved) o.selected = true;
+        sel.appendChild(o);
+      });
+    } catch(_) {}
+  }
+
   window.expPreferences = function() {
-    window.open('preferences.html', '_blank');
-    $('settings-menu').classList.remove('open');
+    _applyPrefsToForm(_loadPrefs());
+    _enumeratePrefsOutputs();
+    $('prefs-modal')?.classList.add('open');
   };
-  window.expLiveView = function() {
-    window.open('liveview.html', '_blank');
-    $('settings-menu').classList.remove('open');
+  window.expClosePrefs = () => $('prefs-modal')?.classList.remove('open');
+
+  async function _saveExploreJson() {
+    if (!_exploreSettingsHandle) return;
+    try {
+      const data = { lineWidth: _S.lineWidth, yDbRange: _S.yDbRange, xMin: _S.xMin, xMax: _S.xMax };
+      const fh = await _exploreSettingsHandle.getFileHandle('explore.json', { create: true });
+      const w  = await fh.createWritable();
+      await w.write(JSON.stringify(data, null, 2));
+      await w.close();
+    } catch (_) {}
+  }
+
+  window.expSavePrefs = function() {
+    const g = id => $('pref-' + id)?.value ?? '';
+    const p = {
+      defaultWavUrl:  g('wav-url').trim() || _PREF_DEFAULTS.defaultWavUrl,
+      outputDeviceId: g('device'),
+      yDbRange:   parseFloat(g('yrange'))    || _PREF_DEFAULTS.yDbRange,
+      xMin:       parseFloat(g('xmin'))      || _PREF_DEFAULTS.xMin,
+      xMax:       parseFloat(g('xmax'))      || _PREF_DEFAULTS.xMax,
+      lineWidth:  parseFloat(g('linewidth')) || _PREF_DEFAULTS.lineWidth,
+    };
+    localStorage.setItem('obieExplore_prefs', JSON.stringify(p));
+    localStorage.setItem('obieExplore_defaultWavUrl', p.defaultWavUrl);
+    _S.yDbRange = p.yDbRange; _S.xMin = p.xMin; _S.xMax = p.xMax; _S.lineWidth = p.lineWidth;
+    _syncControls(); render();
+    _saveExploreJson();   // also persist to ObieAppSettings/explore.json
+    const st = $('prefs-save-msg');
+    if (st) { st.textContent = '✓ Saved'; setTimeout(() => st.textContent = '', 2500); }
   };
+
+  window.expResetPrefs = function() {
+    localStorage.removeItem('obieExplore_prefs');
+    localStorage.removeItem('obieExplore_defaultWavUrl');
+    localStorage.removeItem('obieExplore_wavName');
+    _IDB.del('wavData').catch(() => {});
+    _applyPrefsToForm(_PREF_DEFAULTS);
+    _S.yDbRange = _PREF_DEFAULTS.yDbRange; _S.xMin = _PREF_DEFAULTS.xMin;
+    _S.xMax = _PREF_DEFAULTS.xMax; _S.lineWidth = _PREF_DEFAULTS.lineWidth;
+    _syncControls(); render();
+    const st = $('prefs-save-msg');
+    if (st) { st.textContent = '✓ Reset to defaults'; setTimeout(() => st.textContent = '', 2500); }
+  };
+
+  window.expBrowseWav = function() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.wav,audio/wav';
+    input.onchange = async () => {
+      const file = input.files[0]; if (!file) return;
+      const ab = await file.arrayBuffer();
+      await _IDB.put('wavData', ab);
+      localStorage.setItem('obieExplore_wavName', file.name);
+      localStorage.removeItem('obieExplore_defaultWavUrl');
+      const el = $('pref-wav-url'); if (el) el.value = file.name;
+      const st = $('prefs-save-msg');
+      if (st) { st.textContent = '✓ WAV stored locally'; setTimeout(() => st.textContent = '', 2500); }
+    };
+    input.click();
+  };
+
+  window.expLiveView = function() { window.open('liveview.html', '_blank'); };
 
   // ── Toolbar: misc buttons ─────────────────────────────────────────────
   window.expFun            = () => alert('You pressed: Fun');
@@ -446,11 +598,13 @@
     _dataDir  = dir;
     _dirFiles = await _scanDir(dir, '');
 
-    // Load settings and templates from ObieAppSettings/ (seeds from GitHub if new)
+    // Load settings, bands, and templates from ObieAppSettings/
     try {
-      ({ settingsHandle: _exploreSettingsHandle } = await openObieAppSettings(dir));
+      let templatesHandle;
+      ({ settingsHandle: _exploreSettingsHandle, bandsHandle: _bandsHandle, templatesHandle }
+        = await openObieAppSettings(dir));
 
-      // Load explore prefs
+      // Load explore prefs from explore.json
       try {
         const file  = await (await _exploreSettingsHandle.getFileHandle('explore.json')).getFile();
         const prefs = JSON.parse(await file.text());
@@ -462,10 +616,12 @@
         render();
       } catch (_) {}
 
+      // Load bands from ObieAppSettings/bands/
+      if (_bandsHandle) await _loadBandsFromFolder(_bandsHandle);
+
       // Load templates from ObieAppSettings/Templates/
       try {
-        const tplDir = await _exploreSettingsHandle.getDirectoryHandle('Templates');
-        for await (const [name, h] of tplDir.entries()) {
+        for await (const [name, h] of templatesHandle.entries()) {
           if (h.kind !== 'file' || !name.toLowerCase().endsWith('.json')) continue;
           try {
             const tpl = JSON.parse(await (await h.getFile()).text());
@@ -912,6 +1068,7 @@
       Object.assign(_S, saved);
     } catch(_) {}
     _syncControls();
+    _populateBandSel();  // build dropdown from _dynamicBandPresets (empty until folder loaded)
     render();
     _setupHover();
     _setupDropZone();

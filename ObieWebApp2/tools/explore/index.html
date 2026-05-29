@@ -46,13 +46,7 @@
 
     <!-- Row 1: Settings / Data Folder  ···  Interpret / Help -->
     <div class="tb-r">
-      <div class="dropdown-wrap">
-        <button class="tb-btn" onclick="expSettings(event)">Settings ▾</button>
-        <div id="settings-menu" class="dropdown-menu">
-          <button class="menu-item" onclick="expPreferences()">Preferences</button>
-          <button class="menu-item" onclick="expLiveView()">LiveView</button>
-        </div>
-      </div>
+      <button class="tb-btn" onclick="expPreferences()">Settings</button>
       <button id="data-folder-btn" class="tb-btn" onclick="expSetDataFolder()">📁 Data Folder</button>
       <span id="folder-name-ind" class="folder-name-disp"></span>
 
@@ -140,10 +134,8 @@
           <span class="tb-lbl">Hz</span>
         </span>
         <div class="tb-vsep"></div>
-        <select id="band-sel" class="tb-sel" onchange="expSetBandPreset(this.value)" title="Band averaging">
+        <select id="band-sel" class="tb-sel" onchange="expSetBandPreset(this.value)" title="Band averaging — loaded from ObieAppSettings/bands/">
           <option value="">No bands</option>
-          <option value="violin">Violin Modes</option>
-          <option value="claude">Claude Bands</option>
           <option value="custom">Custom…</option>
         </select>
         <label class="tb-lbl" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="Toggle band shading">
@@ -323,6 +315,65 @@
           </div>
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Preferences modal ─────────────────────────────────────────────── -->
+<div id="prefs-modal" class="modal-overlay">
+  <div class="modal-box" style="width:min(92vw,480px);max-height:90vh">
+    <div class="modal-header">
+      <span class="modal-title">Explore Preferences</span>
+      <button class="modal-close" onclick="expClosePrefs()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="pref-section">Audio</div>
+      <div class="pref-row">
+        <label>Sound snippet (WAV)</label>
+        <div style="display:flex;gap:5px;flex:1;min-width:0">
+          <input id="pref-wav-url" type="text" placeholder="Name or URL" style="flex:1;min-width:0;max-width:none">
+          <button class="act-btn" onclick="expBrowseWav()" style="flex-shrink:0">Browse…</button>
+        </div>
+      </div>
+      <p class="pref-hint">The WAV file played when ▶ is pressed. Browse stores it locally in the browser.</p>
+      <div class="pref-row">
+        <label for="pref-device">Output device</label>
+        <select id="pref-device" style="flex:1;max-width:200px">
+          <option value="">Default output</option>
+        </select>
+      </div>
+
+      <div class="pref-section">Plot Defaults</div>
+      <div class="pref-row">
+        <label for="pref-yrange">Y range</label>
+        <input id="pref-yrange" type="number" min="10" max="120" value="38" style="max-width:70px">
+        <span class="pref-unit">dB</span>
+      </div>
+      <div class="pref-row">
+        <label for="pref-xmin">X min</label>
+        <input id="pref-xmin" type="number" value="200" style="max-width:70px">
+        <span class="pref-unit">Hz</span>
+      </div>
+      <div class="pref-row">
+        <label for="pref-xmax">X max</label>
+        <input id="pref-xmax" type="number" value="7000" style="max-width:70px">
+        <span class="pref-unit">Hz</span>
+      </div>
+      <div class="pref-row">
+        <label for="pref-linewidth">Line width</label>
+        <input id="pref-linewidth" type="number" value="1.0" min="0.5" max="4" step="0.25" style="max-width:70px">
+        <span class="pref-unit">px</span>
+      </div>
+
+      <div class="save-row">
+        <button class="act-btn" style="background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600"
+                onclick="expSavePrefs()">Save</button>
+        <button class="act-btn" onclick="expResetPrefs()">Reset defaults</button>
+        <button class="act-btn" onclick="expClosePrefs()">Close</button>
+        <span id="prefs-save-msg" class="save-msg"></span>
+      </div>
+
     </div>
   </div>
 </div>
