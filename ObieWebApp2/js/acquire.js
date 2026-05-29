@@ -451,6 +451,14 @@ window.acqDeleteLastHit = function() {
   if (window.pyDeleteLastHit) window.pyDeleteLastHit();
 };
 
+window.acqStartOver = async function() {
+  if (!confirm('Clear all positions and start over from the beginning?')) return;
+  if (appState !== 'idle' && appState !== 'complete') await _stopAudio();
+  frfCache = {};
+  renderFRF();
+  if (window.pyResetAll) window.pyResetAll();
+};
+
 window.acqClearPosition = function() {
   if (window.pyClearPosition) window.pyClearPosition();
 };
@@ -520,7 +528,9 @@ function _populatePrefsForm(overridePrefs) {
   const swapEl = document.getElementById('inp-swap-channels');
   if (swapEl) swapEl.checked = prefs.swap_channels ?? false;
   set('inp-soundcard',   prefs.soundcard);
-  set('inp-instrument',  prefs.instrument);
+  const instrVal = prefs.instrument || 'scratch';
+  set('inp-instrument',        instrVal);
+  set('inp-instrument-banner', instrVal);
   set('inp-line-width',  prefs.line_width);
   // populate device selector
   _enumeratePrefsDevices();
@@ -534,7 +544,7 @@ function _loadPrefs() {
       taps: 5, positions: 12, prefix: 'H',
       mic_cal: 1.0, ham_cal: 1.0, swap_channels: false,
       frf_x_min: 100, frf_x_max: 12000,
-      soundcard: '', instrument: '', deviceId: '', line_width: 0.5,
+      soundcard: '', instrument: 'scratch', deviceId: '', line_width: 0.5,
       ...JSON.parse(localStorage.getItem('obieAcquire_prefs') || '{}'),
     };
   } catch (_) {
@@ -542,7 +552,7 @@ function _loadPrefs() {
              time_cutoff_s: 0.30, mic_time_cutoff_s: 0.30,
              taps: 5, positions: 12, prefix: 'H', mic_cal: 1.0, ham_cal: 1.0,
              swap_channels: false, frf_x_min: 100, frf_x_max: 12000,
-             soundcard: '', instrument: '', deviceId: '', line_width: 0.5 };
+             soundcard: '', instrument: 'scratch', deviceId: '', line_width: 0.5 };
   }
 }
 
@@ -575,11 +585,22 @@ window.acqSavePrefs = function() {
   if (st) { st.textContent = '✓ Saved'; setTimeout(() => st.textContent = '', 2500); }
 };
 
-window.acqResetPrefs = function() {
+window.acqResetPrefs = async function() {
+  const st = document.getElementById('prefs-save-msg');
+  if (_settingsHandle) {
+    try {
+      const file  = await (await _settingsHandle.getFileHandle('acquire.json')).getFile();
+      const prefs = JSON.parse(await file.text());
+      localStorage.setItem('obieAcquire_prefs', JSON.stringify(prefs));
+      _populatePrefsForm(prefs);
+      _pushSettingsFromPrefs(prefs);
+      if (st) { st.textContent = '✓ Restored from disk'; setTimeout(() => st.textContent = '', 2500); }
+      return;
+    } catch (_) {}
+  }
   localStorage.removeItem('obieAcquire_prefs');
   _populatePrefsForm();
-  const st = document.getElementById('prefs-save-msg');
-  if (st) { st.textContent = '✓ Reset'; setTimeout(() => st.textContent = '', 2500); }
+  if (st) { st.textContent = '✓ Reset to defaults'; setTimeout(() => st.textContent = '', 2500); }
 };
 
 function _pushSettingsFromPrefs(prefs) {
@@ -630,11 +651,12 @@ async function _enumeratePrefsDevices() {
 // Notes modal
 // ════════════════════════════════════════════════════════════════════════════
 
+function _notesKey() { return 'obieAcquire_notes_' + (_pendingTestName || _runName || 'default'); }
+
 window.acqNotes = function() {
   document.getElementById('notes-modal')?.classList.add('open');
-  const key   = 'obieAcquire_notes_' + (_runName || 'default');
-  const ta    = document.getElementById('notes-textarea');
-  if (ta) ta.value = localStorage.getItem(key) || '';
+  const ta = document.getElementById('notes-textarea');
+  if (ta) ta.value = localStorage.getItem(_notesKey()) || '';
 };
 
 window.acqCloseNotes = function() {
@@ -642,9 +664,8 @@ window.acqCloseNotes = function() {
 };
 
 window.acqSaveNotes = function() {
-  const key = 'obieAcquire_notes_' + (_runName || 'default');
   const val = document.getElementById('notes-textarea')?.value || '';
-  localStorage.setItem(key, val);
+  localStorage.setItem(_notesKey(), val);
   const st = document.getElementById('notes-save-msg');
   if (st) { st.textContent = '✓ Saved'; setTimeout(() => st.textContent = '', 2000); }
 };
@@ -656,7 +677,12 @@ window.acqSaveNotes = function() {
 
 window.acqTemplate = function() {
   document.getElementById('template-modal')?.classList.add('open');
+  _selectedTpl = null;
   _renderTemplateList();
+  const pre = document.getElementById('tpl-json');
+  const lbl = document.getElementById('tpl-json-lbl');
+  if (pre) pre.textContent = '';
+  if (lbl) lbl.textContent = 'Select a template above to preview its settings';
 };
 
 window.acqCloseTemplate = function() {
@@ -666,21 +692,70 @@ window.acqCloseTemplate = function() {
 let _templates = [];
 let _selectedTpl = null;
 
+function _tplMeta(s) {
+  const bits = [];
+  if (s.taps      != null) bits.push(`${s.taps} hits`);
+  if (s.frf_x_max != null) bits.push(`≤${s.frf_x_max} Hz`);
+  if (s.threshold != null) bits.push(`thr ${s.threshold}`);
+  if (s.ham_cal   != null && s.ham_cal !== 1) bits.push(`ham×${s.ham_cal}`);
+  if (s.mic_cal   != null && s.mic_cal !== 1) bits.push(`mic×${s.mic_cal}`);
+  return bits.join(' · ');
+}
+
 function _renderTemplateList() {
   const container = document.getElementById('tpl-list');
   if (!container) return;
-  container.innerHTML = _templates.length
-    ? _templates.map((t, i) => `
-        <div class="tpl-item${_selectedTpl === i ? ' selected' : ''}" onclick="acqSelectTpl(${i})">
-          <div class="tpl-name">${t.name || 'Unnamed'}</div>
-          <div class="tpl-desc">${t.description || ''}</div>
-        </div>`).join('')
-    : '<div style="font-size:11px;color:var(--muted)">No templates loaded. Use Browse to import a JSON file.</div>';
+
+  // Synthetic "Current Settings" entry always at the top
+  const curSel = _selectedTpl === -1;
+  const currentItem = `
+    <div class="tpl-item${curSel ? ' selected' : ''}" onclick="acqSelectTpl(-1)"
+         style="border-color:#1565c0;${curSel ? 'background:#e8f0fe;' : ''}">
+      <div class="tpl-name" style="color:#1565c0">Current Settings</div>
+      <div class="tpl-desc">${_tplMeta(_loadPrefs())}</div>
+    </div>`;
+
+  const list = _templates.length
+    ? _templates.map((t, i) => {
+        const s = t.settings || t.run || t;
+        const meta = _tplMeta(s);
+        return `
+          <div class="tpl-item${_selectedTpl === i ? ' selected' : ''}" onclick="acqSelectTpl(${i})">
+            <div class="tpl-name">${t.name || 'Unnamed'}</div>
+            ${meta ? `<div class="tpl-desc">${meta}</div>` : ''}
+          </div>`;
+      }).join('')
+    : '<div style="font-size:11px;color:var(--muted);padding:4px 0">No saved templates — set a Data Folder to load from <code>ObieAppSettings/Templates/</code>, or use Browse.</div>';
+
+  container.innerHTML = currentItem + list;
 }
 
 window.acqSelectTpl = function(i) {
   _selectedTpl = i;
   _renderTemplateList();
+  const pre = document.getElementById('tpl-json');
+  const lbl = document.getElementById('tpl-json-lbl');
+  if (!pre) return;
+
+  if (i === -1) {
+    // Current Settings
+    const p = { ..._loadPrefs() };
+    delete p.soundcard; delete p.deviceId;
+    pre.textContent = JSON.stringify(p, null, 2);
+    if (lbl) lbl.textContent = 'Current Settings (soundcard excluded):';
+  } else if (_templates[i]) {
+    const t = _templates[i];
+    const s = { ...(t.settings || t.run || t) };
+    delete s.soundcard;
+    const display = { name: t.name || 'Unnamed' };
+    if (t.description) display.description = t.description;
+    display.settings = s;
+    pre.textContent = JSON.stringify(display, null, 2);
+    if (lbl) lbl.textContent = `${t.name || 'Template'} — settings (soundcard excluded):`;
+  } else {
+    pre.textContent = '';
+    if (lbl) lbl.textContent = 'Select a template above to preview its settings';
+  }
 };
 
 window.acqBrowseTemplate = async function() {
@@ -704,12 +779,11 @@ window.acqBrowseTemplate = async function() {
 };
 
 window.acqApplyTemplate = function() {
-  if (_selectedTpl === null || !_templates[_selectedTpl]) {
-    alert('Select a template first.');
-    return;
-  }
+  if (_selectedTpl === null) { alert('Select a template first.'); return; }
+  if (_selectedTpl === -1) { window.acqCloseTemplate(); return; }  // Current Settings = no-op
+  if (!_templates[_selectedTpl]) { alert('Select a template first.'); return; }
   const t = _templates[_selectedTpl];
-  const s = t.settings || t;
+  const s = t.settings || t.run || t;
   // Apply to prefs form
   const set = (id, val) => {
     const el = document.getElementById(id);
@@ -725,7 +799,10 @@ window.acqApplyTemplate = function() {
   if (s.prefix      != null) set('inp-prefix',     s.prefix);
   if (s.mic_cal     != null) set('inp-mic-cal',    s.mic_cal);
   if (s.ham_cal     != null) set('inp-ham-cal',    s.ham_cal);
-  if (s.soundcard   != null) set('inp-soundcard',  s.soundcard);
+  // soundcard intentionally skipped — keep the current soundcard on import
+  _currentTemplateName = t.name || '';
+  const tplInd = document.getElementById('tpl-ind');
+  if (tplInd) tplInd.textContent = _currentTemplateName;
   window.acqSavePrefs();
   window.acqCloseTemplate();
   document.getElementById('prefs-modal')?.classList.add('open');
@@ -764,18 +841,75 @@ const HAS_FS = typeof window.showDirectoryPicker === 'function';
 let _rawHandle       = null;
 let _trfHandle       = null;
 let _runName         = '';
-let _settingsHandle  = null;  // ObieAppSettings/ dir inside the data folder
-let _templatesHandle = null;  // ObieAppSettings/Templates/ dir
+let _settingsHandle  = null;   // ObieAppSettings/ dir inside the data folder
+let _templatesHandle = null;   // ObieAppSettings/Templates/ dir
+let _testsHandle     = null;   // <instrument>/test/ dir (set when data folder chosen)
+let _rootDirHandle   = null;   // root data folder handle
+let _pendingTestName = '';  // proposed test folder name, editable before first Start
+let _currentTemplateName = '';  // template last applied
+
+window.acqUpdatePendingTest = function(val) { _pendingTestName = val.trim(); };
+
+// Core folder-setup logic, callable with any directory handle (manual pick or auto-restore)
+async function _applyDataFolder(dirHandle) {
+  _rootDirHandle = dirHandle;
+
+  // ObieAppSettings first — gives us the saved instrument name
+  ({ settingsHandle: _settingsHandle, templatesHandle: _templatesHandle } =
+      await openObieAppSettings(dirHandle));
+
+  // Load saved prefs (instrument name comes from here)
+  let savedPrefs = null;
+  try {
+    const file = await (await _settingsHandle.getFileHandle('acquire.json')).getFile();
+    savedPrefs  = JSON.parse(await file.text());
+    _populatePrefsForm(savedPrefs);
+    _pushSettingsFromPrefs(savedPrefs);
+  } catch (_) {}
+
+  // Determine instrument name: banner > prefs > 'scratch'
+  const instrument =
+    (document.getElementById('inp-instrument-banner')?.value.trim()) ||
+    (savedPrefs?.instrument || '') ||
+    'scratch';
+
+  // Structure: DataFolder/<instrument>/<instrument>_XX/raw, TRF
+  const instrHandle = await dirHandle.getDirectoryHandle(instrument, { create: true });
+  let maxNum = 0;
+  for await (const [name, h] of instrHandle.entries()) {
+    if (h.kind === 'directory') {
+      const m = name.match(/_(\d+)$/);
+      if (m) { const n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
+    }
+  }
+  _pendingTestName = `${instrument}_${String(maxNum + 1).padStart(2, '0')}`;
+  _testsHandle     = instrHandle;
+
+  const instrBannerEl = document.getElementById('inp-instrument-banner');
+  if (instrBannerEl && !instrBannerEl.value) instrBannerEl.value = instrument;
+  const testBannerEl = document.getElementById('inp-test-banner');
+  if (testBannerEl) testBannerEl.value = _pendingTestName;
+
+  _rawHandle = null;   // created on first Start
+  _trfHandle = null;
+  _runName   = '';
+
+  // Load templates
+  _templates = [];
+  await _loadTemplatesFromFolder(_templatesHandle);
+
+  const btn = document.getElementById('data-folder-btn');
+  if (btn) btn.textContent = '📁 ' + dirHandle.name;
+  const ind = document.getElementById('folder-name-ind');
+  if (ind) ind.textContent = _pendingTestName || dirHandle.name;
+
+  // Hide the no-folder overlay
+  document.getElementById('folder-overlay')?.classList.add('hidden');
+}
 
 window.acqSetDataFolder = async function() {
   if (!HAS_FS) {
     alert('Directory picker requires Chrome/Edge. Use the download buttons for manual export.');
-    return;
-  }
-  const instrument = document.getElementById('inp-instrument')?.value.trim() || '';
-  if (!instrument) {
-    alert('Enter an instrument name in Preferences first.');
-    window.acqPreferences();
     return;
   }
   let dirHandle;
@@ -785,40 +919,8 @@ window.acqSetDataFolder = async function() {
     if (e.name !== 'AbortError') alert('Folder error: ' + e.message);
     return;
   }
-  // Find next run number
-  const pfx    = instrument + ' ';
-  let maxNum   = 0;
-  for await (const [name, h] of dirHandle.entries()) {
-    if (h.kind === 'directory' && name.startsWith(pfx)) {
-      const n = parseInt(name.slice(pfx.length));
-      if (!isNaN(n) && n > maxNum) maxNum = n;
-    }
-  }
-  _runName = `${instrument} ${String(maxNum + 1).padStart(2, '0')}`;
-  const runHandle = await dirHandle.getDirectoryHandle(_runName, { create: true });
-  _rawHandle = await runHandle.getDirectoryHandle('raw', { create: true });
-  _trfHandle = await runHandle.getDirectoryHandle('TRF', { create: true });
-
-  // ObieAppSettings — shared settings + templates folder
-  _settingsHandle  = await dirHandle.getDirectoryHandle('ObieAppSettings', { create: true });
-  _templatesHandle = await _settingsHandle.getDirectoryHandle('Templates',  { create: true });
-
-  // Load saved prefs from ObieAppSettings/acquire.json
-  try {
-    const file  = await (await _settingsHandle.getFileHandle('acquire.json')).getFile();
-    const prefs = JSON.parse(await file.text());
-    _populatePrefsForm(prefs);
-    _pushSettingsFromPrefs(prefs);
-  } catch (_) {}
-
-  // Load all templates from ObieAppSettings/Templates/
-  _templates = [];
-  await _loadTemplatesFromFolder(_templatesHandle);
-
-  const btn = document.getElementById('data-folder-btn');
-  if (btn) btn.textContent = '📁 ' + dirHandle.name;
-  const ind = document.getElementById('folder-name-ind');
-  if (ind) ind.textContent = _runName;
+  await _applyDataFolder(dirHandle);
+  await saveDataFolderHandle(dirHandle);
 };
 
 async function _writeFile(folderHandle, filename, b64) {
@@ -885,6 +987,35 @@ window.acqToggleAcquire = async function() {
 async function _startAudio() {
   const prefs    = _loadPrefs();
   const deviceId = prefs.deviceId;
+
+  // Create the test run folder on the very first Start after a data folder is set
+  if (_testsHandle && !_rawHandle && _pendingTestName) {
+    try {
+      const testName = document.getElementById('inp-test-banner')?.value.trim() || _pendingTestName;
+      _pendingTestName = testName;
+      const testHandle = await _testsHandle.getDirectoryHandle(testName, { create: true });
+      _rawHandle = await testHandle.getDirectoryHandle('raw', { create: true });
+      _trfHandle = await testHandle.getDirectoryHandle('TRF', { create: true });
+      _runName   = testName;
+      // Copy settings into test folder
+      const fh1 = await testHandle.getFileHandle('settings.json', { create: true });
+      const w1  = await fh1.createWritable();
+      await w1.write(JSON.stringify(_loadPrefs(), null, 2));
+      await w1.close();
+      // Copy notes if any exist
+      const notes = localStorage.getItem('obieAcquire_notes_' + testName)
+                 || localStorage.getItem('obieAcquire_notes_default') || '';
+      if (notes) {
+        const fh2 = await testHandle.getFileHandle('notes.txt', { create: true });
+        const w2  = await fh2.createWritable();
+        await w2.write(notes);
+        await w2.close();
+      }
+      const ind = document.getElementById('folder-name-ind');
+      if (ind) ind.textContent = testName;
+    } catch (e) { console.warn('Failed to create test folder:', e); }
+  }
+
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -1039,9 +1170,32 @@ window.addEventListener('load', () => {
   _lineWidth      = prefs.line_width        ?? 0.5;
   _S.xMin         = prefs.frf_x_min        ?? 100;
   _S.xMax         = prefs.frf_x_max        ?? 12000;
+  const instrEl = document.getElementById('inp-instrument-banner');
+  if (instrEl && !instrEl.value) instrEl.value = prefs.instrument || 'scratch';
+  const hiddenEl = document.getElementById('inp-instrument');
+  if (hiddenEl) hiddenEl.value = instrEl?.value || 'scratch';
   _initPlots();
   _initResizer();
   _updateStopBtn();
   _updateEditBtns({ hit_n: 0 });
   _updateSoundcardDisplay();
+
+  // Try to auto-restore a previously selected data folder (no user gesture needed
+  // if the browser already granted permission in this origin).
+  const storedName = localStorage.getItem('obieDataFolderName');
+  const sub = document.getElementById('folder-overlay-sub');
+  if (storedName && sub) sub.textContent = `Last used: "${storedName}" — or click to pick a folder`;
+  loadDataFolderHandle().then(async handle => {
+    if (!handle) return;
+    try {
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        await _applyDataFolder(handle);
+        return;
+      }
+    } catch (_) {}
+    // Permission not yet granted — overlay stays; user must click to re-grant
+    if (sub && storedName)
+      sub.textContent = `"${storedName}" needs permission — click to reconnect`;
+  }).catch(() => {});
 });

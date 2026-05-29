@@ -110,11 +110,39 @@ header.obie-header .logo-icon { width: 26px; height: 26px; font-size: 14px; }
   max-width: 280px; flex-shrink: 1;
 }
 
-/* ── Position banner ─────────────────────────────────────────────────── */
-.acq-banner {
+/* ── Banner row: instrument/test + position tabs + template indicator ── */
+.acq-banner-row {
+  display: flex; align-items: stretch; flex-shrink: 0;
+  background: var(--bg-deep); border-bottom: 1px solid var(--border);
+  min-height: 30px;
+}
+.acq-run-meta {
   display: flex; align-items: center; gap: 2px;
   padding: 2px 6px; flex-shrink: 0;
-  background: var(--bg-deep); border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.acq-meta-inp {
+  font-size: 11px; font-weight: 600; color: #1565c0;
+  border: 1px solid transparent; border-radius: 3px;
+  background: transparent; padding: 1px 4px;
+  font-family: inherit; min-width: 56px; max-width: 110px;
+}
+.acq-meta-inp:hover { border-color: #90caf9; }
+.acq-meta-inp:focus { outline: none; border-color: #1565c0; background: #e8f0fe; }
+.acq-meta-inp::placeholder { color: #bbb; font-weight: 400; }
+.acq-meta-sep { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.acq-tpl-ind {
+  display: flex; align-items: center; padding: 2px 8px;
+  font-size: 10px; font-weight: 600; color: #1565c0; font-style: italic;
+  flex-shrink: 0; border-left: 1px solid var(--border);
+  white-space: nowrap; min-width: 60px; max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Position banner (scrollable tabs, sits inside .acq-banner-row) ── */
+.acq-banner {
+  display: flex; align-items: center; gap: 2px;
+  padding: 2px 6px; flex: 1;
   overflow-x: auto; min-height: 30px;
 }
 .acq-banner::-webkit-scrollbar { height: 3px; }
@@ -199,6 +227,23 @@ header.obie-header .logo-icon { width: 26px; height: 26px; font-size: 14px; }
 /* ── Main plot wrap ──────────────────────────────────────────────────── */
 .acq-plot-wrap {
   flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  position: relative;  /* needed for the folder overlay */
+}
+
+/* ── No-folder overlay ───────────────────────────────────────────────── */
+.folder-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  background: rgba(255,255,255,0.93);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px;
+}
+.folder-overlay.hidden { display: none; }
+.folder-overlay-msg {
+  font-size: 15px; font-weight: 600; color: var(--muted); text-align: center;
+}
+.folder-overlay-sub {
+  font-size: 11px; color: var(--muted); font-style: italic; text-align: center;
 }
 
 .plot-toolbar {

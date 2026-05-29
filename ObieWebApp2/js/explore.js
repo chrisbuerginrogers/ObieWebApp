@@ -85,8 +85,11 @@
     yLog: false, yMin: null, yMax: null,
     yDbRange: 38,
     smoothing: 0,
-    normalize: false,
+    normalize: false,     // legacy — kept so saved prefs still load
+    normMode: 'as_measured',  // 'as_measured' | 'normalize' | 'avg_range'
+    normFLo: 200, normFHi: 7000,
     bandPreset: '',
+    bandShading: true,
     lineWidth: 1.0,
   };
 
@@ -167,6 +170,22 @@
     return mags.map(v => v - maxV);
   }
 
+  function _normByAvg(freqs, mags, fLo, fHi) {
+    let sum = 0, n = 0;
+    for (let i = 0; i < freqs.length; i++) {
+      if (freqs[i] >= fLo && freqs[i] <= fHi && isFinite(mags[i])) { sum += mags[i]; n++; }
+    }
+    if (!n) return mags;
+    const avg = sum / n;
+    return mags.map(v => v - avg);
+  }
+
+  function _applyNorm(freqs, mags) {
+    if (_S.normMode === 'normalize') return _norm(mags);
+    if (_S.normMode === 'avg_range') return _normByAvg(freqs, mags, _S.normFLo, _S.normFHi);
+    return mags;
+  }
+
   // ── Band computation ───────────────────────────────────────────────────
   function _computeBands(freqs, mags, bands) {
     return bands.map(b => {
@@ -189,7 +208,7 @@
 
     _datasets.filter(d => d.visible).forEach(d => {
       let mags = _smooth(d.freqs, d.mags, _S.smoothing);
-      if (_S.normalize) mags = _norm(mags);
+      mags = _applyNorm(d.freqs, mags);
       plotTraces.push({
         x: d.freqs, y: mags, type:'scatter', mode:'lines',
         name: d.name, line:{color:d.color, width:_S.lineWidth}, showlegend:false,
@@ -209,7 +228,8 @@
       window._exploreLastBandData = bd;
       bd.forEach((b, i) => {
         const c = BAND_COLORS[i % BAND_COLORS.length];
-        bandShapes.push({type:'rect', xref:'x', yref:'paper', x0:b.f_lo, x1:b.f_hi, y0:0, y1:1, fillcolor:c, opacity:0.1, line:{width:0}});
+        if (_S.bandShading)
+          bandShapes.push({type:'rect', xref:'x', yref:'paper', x0:b.f_lo, x1:b.f_hi, y0:0, y1:1, fillcolor:c, opacity:0.1, line:{width:0}});
         bandTraces.push({x:[b.f_lo,b.f_hi], y:[b.avg_db,b.avg_db], type:'scatter', mode:'lines', line:{color:c,width:2.5}, showlegend:false, hovertemplate:`<b>${_esc(b.label)}</b><br>Avg: ${b.avg_db.toFixed(1)} dB<extra></extra>`});
       });
       _renderBandTable(bd);
@@ -234,7 +254,7 @@
       : undefined;
 
     const layout = {
-      paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+      paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
       font:{color:text, family:'inherit', size:12},
       margin:{l:65, r:16, t:12, b:50},
       showlegend:false, autosize:true,
@@ -244,7 +264,8 @@
     };
 
     Plotly.react('explore-plot', [...plotTraces, ...bandTraces], layout,
-      {responsive:true, displayModeBar:true, displaylogo:false, modeBarButtonsToRemove:['sendDataToCloud']});
+      {responsive:true, displayModeBar:true, displaylogo:false, modeBarButtonsToRemove:['sendDataToCloud'],
+       toImageButtonOptions:{format:'png', scale:2, filename:'explore-frf'}});
   }
 
   // ── Band table ─────────────────────────────────────────────────────────
@@ -356,8 +377,12 @@
       if (s.x_log  != null) _S.xLog     = s.x_log;
       if (s.y_log  != null) _S.yLog     = s.y_log;
       if (s.y_db_range != null) _S.yDbRange = s.y_db_range;
-      if (s.smoothing  != null) _S.smoothing = s.smoothing;
-      if (s.normalize  != null) _S.normalize = s.normalize;
+      if (s.smoothing   != null) _S.smoothing   = s.smoothing;
+      if (s.normalize   != null) _S.normalize   = s.normalize;
+      if (s.normMode    != null) _S.normMode    = s.normMode;
+      if (s.normFLo     != null) _S.normFLo     = s.normFLo;
+      if (s.normFHi     != null) _S.normFHi     = s.normFHi;
+      if (s.bandShading != null) _S.bandShading = s.bandShading;
       _syncControls();
       render();
     }
@@ -421,9 +446,9 @@
     _dataDir  = dir;
     _dirFiles = await _scanDir(dir, '');
 
-    // Load settings and templates from ObieAppSettings/
+    // Load settings and templates from ObieAppSettings/ (seeds from GitHub if new)
     try {
-      _exploreSettingsHandle = await dir.getDirectoryHandle('ObieAppSettings', { create: true });
+      ({ settingsHandle: _exploreSettingsHandle } = await openObieAppSettings(dir));
 
       // Load explore prefs
       try {
@@ -439,7 +464,7 @@
 
       // Load templates from ObieAppSettings/Templates/
       try {
-        const tplDir = await _exploreSettingsHandle.getDirectoryHandle('Templates', { create: true });
+        const tplDir = await _exploreSettingsHandle.getDirectoryHandle('Templates');
         for await (const [name, h] of tplDir.entries()) {
           if (h.kind !== 'file' || !name.toLowerCase().endsWith('.json')) continue;
           try {
@@ -479,6 +504,7 @@
       await _applyFolder(dir);
       _IDB.put('dataFolderHandle', dir).catch(() => {});
       localStorage.setItem('obieExplore_folderName', dir.name);
+      saveDataFolderHandle(dir).catch(() => {});  // sync to shared cross-tool IDB
     } catch(e) { if (e.name !== 'AbortError') console.warn('expSetDataFolder:', e); }
   };
 
@@ -655,7 +681,20 @@
   };
   window.expToggleXLog = function() { _S.xLog = !_S.xLog; _syncAxisBtns(); render(); };
   window.expSetSmoothing = function(v) { _S.smoothing = parseFloat(v) || 0; render(); };
-  window.expSetNormalize = function(v) { _S.normalize = v === 'normalize'; render(); };
+  window.expSetNormalize = function(v) {
+    _S.normMode = v;   // 'as_measured' | 'normalize' | 'avg_range'
+    _S.normalize = v === 'normalize';  // keep legacy field in sync
+    const wrap = $('norm-range-wrap');
+    if (wrap) wrap.style.display = v === 'avg_range' ? 'flex' : 'none';
+    render();
+  };
+  window.expSetNormRange = function() {
+    const lo = parseFloat($('norm-f-lo')?.value), hi = parseFloat($('norm-f-hi')?.value);
+    if (isFinite(lo)) _S.normFLo = lo;
+    if (isFinite(hi)) _S.normFHi = hi;
+    render();
+  };
+  window.expToggleBandShading = function(v) { _S.bandShading = !!v; render(); };
   window.expSetBandPreset = function(v) {
     if (v === 'custom') { expCustomBands(); return; }
     _S.bandPreset = v; render();
@@ -692,7 +731,7 @@
     const vis = _datasets.filter(d => d.visible);
     const traces = vis.map(d => {
       let mags = _smooth(d.freqs, d.mags, _S.smoothing);
-      if (_S.normalize) mags = _norm(mags);
+      mags = _applyNorm(d.freqs, mags);
       return {x:d.freqs, y:mags, type:'scatter', mode:'lines', name:d.name, line:{color:d.color, width:1.5}, showlegend:true};
     });
     // String mode tick marks at bottom
@@ -736,7 +775,13 @@
     if (xMin) xMin.value = _S.xMin; if (xMax) xMax.value = _S.xMax;
     const yRange = $('y-db-range'); if (yRange) yRange.value = _S.yDbRange;
     const sm = $('smooth-sel'); if (sm) sm.value = String(_S.smoothing);
-    const nm = $('norm-sel');   if (nm) nm.value = _S.normalize ? 'normalize' : 'as_measured';
+    const nm = $('norm-sel');
+    if (nm) nm.value = _S.normMode || (_S.normalize ? 'normalize' : 'as_measured');
+    const wrap = $('norm-range-wrap');
+    if (wrap) wrap.style.display = _S.normMode === 'avg_range' ? 'flex' : 'none';
+    const loEl = $('norm-f-lo'), hiEl = $('norm-f-hi');
+    if (loEl) loEl.value = _S.normFLo; if (hiEl) hiEl.value = _S.normFHi;
+    const shadeChk = $('band-shade-chk'); if (shadeChk) shadeChk.checked = _S.bandShading;
     _syncAxisBtns();
   }
   function _syncAxisBtns() {

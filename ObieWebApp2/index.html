@@ -7,6 +7,7 @@
   <title>ObieWebApp 2 — Violin Acoustics Toolkit</title>
   <link rel="stylesheet" href="./css/theme.css">
   <link rel="stylesheet" href="./css/index.css">
+  <script src="./js/obie-settings.js"></script>
 </head>
 <body>
 
@@ -29,6 +30,15 @@
       uploads, no server.
     </p>
   </section>
+
+  <!-- ── Data Folder selector ─────────────────────────────────────────── -->
+  <div class="folder-bar" id="folder-bar">
+    <div class="folder-bar-left">
+      <span class="folder-bar-label">📁 Data Folder</span>
+      <span class="folder-bar-name" id="folder-bar-name">No folder selected</span>
+    </div>
+    <button class="folder-bar-btn" id="folder-bar-btn" onclick="pickDataFolder()">Select…</button>
+  </div>
 
   <hr class="divider">
 
@@ -104,11 +114,38 @@
 
   <footer class="obie-footer">
     Oberlin Acoustics Workshop &nbsp;·&nbsp; ObieWebApp 2 &nbsp;·&nbsp;
-    Built with <a href="https://pyscript.net/" target="_blank" rel="noopener">PyScript</a>
+    Built by <a href="https://claude.ai/code" target="_blank" rel="noopener">Claude</a>
+    with <a href="https://pyscript.net/" target="_blank" rel="noopener">PyScript</a>
     &nbsp;+&nbsp; <a href="https://plotly.com/javascript/" target="_blank" rel="noopener">Plotly</a>
   </footer>
 
 </main>
 
+<script>
+(function () {
+  // Show saved folder name immediately (no IDB needed for display)
+  const saved = localStorage.getItem('obieDataFolderName');
+  if (saved) {
+    document.getElementById('folder-bar-name').textContent = saved;
+    document.getElementById('folder-bar').classList.add('has-folder');
+  }
+
+  window.pickDataFolder = async function () {
+    if (!window.showDirectoryPicker) {
+      alert('Directory picker requires Chrome or Edge.');
+      return;
+    }
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await saveDataFolderHandle(handle);
+      document.getElementById('folder-bar-name').textContent = handle.name;
+      document.getElementById('folder-bar').classList.add('has-folder');
+      document.getElementById('folder-bar-btn').textContent = 'Change…';
+    } catch (e) {
+      if (e.name !== 'AbortError') alert('Folder error: ' + e.message);
+    }
+  };
+})();
+</script>
 </body>
 </html>

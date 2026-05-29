@@ -15,6 +15,7 @@
   <link  rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css">
   <script type="module"   src="https://pyscript.net/releases/2026.3.1/core.js"></script>
 
+  <script src="../../js/obie-settings.js"></script>
   <script src="../../js/acquire.js" defer></script>
 </head>
 <body>
@@ -42,14 +43,7 @@
   <div class="acq-toolbar">
     <div class="tb-r">
 
-      <!-- Settings dropdown -->
-      <div class="dropdown-wrap">
-        <button class="tb-btn" onclick="acqSettings(event)">Settings ▾</button>
-        <div id="settings-menu" class="dropdown-menu">
-          <button class="menu-item" onclick="acqPreferences()">Preferences</button>
-          <button class="menu-item" onclick="acqLiveView()">LiveView</button>
-        </div>
-      </div>
+      <button class="tb-btn" onclick="acqPreferences()">Settings</button>
 
       <button class="tb-btn" onclick="acqNotes()">Notes</button>
       <button id="data-folder-btn" class="tb-btn" onclick="acqSetDataFolder()">📁 Data Folder</button>
@@ -63,11 +57,24 @@
     </div>
   </div>
 
-  <!-- ── Position banner ──────────────────────────────────────────────────── -->
-  <div id="pos-banner" class="acq-banner">
-    <span style="font-size:10px;color:var(--muted);font-style:italic">
-      Loading…
-    </span>
+  <!-- ── Banner row: run meta + position tabs + template indicator ──────── -->
+  <div class="acq-banner-row">
+    <div class="acq-run-meta">
+      <input id="inp-instrument" type="text" style="display:none" aria-hidden="true">
+      <input id="inp-instrument-banner" type="text" class="acq-meta-inp"
+             placeholder="Instrument"
+             oninput="document.getElementById('inp-instrument').value=this.value"
+             title="Instrument name">
+      <span class="acq-meta-sep">/</span>
+      <input id="inp-test-banner" type="text" class="acq-meta-inp"
+             placeholder="Test name"
+             oninput="acqUpdatePendingTest(this.value)"
+             title="Test name — set when Data Folder is selected; editable before Start">
+    </div>
+    <div id="pos-banner" class="acq-banner">
+      <span style="font-size:10px;color:var(--muted);font-style:italic">Loading…</span>
+    </div>
+    <div id="tpl-ind" class="acq-tpl-ind"></div>
   </div>
 
   <!-- ── Status row ───────────────────────────────────────────────────────── -->
@@ -139,6 +146,15 @@
     <!-- Main FRF plot area -->
     <div class="acq-plot-wrap">
 
+      <!-- No-folder overlay — hidden once a Data Folder is connected -->
+      <div id="folder-overlay" class="folder-overlay">
+        <div class="folder-overlay-msg">📁 Select a Data Folder above before continuing</div>
+        <button class="tb-btn start" onclick="acqSetDataFolder()" style="padding:6px 18px;font-size:12px">
+          Select Data Folder…
+        </button>
+        <div class="folder-overlay-sub" id="folder-overlay-sub"></div>
+      </div>
+
       <!-- Plot controls toolbar -->
       <div class="plot-toolbar">
         <button class="tb-btn" onclick="acqRescaleY()" title="Rescale Y to data range">↕Y</button>
@@ -148,8 +164,9 @@
         <span class="tb-lbl">dB</span>
         <button id="x-log-btn" class="tb-btn active" onclick="acqToggleXLog()" title="Toggle X axis log/linear">X=log</button>
         <div class="tb-flex"></div>
-        <button id="delete-btn" class="tb-btn" onclick="acqDeleteLastHit()" disabled title="Delete last hit">↩ Undo Hit</button>
-        <button id="clear-btn"  class="tb-btn" onclick="acqClearPosition()"  disabled title="Clear current position">🗑 Clear</button>
+        <button id="delete-btn"    class="tb-btn" onclick="acqDeleteLastHit()" disabled title="Delete last hit">↩ Undo Hit</button>
+        <button id="clear-btn"     class="tb-btn" onclick="acqClearPosition()"  disabled title="Clear current position">🗑 Clear</button>
+        <button id="startover-btn" class="tb-btn" onclick="acqStartOver()" title="Clear ALL positions and start over" style="color:#c62828">↺ Start over</button>
       </div>
 
       <div id="acq-plot"></div>
@@ -255,11 +272,6 @@
         <label for="inp-prefix">Position prefix</label>
         <input id="inp-prefix" type="text" value="H" maxlength="3" style="max-width:60px">
       </div>
-      <div class="pref-row">
-        <label for="inp-instrument">Instrument name</label>
-        <input id="inp-instrument" type="text" placeholder="e.g. Strad" style="max-width:200px">
-      </div>
-
       <div class="save-row">
         <button class="btn primary" onclick="acqSavePrefs()">Apply &amp; Save</button>
         <button class="btn" onclick="acqResetPrefs()">Reset defaults</button>
@@ -316,22 +328,10 @@
       </div>
 
       <div style="margin-bottom:12px">
-        <p style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">
-          Template JSON format example:
+        <p id="tpl-json-lbl" style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">
+          Select a template above to preview its settings
         </p>
-        <pre style="font-size:9px;background:var(--bg-deep);padding:8px;border-radius:4px;color:var(--muted);overflow:auto">{
-  "name": "Scarlett 2i2 — Impact Hammer",
-  "description": "PCB 086D50 hammer, DPA 4060 mic",
-  "settings": {
-    "soundcard":   "Scarlett 2i2",
-    "threshold":   0.05,
-    "frf_x_max":   12000,
-    "ham_cal":     22.5,
-    "mic_cal":     12.4,
-    "pre_trig_s":  0.01,
-    "post_trig_s": 0.30
-  }
-}</pre>
+        <pre id="tpl-json" style="font-size:9px;background:var(--bg-deep);padding:8px;border-radius:4px;color:var(--muted);overflow:auto;max-height:220px;margin:0"></pre>
       </div>
 
       <div class="save-row">

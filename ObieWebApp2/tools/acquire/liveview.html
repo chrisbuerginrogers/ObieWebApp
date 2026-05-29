@@ -47,6 +47,12 @@
     .lv-status { font-size:10px; color:var(--muted); text-align:center;
                  font-style:italic; line-height:1.4; min-height:28px; }
 
+    /* Green start / red stop */
+    #start-btn { background:#2e7d32; border-color:#1b5e20; color:#fff; font-weight:700; }
+    #start-btn:hover { background:#1b5e20; }
+    #start-btn.stopping { background:#c62828; border-color:#b71c1c; }
+    #start-btn.stopping:hover { background:#b71c1c; }
+
     /* ── Right panel: 3 stacked canvases ───────────────────────── */
     .lv-right {
       flex:1; display:flex; flex-direction:column;
@@ -376,13 +382,6 @@ function drawTimeDomain(canvas, ctx, samples, color, preSamples, threshold, show
     ctx.setLineDash([]);
   }
 
-  // Trigger line (vertical green)
-  if (preSamples > 0 && preSamples < n) {
-    const x0 = w * preSamples / n;
-    ctx.strokeStyle = '#2e7d32'; ctx.lineWidth = 1.5 * devicePixelRatio;
-    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0, h); ctx.stroke();
-  }
-
   // Signal
   ctx.strokeStyle = color; ctx.lineWidth = 1.5 * devicePixelRatio;
   ctx.beginPath();
@@ -545,6 +544,7 @@ async function toggleCapture() {
     _running = true;
     _trigState = 'armed';
     document.getElementById('start-btn').textContent = '■ Stop';
+    document.getElementById('start-btn').classList.add('stopping');
     setSt(_mode === 'live' ? 'Running — live mode' : 'Armed — waiting for trigger…');
     _loop();
   } catch(e) { setSt('Error: ' + e.message); }
@@ -558,6 +558,7 @@ function stopCapture() {
   if (_stream)      { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
   if (_audioCtx)    { _audioCtx.close(); _audioCtx = null; }
   document.getElementById('start-btn').textContent = '▶ Start';
+  document.getElementById('start-btn').classList.remove('stopping');
   setSt('Stopped');
 }
 
@@ -702,7 +703,7 @@ function _loop() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 _applyPrefsToForm();
-enumerateMics();
+enumerateMics().then(() => setTimeout(toggleCapture, 300));
 </script>
 </body>
 </html>

@@ -178,6 +178,12 @@ def clear_position():
     _emit_state()
 
 
+def reset_all():
+    global _state
+    _state = "idle"
+    _init_internal(_n_positions)
+
+
 def jump_to_position(idx_js):
     global _cur_pos
     i = int(idx_js)

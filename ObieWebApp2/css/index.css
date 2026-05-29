@@ -101,6 +101,38 @@ main.landing {
 .tag.app    { border-color: #b35c0055; color: var(--accent); }
 .tag.future { border-color: #c9b48f; color: var(--muted); font-style: italic; }
 
+/* ── Data-folder bar ─────────────────────────────────────────────────── */
+.folder-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 16px;
+  border: 2px dashed var(--border); border-radius: 8px;
+  background: var(--bg-deep); margin-bottom: 8px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.folder-bar.has-folder {
+  border-style: solid; border-color: #2e7d32; background: #f1f8f1;
+}
+.folder-bar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.folder-bar-label {
+  font-size: 0.85rem; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.folder-bar-name {
+  font-size: 0.85rem; color: var(--muted); font-style: italic;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.folder-bar.has-folder .folder-bar-name {
+  color: #2e7d32; font-style: normal; font-weight: 600;
+}
+.folder-bar-btn {
+  flex-shrink: 0; padding: 5px 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 5px; font-size: 0.82rem; font-family: inherit;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+.folder-bar-btn:hover { background: #e4e8ee; border-color: #9aa0aa; }
+/* ─────────────────────────────────────────────────────────────────────── */
+
 footer.obie-footer {
   text-align: center;
   font-size: 0.8rem;
