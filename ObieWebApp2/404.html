@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Page Moved</title>
+  <script>
+    // 1. Define your new domain or new root folder URL
+    // Ensure it ends with a trailing slash
+    var newLocation = "https://chrisbuerginrogers.github.io/ObieApp/Web";
+
+    // 2. Extract the broken path the user tried to visit
+    var currentPath = window.location.pathname;
+
+    // 3. Clean up the path and redirect the user instantly
+    // This preserves the exact subfolder and file name structure
+    var destination = newLocation + currentPath.replace(/^\/+/,'');
+    window.location.replace(destination);
+  </script>
+</head>
+<body>
+  <p>Redirecting you to the new location...</p>
+</body>
+</html>

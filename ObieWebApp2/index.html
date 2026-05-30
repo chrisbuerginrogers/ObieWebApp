@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ObieApps</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --card-hover: #1c2128;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 40px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+      max-width: 680px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .tagline {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .divider {
+      width: 100%;
+      max-width: 680px;
+      border: none;
+      border-top: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+
+    .section-label {
+      width: 100%;
+      max-width: 680px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 680px;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+
+    .card:hover {
+      background: var(--card-hover);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      font-size: 1.4rem;
+      width: 36px; height: 36px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-name {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .card-desc {
+      font-size: 0.87rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .card-tag {
+      align-self: flex-start;
+      margin-top: 4px;
+      padding: 2px 9px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .tag-app   { border-color: #388bfd55; color: #58a6ff; }
+    .tag-video { border-color: #f7853455; color: #f78534; }
+    .tag-site  { border-color: #3fb95055; color: #3fb950; }
+    .tag-legacy{ border-color: #bc8cff55; color: #bc8cff; }
+
+    footer {
+      margin-top: auto;
+      padding-top: 30px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    footer a { color: var(--muted); text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">🎛️</div>
+      <h1>ObieApps</h1>
+    </div>
+    <p class="tagline">
+      A collection of apps, tools, and resources from the
+      <strong>Oberlin Acoustics Workshop</strong> — built for exploring
+      sound, signal analysis, and acoustic education.
+    </p>
+    <span class="badge">&#128279; All ObieApp resources in one place</span>
+  </header>
+
+  <hr class="divider" />
+
+  <p class="section-label">📦 Apps &amp; Tools</p>
+  <div class="cards">
+
+    <a class="card" href="./obiescope/pyscope.html">
+      <div class="card-header">
+        <div class="card-icon">📡</div>
+        <span class="card-name">PyScope</span>
+      </div>
+      <p class="card-desc">
+        A Python-based real-time oscilloscope and signal analysis tool.
+        Visualize waveforms, measure frequency, and explore acoustic signals.
+      </p>
+      <span class="card-tag tag-app">App · Python</span>
+    </a>
+
+    <a class="card" href="./NoahApp/index.html">
+      <div class="card-header">
+        <div class="card-icon">🌐</div>
+        <span class="card-name">ObieWebApp</span>
+      </div>
+      <p class="card-desc">
+        This contains Noah's first attempt at a fully web-based solution.
+      </p>
+      <span class="card-tag tag-app">App · Web</span>
+    </a>
+
+    <a class="card" href="./fileReader/index.html">
+      <div class="card-header">
+        <div class="card-icon">📂</div>
+        <span class="card-name">File Reader</span>
+      </div>
+      <p class="card-desc">
+        Read and inspect data files from the Oberlin Acoustics Workshop tools.
+      </p>
+      <span class="card-tag tag-app">App · Tool</span>
+    </a>
+
+    <a class="card" href="https://sites.google.com/view/oberlinacoustics/home?pli=1" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">🗂️</div>
+        <span class="card-name">Legacy Software</span>
+      </div>
+      <p class="card-desc">
+        The original Oberlin Acoustics software suite. Previous versions of
+        tools and resources from the workshop's earlier work.
+      </p>
+      <span class="card-tag tag-legacy">Legacy · Google Sites</span>
+    </a>
+
+  </div>
+
+  <p class="section-label">🌐 Community &amp; Resources</p>
+  <div class="cards">
+
+    <a class="card" href="https://www.youtube.com/@oberlinacousticsworkshop9137" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">▶️</div>
+        <span class="card-name">YouTube Channel</span>
+      </div>
+      <p class="card-desc">
+        Oberlin Acoustics Workshop on YouTube — lectures, demos, and
+        explorations in acoustics and signal processing.
+      </p>
+      <span class="card-tag tag-video">Video · YouTube</span>
+    </a>
+
+    <a class="card" href="https://euphonics.org/" target="_blank" rel="noopener">
+      <div class="card-header">
+        <div class="card-icon">🔊</div>
+        <span class="card-name">Euphonics.org</span>
+      </div>
+      <p class="card-desc">
+        An interactive resource on the science of musical sound — covering
+        instrument acoustics, psychoacoustics, and more.
+      </p>
+      <span class="card-tag tag-site">Website · Reference</span>
+    </a>
+
+  </div>
+
+  <footer>
+    Oberlin Acoustics Workshop &mdash; Developed by Claude
+  </footer>
+
+</body>
+</html>
